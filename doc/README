@@ -1,0 +1,24 @@
+module heinzmann
+
+1. configuration
+
+  devname: /dev/jr30
+  filter: 0
+
+2. lnrk device class
+- name: jr3
+  class parameters:
+  - name: jr3_module
+  - name: jr3_channel
+  type: pd_mapping 
+  clk_id: "%(jr3_channel)"
+  pd_module: "%(jr3_module)"
+  pd_offset: "%(jr3_channel)"
+  measurements:
+  - uint16_t: cnt
+  - double[3]: force
+    string_format: "%7.3f"
+  - double[3]: torque
+    string_format: "%7.3f"
+
+

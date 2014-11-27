@@ -1,0 +1,12 @@
+PTVERSION           = 2
+NAME                = @PACKAGE@
+VERSION             = @PACKAGE_VERSION@
+DESCRIPTION         = robotkernel jr3 force torque sensors
+MAINTAINER          = Robert Burger <robert.burger@dlr.de>
+ARCHS               = sled11-x86-gcc4.x, sled11-x86_64-gcc4.x
+
+[install]
+build/${ARCH}/install/lib => lib/${ARCH}
+doc/ => doc/
+share/ => share/
+kernel/ => kernel/

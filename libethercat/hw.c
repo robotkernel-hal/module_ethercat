@@ -1,0 +1,290 @@
+//! ethercat hardware layer
+/*!
+ * author: Robert Burger
+ *
+ * $Id$
+ */
+
+/*
+ * This file is part of libethercat.
+ *
+ * libethercat is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * libethercat is distributed in the hope that 
+ * it will be useful, but WITHOUT ANY WARRANTY; without even the implied 
+ * warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with libethercat
+ * If not, see <http://www.gnu.org/licenses/>.
+ */
+
+#include "hw.h"
+#include <pthread.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/ioctl.h>
+#include <net/if.h> 
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <netpacket/packet.h>
+#include <stdio.h>
+#include <fcntl.h>
+#include <unistd.h>
+
+#define ETH_P_ECAT      0x88A4
+#define ETH_FRAME_LEN   1518 
+
+//! receiver thread forward declaration
+void *hw_rx_thread(void *arg);
+
+//! open a new hw
+/*!
+ * \param pphw return hw 
+ * \param devname ethernet device name
+ * \param prio receive thread prio
+ * \param cpumask receive thread cpumask
+ * \return 0 or negative error code
+ */
+int hw_open(hw_t **pphw, const char *devname, int prio, int cpumask) {
+    struct timeval timeout;
+    int i, ifindex;
+    struct ifreq ifr;
+    struct sockaddr_ll sll;
+    memset(&sll, 0, sizeof(sll));
+
+    (*pphw) = (hw_t *)malloc(sizeof(hw_t));
+    if (!(*pphw))
+        return -ENOMEM;
+
+    memset(*pphw, 0, sizeof(hw_t));
+
+    datagram_pool_open(&(*pphw)->tx_high, 0);
+    datagram_pool_open(&(*pphw)->tx_low, 0);
+    
+    // create raw socket connection
+    (*pphw)->sockfd = socket(PF_PACKET, SOCK_RAW, htons(ETH_P_ECAT));
+    if ((*pphw)->sockfd <= 0) {
+        perror("socket");
+        goto error_exit;
+    }
+   
+    // set timeouts
+    timeout.tv_sec = 0;
+    timeout.tv_usec = 10000; 
+    setsockopt((*pphw)->sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+    setsockopt((*pphw)->sockfd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
+
+    // do not route our frames
+    i = 1;
+    setsockopt((*pphw)->sockfd, SOL_SOCKET, SO_DONTROUTE, &i, sizeof(i));
+
+    // attach to out network interface
+    strcpy(ifr.ifr_name, devname);
+    ioctl((*pphw)->sockfd, SIOCGIFINDEX, &ifr);
+    ifindex = ifr.ifr_ifindex;
+    strcpy(ifr.ifr_name, devname);
+    ifr.ifr_flags = 0;
+    ioctl((*pphw)->sockfd, SIOCGIFFLAGS, &ifr);
+    ifr.ifr_flags = ifr.ifr_flags | IFF_PROMISC | IFF_BROADCAST;
+    ioctl((*pphw)->sockfd, SIOCSIFFLAGS, &ifr);
+
+    // bind socket to protocol, in this case RAW EtherCAT */
+    sll.sll_family = AF_PACKET;
+    sll.sll_ifindex = ifindex;
+    sll.sll_protocol = htons(ETH_P_ECAT);
+    bind((*pphw)->sockfd, (struct sockaddr *)&sll, sizeof(sll));
+   
+    // thread settings
+    (*pphw)->rxthreadprio = prio;
+    (*pphw)->rxthreadcpumask = cpumask;
+    (*pphw)->rxthreadrunning = 1;
+    pthread_create(&(*pphw)->rxthread, NULL, hw_rx_thread, *pphw);
+
+    return 0;
+
+error_exit:
+
+    if (*pphw)
+        free(*pphw);
+
+    return -1;
+}
+
+//! destroys a hw
+/*!
+ * \param phw hw handle
+ * \return 0 or negative error code
+ */
+int hw_close(hw_t *phw) {
+    // stop receiver thread
+    phw->rxthreadrunning = 0;
+    pthread_join(phw->rxthread, NULL);
+    
+    datagram_pool_close(phw->tx_high);
+    datagram_pool_close(phw->tx_low);
+
+    if (phw)
+        free(phw);
+
+    return 0;
+}
+
+//! receiver thread
+void *hw_rx_thread(void *arg) {
+    hw_t *phw = (hw_t *)arg;
+    uint8_t recv_frame[ETH_FRAME_LEN];
+    ec_frame_t *pframe = (ec_frame_t *)recv_frame;
+    struct sched_param param;
+    int policy;
+
+    // thread settings
+    if (pthread_getschedparam(pthread_self(), &policy, &param) != 0)
+        perror("ecx_recv_thread - error on pthread_getschedparam");
+    else {
+        policy = SCHED_FIFO;
+        param.sched_priority = phw->rxthreadprio;
+        if (pthread_setschedparam(pthread_self(), policy, &param) != 0)
+            perror("ecx_recv_thread - error on pthread_setschedparam");
+    }
+    
+    while (phw->rxthreadrunning) {
+        ssize_t bytesrx = recv(phw->sockfd, pframe, ETH_FRAME_LEN, 0);
+        if (bytesrx <= 0) {
+            if ((errno == EAGAIN) || (errno == EWOULDBLOCK))
+                continue;
+
+            perror("recv:");
+            sleep(1);
+        }
+        
+        /* check if it is an EtherCAT frame */
+        if (pframe->ethertype != htons(ETH_P_ECAT)) {
+            printf("received non-ethercat frame! (bytes %d, type 0x%X)\n", 
+                    bytesrx, pframe->type);
+            continue;
+        }
+
+        ec_datagram_t *d;
+        for (d = ec_datagram_first(pframe); (uint8_t *)d < (uint8_t *)ec_frame_end(pframe);
+                d = ec_datagram_next(d)) {
+            datagram_entry_t *entry = phw->tx_send[d->idx];
+
+            if (!entry) {
+                printf("received idx %d, but we did not send one?\n", d->idx);
+                continue;
+            }
+
+            memcpy(&entry->datagram, d, ec_datagram_length(d));
+            if (entry->user_cb)
+                (*entry->user_cb)(entry->user_arg, entry);
+        }
+    }
+
+    return NULL;
+}
+
+static const uint8_t mac_dest[] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
+static const uint8_t mac_src[]  = { 0x00, 0x1B, 0x21, 0xB8, 0x77, 0xCC };
+
+//! start sending queued ethercat datagrams
+/*!
+ * \param phw hardware handle
+ * \return 0 or error code
+ */
+int hw_tx(hw_t *phw) {
+    uint8_t recv_frame[ETH_FRAME_LEN];
+    memset(recv_frame, 0, ETH_FRAME_LEN);
+    ec_frame_t *pframe = (ec_frame_t *)recv_frame;
+
+    memcpy(pframe->mac_dest, mac_dest, 6);
+    memcpy(pframe->mac_src , mac_src , 6);
+    pframe->ethertype = htons(ETH_P_ECAT);
+    pframe->type = 0x01;
+    pframe->len = sizeof(ec_frame_t);
+
+    ec_datagram_t *pdg = ec_datagram_first(pframe), *pdg_prev = NULL;
+    size_t len;
+
+    // send high priority cyclic frames
+    while (1) {
+        datagram_pool_get_next_len(phw->tx_high, &len);
+
+        if ((len == 0) || ((pframe->len + len) >= ETH_FRAME_LEN)) {
+            if (pframe->len == sizeof(ec_frame_t))
+                break; // nothing to send
+                    
+            // no more datagrams need to be sent or no more space in frame
+            size_t bytesrx = send(phw->sockfd, pframe, pframe->len, 0);
+
+            if (pframe->len != bytesrx) 
+                printf("got only %d bytes out of %d bytes through.\n", bytesrx, pframe->len);
+            
+            // reset length to send new frame
+            pframe->len = sizeof(ec_frame_t);
+            pdg = ec_datagram_first(pframe);
+        }
+
+        datagram_entry_t *entry;
+        if (datagram_pool_get(phw->tx_high, &entry, NULL) != 0)
+            break;  // no more frames
+
+        if (pdg_prev)
+            ec_datagram_mark_next(pdg_prev);
+        memcpy(pdg, &entry->datagram, ec_datagram_length(&entry->datagram));    
+        pframe->len += ec_datagram_length(&entry->datagram);
+        pdg_prev = pdg;
+        pdg = ec_datagram_next(pdg);
+
+        // store as sent
+        phw->tx_send[entry->datagram.idx] = entry;
+    }
+
+    // reset
+    pframe->len = sizeof(ec_frame_t);
+    pdg = ec_datagram_first(pframe);
+    pdg_prev = NULL;
+    
+    // send low priority acyclic frames
+    while (1) {
+        datagram_pool_get_next_len(phw->tx_low, &len);
+
+        if ((len == 0) || ((pframe->len + len) >= ETH_FRAME_LEN)) {
+            if (pframe->len == sizeof(ec_frame_t))
+                break; // nothing to send
+
+            // no more datagrams need to be sent or no more space in frame
+            size_t bytesrx = send(phw->sockfd, pframe, pframe->len, 0);
+
+            if (pframe->len != bytesrx) 
+                printf("got only %d bytes out of %d bytes through.\n", bytesrx, pframe->len);
+
+            // reset length to send new frame
+            pframe->len = sizeof(ec_frame_t);
+            pdg = ec_datagram_first(pframe);
+        }
+
+        datagram_entry_t *entry;
+        if (datagram_pool_get(phw->tx_low, &entry, NULL) != 0)
+            break;  // no more frames
+
+        if (pdg_prev)
+            ec_datagram_mark_next(pdg_prev);
+        memcpy(pdg, &entry->datagram, ec_datagram_length(&entry->datagram));    
+        pframe->len += ec_datagram_length(&entry->datagram);
+        pdg_prev = pdg;
+        pdg = ec_datagram_next(pdg);
+
+        // store as sent
+        phw->tx_send[entry->datagram.idx] = entry;
+    }
+
+    return 0;
+}
+

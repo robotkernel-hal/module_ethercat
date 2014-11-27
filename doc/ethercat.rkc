@@ -1,0 +1,29 @@
+loglevel: [ error, warning, info, module_error, module_warning, module_info, interface_error, interface_warning, interface_info ]
+modules:
+-   name: posix_timer
+    module_file: libmodule_posix_timer.so
+    config: 
+        interval: 0.001
+        signo: 36
+        prio: 91
+        affinity: [ 0, 1, 2, 3 ]
+        mode: nanosleep
+    power_up: true
+
+-   name: jr3
+    module_file: libmodule_jr3.so
+    config: 
+        devname: /dev/jr30
+        filter: 0
+    trigger:
+    -   mod_name: posix_timer
+        clk_id: 1
+        prio: 72 
+    power_up: true
+
+-   name: jr3_lnrk
+    module_file: libmodule_lnrkinterface.so
+    config_file: jr3_lnrkinterface.rkc
+    depends: [ jr3, ]
+    power_up: true
+
