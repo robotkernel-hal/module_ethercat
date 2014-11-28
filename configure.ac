@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.63])
-AC_INIT([module_jr3], [3.0.0], [robert.burger@dlr.de])
+AC_INIT([module_ethercat], [3.0.0], [robert.burger@dlr.de])
 AM_INIT_AUTOMAKE([-Wall -Werror foreign])
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_MACRO_DIR([m4])
@@ -76,7 +76,7 @@ AC_CHECK_LIB(dl, dlopen, DL_LIBS="-ldl", DL_LIBS=)
 AC_SUBST(DL_LIBS)
 
 AC_CONFIG_FILES([Makefile])
-AC_CONFIG_FILES([module_jr3.pt], [cp module_jr3.pt ${ac_abs_top_srcdir}])
+AC_CONFIG_FILES([module_ethercat.pt], [cp module_ethercat.pt ${ac_abs_top_srcdir}])
 
 AC_OUTPUT
 

@@ -1,11 +1,11 @@
 ACLOCAL_AMFLAGS = -I m4 
 
 libdir = $(prefix)/lib
-lib_LTLIBRARIES = libmodule_jr3.la
+lib_LTLIBRARIES = libmodule_ethercat.la
 
-libmodule_jr3_la_SOURCES  = module_jr3.cpp module_jr3_firmware.cpp
-libmodule_jr3_la_CXXFLAGS = -Wall -I$(top_srcdir)/kernel/source -I$(top_srcdir)/src -I$(top_builddir) @ROBOTKERNEL_CFLAGS@
-libmodule_jr3_la_LDFLAGS  = -Wall -release $(PACKAGE_VERSION)
+libmodule_ethercat_la_SOURCES  = module_ethercat.cpp module_ethercat_firmware.cpp
+libmodule_ethercat_la_CXXFLAGS = -Wall -I$(top_srcdir)/kernel/source -I$(top_srcdir)/src -I$(top_builddir) @ROBOTKERNEL_CFLAGS@
+libmodule_ethercat_la_LDFLAGS  = -Wall -release $(PACKAGE_VERSION)
 
 install-exec-hook:
 	mkdir -p $(prefix)/share/ln
