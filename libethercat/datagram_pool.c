@@ -28,6 +28,8 @@
 #include <time.h>
 #include <string.h>
 #include <stdio.h>
+#include <pthread.h>
+
 
 //! open a new datagram pool
 /*!
@@ -40,6 +42,9 @@ int datagram_pool_open(datagram_pool_t **pp, size_t cnt) {
     if (!(*pp))
         return -ENOMEM;
 
+    pthread_mutex_init(&(*pp)->_pool_lock, NULL);
+    pthread_mutex_lock(&(*pp)->_pool_lock);
+
     memset(&(*pp)->avail_cnt, 0, sizeof(sem_t));
     sem_init(&(*pp)->avail_cnt, 0, cnt);
     TAILQ_INIT(&(*pp)->avail);
@@ -51,6 +56,8 @@ int datagram_pool_open(datagram_pool_t **pp, size_t cnt) {
         memset(datagram, 0, sizeof(datagram_entry_t) + 1500);
         TAILQ_INSERT_TAIL(&(*pp)->avail, datagram, qh);
     }
+    
+    pthread_mutex_unlock(&(*pp)->_pool_lock);
 
     return 0;
 }
@@ -63,6 +70,8 @@ int datagram_pool_open(datagram_pool_t **pp, size_t cnt) {
 int datagram_pool_close(datagram_pool_t *pp) {
     if (!pp)
         return -EINVAL;
+    
+    pthread_mutex_lock(&pp->_pool_lock);
 
     datagram_entry_t *datagram;
     while ((datagram = TAILQ_FIRST(&pp->avail)) != NULL) {
@@ -71,6 +80,9 @@ int datagram_pool_close(datagram_pool_t *pp) {
     }
 
     free(pp);
+    
+    pthread_mutex_unlock(&pp->_pool_lock);
+    pthread_mutex_destroy(&pp->_pool_lock);
 
     return 0;
 }
@@ -94,9 +106,9 @@ int datagram_pool_close(datagram_pool_t *pp) {
  * \return 0 or negative error code
  */
 int datagram_pool_get(datagram_pool_t *pp, datagram_entry_t **datagram, struct timespec *ts) {
-    int ret;
+    int ret = ENOPKG;
     if (!pp || !datagram)
-        return EINVAL;
+        return (ret = EINVAL);
 
     if (ts) {
         struct timespec act, end;
@@ -111,17 +123,21 @@ int datagram_pool_get(datagram_pool_t *pp, datagram_entry_t **datagram, struct t
             if (errno != ETIMEDOUT)
                 perror("sem_timedwait");
 
-            return errno;
+            return (ret = errno);
         }
     }
+
+    pthread_mutex_lock(&pp->_pool_lock);
 
     *datagram = (datagram_entry_t *)TAILQ_FIRST(&pp->avail);
     if (*datagram) {
         TAILQ_REMOVE(&pp->avail, (datagram_entry_t *)*datagram, qh);
-        return 0;
+        ret = 0;
     }
+    
+    pthread_mutex_unlock(&pp->_pool_lock);
 
-    return ENOPKG;
+    return ret;
 }
 
 //! get next datagram length from datagram_pool
@@ -133,14 +149,18 @@ int datagram_pool_get(datagram_pool_t *pp, datagram_entry_t **datagram, struct t
 int datagram_pool_get_next_len(datagram_pool_t *pp, size_t *len) {
     if (!pp || !len)
         return EINVAL;
+    
+
+    pthread_mutex_lock(&pp->_pool_lock);
 
     datagram_entry_t *entry = (datagram_entry_t *)TAILQ_FIRST(&pp->avail);
-    if (entry) {
+    if (entry)
         *len = ec_datagram_length(&entry->datagram);
-        return 0;
-    }
+    else
+        *len = 0;
+    
+    pthread_mutex_unlock(&pp->_pool_lock);
 
-    *len = 0;
     return ENOPKG;
 }
 
@@ -153,9 +173,14 @@ int datagram_pool_get_next_len(datagram_pool_t *pp, size_t *len) {
 int datagram_pool_put(datagram_pool_t *pp, datagram_entry_t *datagram) {
     if (!pp || !datagram)
         return -EINVAL;
+    
+    pthread_mutex_lock(&pp->_pool_lock);
 
     TAILQ_INSERT_TAIL(&pp->avail, (datagram_entry_t *)datagram, qh);
     sem_post(&pp->avail_cnt);
+    
+    pthread_mutex_unlock(&pp->_pool_lock);
+    
     return 0;
 }
 

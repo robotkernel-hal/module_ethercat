@@ -46,6 +46,8 @@ TAILQ_HEAD(datagram_pool_queue, datagram_entry);
 typedef struct datagram_pool {    
     struct datagram_pool_queue avail;
     sem_t avail_cnt;
+
+    pthread_mutex_t _pool_lock;
 } datagram_pool_t;
 
 #ifdef __cplusplus
