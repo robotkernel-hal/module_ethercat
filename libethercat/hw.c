@@ -146,12 +146,12 @@ void *hw_rx_thread(void *arg) {
 
     // thread settings
     if (pthread_getschedparam(pthread_self(), &policy, &param) != 0)
-        perror("ecx_recv_thread - error on pthread_getschedparam");
+        ec_log("RX_THREAD", "error on pthread_getschedparam %s\n", strerror(errno));
     else {
         policy = SCHED_FIFO;
         param.sched_priority = phw->rxthreadprio;
         if (pthread_setschedparam(pthread_self(), policy, &param) != 0)
-            perror("ecx_recv_thread - error on pthread_setschedparam");
+            ec_log("RX_THREAD", "error on pthread_setschedparam %s\n", strerror(errno));
     }
     
     while (phw->rxthreadrunning) {
@@ -160,13 +160,13 @@ void *hw_rx_thread(void *arg) {
             if ((errno == EAGAIN) || (errno == EWOULDBLOCK))
                 continue;
 
-            perror("recv:");
+            ec_log("RX_THREAD", "recv: %s\n", strerror(errno));
             sleep(1);
         }
         
         /* check if it is an EtherCAT frame */
         if (pframe->ethertype != htons(ETH_P_ECAT)) {
-            printf("received non-ethercat frame! (bytes %d, type 0x%X)\n", 
+            ec_log("RX_THREAD", "received non-ethercat frame! (bytes %d, type 0x%X)\n", 
                     bytesrx, pframe->type);
             continue;
         }
@@ -177,7 +177,7 @@ void *hw_rx_thread(void *arg) {
             datagram_entry_t *entry = phw->tx_send[d->idx];
 
             if (!entry) {
-                printf("received idx %d, but we did not send one?\n", d->idx);
+                ec_log("RX_THREAD", "received idx %d, but we did not send one?\n", d->idx);
                 continue;
             }
 
@@ -224,11 +224,13 @@ int hw_tx(hw_t *phw) {
             size_t bytesrx = send(phw->sockfd, pframe, pframe->len, 0);
 
             if (pframe->len != bytesrx) 
-                printf("got only %d bytes out of %d bytes through.\n", bytesrx, pframe->len);
+                ec_log("RX_THREAD", "got only %d bytes out of %d bytes through.\n", 
+                        bytesrx, pframe->len);
             
             // reset length to send new frame
             pframe->len = sizeof(ec_frame_t);
             pdg = ec_datagram_first(pframe);
+            continue;
         }
 
         datagram_entry_t *entry;
@@ -258,16 +260,21 @@ int hw_tx(hw_t *phw) {
         if ((len == 0) || ((pframe->len + len) >= ETH_FRAME_LEN)) {
             if (pframe->len == sizeof(ec_frame_t))
                 break; // nothing to send
+        
+            if (pframe->len == 1514)
+                sleep(10);
 
             // no more datagrams need to be sent or no more space in frame
             size_t bytesrx = send(phw->sockfd, pframe, pframe->len, 0);
 
             if (pframe->len != bytesrx) 
-                printf("got only %d bytes out of %d bytes through.\n", bytesrx, pframe->len);
+                ec_log("RX_THREAD", "got only %d bytes out of %d bytes through.\n", 
+                        bytesrx, pframe->len);
 
             // reset length to send new frame
             pframe->len = sizeof(ec_frame_t);
             pdg = ec_datagram_first(pframe);
+            continue;
         }
 
         datagram_entry_t *entry;

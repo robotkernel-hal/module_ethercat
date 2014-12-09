@@ -138,6 +138,8 @@ int ec_coe_odlist_read(ec_t *pec, uint16_t slave, uint8_t *buf, size_t *len) {
     // send request
     wkc = ec_mbx_send(pec, slave);
 
+    int val = 0;
+
     do {
     // wait for answer
     ec_mbx_clear(pec, slave, 1);
@@ -148,8 +150,11 @@ int ec_coe_odlist_read(ec_t *pec, uint16_t slave, uint8_t *buf, size_t *len) {
         printf("%02X ", read_buf->sdo_info_data.wdata[j]);
     }
     printf("\n");
+    memcpy(buf + val, &read_buf->sdo_info_data.bdata[0], (read_buf->mbx_hdr.length - 6));
+    val += (read_buf->mbx_hdr.length - 6);
     } while (read_buf->sdo_info_hdr.fragments_left);
 
+    *len = val;
 //    size_t sdo_len = min(*len, read_buf->mbx_hdr.length - 6);
 //    memcpy(buf, read_buf->sdo_data.bdata, sdo_len);
 //    *len = sdo_len;
@@ -180,7 +185,8 @@ typedef struct PACKED ec_sdo_desc_resp {
  * \param len length of buffer, outputs read length
  * \return working counter
  */
-int ec_coe_sdo_desc_read(ec_t *pec, uint16_t slave, uint16_t index, uint8_t *buf, size_t *len) {
+int ec_coe_sdo_desc_read(ec_t *pec, uint16_t slave, uint16_t index,
+        ec_coe_sdo_desc_t *desc) {
     int wkc;
 
     ec_mbx_clear(pec, slave, 0);
@@ -204,26 +210,125 @@ int ec_coe_sdo_desc_read(ec_t *pec, uint16_t slave, uint16_t index, uint8_t *buf
     // send request
     wkc = ec_mbx_send(pec, slave);
 
-    do {
+    int val = 0;
+
     // wait for answer
     ec_mbx_clear(pec, slave, 1);
     wkc = ec_mbx_receive(pec, slave);
+    
+    if (read_buf->coe_hdr.service == EC_COE_SDOINFO) {
+        if (read_buf->sdo_info_hdr.opcode == EC_COE_SDO_INFO_GET_OBJECT_DESC_RESP) {
+            // transfer was successfull
+            desc->data_type         = read_buf->sdo_info_data.wdata[1];
+            desc->obj_type          = read_buf->sdo_info_data.bdata[4];
+            desc->max_subindices    = read_buf->sdo_info_data.bdata[5];
 
-//    int j;
-//    for (j = 0; j < (read_buf->mbx_hdr.length - 6) / 2; ++j) {
-//        printf("%02X ", read_buf->sdo_info_data.wdata[j]);
-//    }
-//    printf("\n");
-    } while (read_buf->sdo_info_hdr.fragments_left);
+            size_t name_len = min(read_buf->mbx_hdr.length - 6 - 6, CANOPEN_MAXNAME - 1);
+            memcpy(desc->name, &read_buf->sdo_info_data.bdata[6], name_len);
+            desc->name[name_len] = '\0';
+        }
+    } else if (read_buf->coe_hdr.service == EC_COE_SDOREQ) {
+        desc->data_type         = 0;
+        desc->obj_type          = 0;
+        desc->max_subindices    = 0;
+        desc->name[0] = '\0';
 
-    char *bufi = malloc(read_buf->mbx_hdr.length - 6 - 6 + 1);
-    memcpy(bufi, &read_buf->sdo_info_data.bdata[6], read_buf->mbx_hdr.length - 6 - 6);
-    bufi[read_buf->mbx_hdr.length - 6 - 6 + 1] = '\0';
-    printf("%s\n", bufi);
-
-//    size_t sdo_len = min(*len, read_buf->mbx_hdr.length - 6);
-//    memcpy(buf, read_buf->sdo_data.bdata, sdo_len);
-//    *len = sdo_len;
+        wkc = -1;
+    }
 
     return wkc;
 }
+
+typedef struct PACKED ec_sdo_entry_desc_req {
+    ec_mbxheader_t      mbx_hdr;
+    ec_coeheader_t      coe_hdr;
+    ec_sdoinfoheader_t  sdo_info_hdr;
+    uint16_t            index;
+    uint8_t             sub_index;
+    uint8_t             value_info;
+} PACKED ec_sdo_entry_desc_req_t;
+
+typedef struct PACKED ec_sdo_entry_desc_resp {
+    ec_mbxheader_t      mbx_hdr;
+    ec_coeheader_t      coe_hdr;
+    ec_sdoinfoheader_t  sdo_info_hdr;
+    uint16_t            index;
+    uint8_t             sub_index;
+    uint8_t             value_info;
+    uint16_t            data_type;
+    uint16_t            bit_length;
+    uint16_t            obj_access;
+    ec_data_t           desc_data;
+} PACKED ec_sdo_entry_desc_resp_t;
+
+//! read coe sdo entry description
+/*!
+ * \param pec pointer to ethercat master
+ * \param slave slave number
+ * \param index sdo index
+ * \param buf buffer to store answer
+ * \param len length of buffer, outputs read length
+ * \return working counter
+ */
+int ec_coe_sdo_entry_desc_read(ec_t *pec, uint16_t slave, uint16_t index, uint8_t sub_index,
+        uint8_t value_info, ec_coe_sdo_entry_desc_t *desc) {
+    int wkc;
+
+    ec_mbx_clear(pec, slave, 0);
+    ec_sdo_entry_desc_req_t *write_buf = (ec_sdo_entry_desc_req_t *)(pec->slaves[slave].mbx_write.buf);
+    ec_sdo_entry_desc_resp_t *read_buf = (ec_sdo_entry_desc_resp_t *)(pec->slaves[slave].mbx_read.buf); 
+
+    // mailbox header
+    write_buf->mbx_hdr.length       = 12; // (mbxhdr - length) + coehdr + sdohdr
+    write_buf->mbx_hdr.address      = 0x0000;
+    write_buf->mbx_hdr.priority     = 0x02;
+    write_buf->mbx_hdr.mbxtype      = EC_MBX_COE;
+
+    // coe header
+    write_buf->coe_hdr.service      = EC_COE_SDOINFO;
+    write_buf->coe_hdr.number       = 0x00;
+
+    // sdo header
+    write_buf->sdo_info_hdr.opcode  = EC_COE_SDO_INFO_GET_ENTRY_DESC_REQ;
+    write_buf->index                = index;
+    write_buf->sub_index            = sub_index;
+    write_buf->value_info           = value_info;
+
+    // send request
+    wkc = ec_mbx_send(pec, slave);
+
+    int val = 0;
+
+    // wait for answer
+    ec_mbx_clear(pec, slave, 1);
+    wkc = ec_mbx_receive(pec, slave);
+    
+    if (read_buf->coe_hdr.service == EC_COE_SDOINFO) {
+        if (read_buf->sdo_info_hdr.opcode == EC_COE_SDO_INFO_GET_ENTRY_DESC_RESP) {
+            // transfer was successfull
+            desc->data_type     = read_buf->data_type;
+            desc->bit_length    = read_buf->bit_length;
+            desc->obj_access    = read_buf->obj_access;
+            desc->data_len      = read_buf->mbx_hdr.length - 6 - 10;
+            
+            if (desc->data) {
+                memcpy(desc->data, read_buf->desc_data.bdata, desc->data_len);
+                int h;
+                for (h = 0; h < desc->data_len; ++h) 
+                    printf("%02X ", desc->data[h]);
+                printf("\n");
+            }
+
+        }
+    } else if (read_buf->coe_hdr.service == EC_COE_SDOREQ) {
+        desc->data_type         = 0;
+        desc->bit_length        = 0;
+        desc->obj_access        = 0;
+        desc->data_len          = 0;
+
+        wkc = -1;
+    }
+
+    return wkc;
+}
+

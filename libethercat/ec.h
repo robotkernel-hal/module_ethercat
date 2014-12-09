@@ -35,6 +35,15 @@
 #include "datagram.h"
 #include "datagram_pool.h"
 
+typedef uint16_t ec_state_t;
+#define EC_STATE_INIT        0x01
+#define EC_STATE_PREOP       0x02
+#define EC_STATE_SAFEOP      0x04
+#define EC_STATE_OP          0x08
+#define EC_STATE_MASK        0x0F
+#define EC_STATE_ERROR       0x10
+#define EC_STATE_RESET       0x10
+
 struct ec;
 
 typedef struct idx_entry {
@@ -69,6 +78,17 @@ typedef struct PACKED ec_slave_fmmu {
     uint8_t reserverd[3];
 } PACKED ec_slave_fmmu_t;
 
+typedef struct PACKED ec_pd_group {
+    uint32_t log;
+    uint32_t log_len;
+    
+    uint8_t *pd;
+    size_t   pdout_len;
+    size_t   pdin_len;
+    
+    datagram_entry_t *p_de;
+    idx_entry_t *p_idx;
+} PACKED ec_pd_group_t;
 
 typedef struct ec_slave {
     int16_t auto_inc_address;
@@ -87,6 +107,12 @@ typedef struct ec_slave {
 
     ec_slave_mbx_t mbx_read;
     ec_slave_mbx_t mbx_write;
+
+    int assigned_pd_group;
+    uint8_t *pdin;
+    size_t pdin_len;
+    uint8_t *pdout;
+    size_t pdout_len;
 } ec_slave_t;
 
 typedef struct ec {
@@ -97,7 +123,17 @@ typedef struct ec {
 
     int slave_cnt;
     ec_slave_t *slaves;
+
+    int pd_group_cnt;
+    ec_pd_group_t *pd_groups;
 } ec_t;
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+extern void *ec_log_func_user;
+extern void (*ec_log_func)(void *user, const char *format, ...);
 
 void ec_log(const char *pre, const char *format, ...);
 
@@ -117,6 +153,14 @@ int ec_open(ec_t **ppec, const char *ifname, int prio, int cpumask);
  * \return 0 on success 
  */
 int ec_close(ec_t *pec);
+
+//! create process data groups
+/*!
+ * \param pec ethercat master pointer
+ * \param pd_group_cnt number of groups to create
+ * \return 0 on success
+ */
+int ec_create_pd_groups(ec_t *pec, int pd_group_cnt);
 
 //! get next free index entry
 /*!
@@ -158,6 +202,20 @@ int ec_transceive(ec_t *pec, uint8_t cmd, uint32_t adr,
  */
 int ec_transmit_no_reply(ec_t *pec, uint8_t cmd, uint32_t adr, 
         uint8_t *data, size_t datalen);
+
+//! set state on ethercat bus
+/*! 
+ * \param pec ethercat master pointer
+ * \param state new ethercat state
+ * \return 0 on success
+ */
+int ec_set_state(ec_t *pec, ec_state_t state);
+
+int ec_state_transition(ec_t *pec, uint16_t slave, ec_state_t state);
+
+#ifdef __cplusplus
+};
+#endif
 
 #define ec_to_adr(ado, adp) \
     ((uint32_t)(ado) << 16) | ((adp) & 0xFFFF)

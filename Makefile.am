@@ -3,8 +3,9 @@ ACLOCAL_AMFLAGS = -I m4
 libdir = $(prefix)/lib
 lib_LTLIBRARIES = libmodule_ethercat.la
 
-libmodule_ethercat_la_SOURCES  = module_ethercat.cpp module_ethercat_firmware.cpp
-libmodule_ethercat_la_CXXFLAGS = -Wall -I$(top_srcdir)/kernel/source -I$(top_srcdir)/src -I$(top_builddir) @ROBOTKERNEL_CFLAGS@
+libmodule_ethercat_la_SOURCES  = module_ethercat.cpp \
+								 libethercat/coe.c libethercat/datagram.c libethercat/datagram_pool.c libethercat/ec.c libethercat/hw.c libethercat/mbx.c
+libmodule_ethercat_la_CXXFLAGS = -Wall -I$(top_srcdir)/kernel/source -I$(top_srcdir)/src -I$(top_srcdir)/libethercat -I$(top_builddir) @ROBOTKERNEL_CFLAGS@
 libmodule_ethercat_la_LDFLAGS  = -Wall -release $(PACKAGE_VERSION)
 
 install-exec-hook:

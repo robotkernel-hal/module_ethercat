@@ -29,15 +29,45 @@
 #include "robotkernel/module_intf.h"
 #include "robotkernel/kernel.h"
 #include "robotkernel/trigger_base.h"
+#include "robotkernel/runnable.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+#include "libethercat/ec.h"
+#include "libethercat/coe.h"
+#ifdef __cplusplus
+}
+#endif
 
 void ethercat_log(robotkernel::loglevel lvl, std::string name, const char *format, ...);
 
-class ethercat : public robotkernel::trigger_base {
+class ethercat : public robotkernel::trigger_base, public robotkernel::runnable {
     private: 
         robotkernel::kernel::interface_id_t _pd_interface_id;
 
     public:
-        std::string _devname;
+        typedef struct slave {
+            ~slave() {
+                if (_pd_intf)
+                    robotkernel::kernel::unregister_interface_cb(_pd_intf);
+                if (_coe_intf)
+                    robotkernel::kernel::unregister_interface_cb(_coe_intf);
+            }
+
+            int group;
+            robotkernel::kernel::interface_id_t _coe_intf;
+            robotkernel::kernel::interface_id_t _pd_intf;
+        } slave_t;
+
+        typedef std::map<int, slave_t *> slave_map_t;
+        slave_map_t _slave_info;
+
+        ec_t *_pec;
+
+        int _recv_prio;
+        int _recv_mask;
+        std::string _ifname;
         std::string _name;          //!< module name
         module_state_t   _state;    //!< actual module state
 
@@ -82,6 +112,8 @@ class ethercat : public robotkernel::trigger_base {
          * \return success or failure
          */
         int request(int reqcode, void* ptr);
+        
+        void run();     //! handler function called if thread is running
 };
 
 #endif // __MODULE_ETHERCAT_H__

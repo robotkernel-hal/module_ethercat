@@ -33,12 +33,28 @@
 #include "mbx.h"
 #include "coe.h"
 
+void *ec_log_func_user = NULL;
+void (*ec_log_func)(void *user, const char *format, ...) = NULL;
+
 void ec_log(const char *pre, const char *format, ...) {
-    va_list ap;
-    va_start(ap, format);
-    va_end(ap);
-    printf("[%-20.20s] ", pre);
-    vprintf(format, ap);
+    if (ec_log_func == NULL) {
+        va_list ap;
+        va_start(ap, format);
+        printf("[%-20.20s] ", pre);
+        vprintf(format, ap);
+        va_end(ap);
+    } else {
+        char buf[512];
+        char *tmp = &buf[0];
+
+        // format argument list
+        va_list args;
+        va_start(args, format);
+        int ret = snprintf(tmp, 512, "%s: ", pre);
+        vsnprintf(tmp+ret, 512-ret, format, args);
+
+        ec_log_func(ec_log_func_user, buf);
+    }
 }
 
 /** Set eeprom control to master. Only if set to PDI.
@@ -70,8 +86,19 @@ int ec_eepromconfig(ec_t *pec, uint16_t slave) {
 int ec_eepromread(ec_t *pec, uint16_t slave, uint32_t eepadr, uint32_t *data) {
     ec_eepromconfig(pec, slave);
     
-    int ret = 0;
+    int ret = 0, retry_cnt = 100;
     uint16_t wkc, eepcsr = 0x0100; // read access
+   
+    do {
+        eepcsr = 0;
+        ec_fprd(pec, pec->slaves[slave].fixed_address, EC_REG_EEPCTL,
+                (uint8_t *)&eepcsr, sizeof(eepcsr), &wkc);
+        if (--retry_cnt == 0) {
+            printf("reading eepctl failed, wkc %d\n", wkc);
+            ret = -1;
+            goto func_exit;
+        }
+    } while (eepcsr & 0x0100);
 
     ec_fpwr(pec, pec->slaves[slave].fixed_address, EC_REG_EEPADR,
             (uint8_t *)&eepadr, sizeof(eepadr), &wkc);
@@ -90,16 +117,18 @@ int ec_eepromread(ec_t *pec, uint16_t slave, uint32_t eepadr, uint32_t *data) {
         goto func_exit;
     }
 
+    retry_cnt = 100;
+
     do {
+        eepcsr = 0;
         ec_fprd(pec, pec->slaves[slave].fixed_address, EC_REG_EEPCTL,
                 (uint8_t *)&eepcsr, sizeof(eepcsr), &wkc);
-        if (wkc != 1) {
-            printf("reading eepctl failed\n");
+        if (--retry_cnt == 0) {
+            printf("reading eepctl failed, wkc %d\n", wkc);
             ret = -1;
             goto func_exit;
         }
     } while (eepcsr & 0x0100);
-
 
     ec_fprd(pec, pec->slaves[slave].fixed_address, EC_REG_EEPDAT,
             (uint8_t *)data, sizeof(*data), &wkc);
@@ -154,15 +183,6 @@ int ec_eepromread_2(ec_t *pec, uint16_t slave) {
     return 0;
 }
 
-typedef uint16_t ec_state_t;
-static const ec_state_t EC_STATE_INIT       = 0x01;
-static const ec_state_t EC_STATE_PREOP      = 0x02;
-static const ec_state_t EC_STATE_SAFEOP     = 0x04;
-static const ec_state_t EC_STATE_OP         = 0x08;
-static const ec_state_t EC_STATE_MASK       = 0x0F;
-static const ec_state_t EC_STATE_ERROR      = 0x10;
-static const ec_state_t EC_STATE_RESET      = 0x10;
-
 int ec_state_get(ec_t *pec, uint16_t slave, ec_state_t *state);
 
 int ec_master_state_set(ec_t *pec, ec_state_t state) {
@@ -172,7 +192,7 @@ int ec_master_state_set(ec_t *pec, ec_state_t state) {
     return wkc;
 }
 
-int ec_state_set(ec_t *pec, uint16_t slave, ec_state_t state) {
+int ec_slave_set_state(ec_t *pec, uint16_t slave, ec_state_t state) {
     uint16_t wkc = 0, act_state, value;
     ec_fpwr(pec, pec->slaves[slave].fixed_address, 
             EC_REG_ALCTL, &state, sizeof(state), &wkc); 
@@ -183,16 +203,16 @@ int ec_state_set(ec_t *pec, uint16_t slave, ec_state_t state) {
     do {
         act_state = 0;
         wkc = ec_state_get(pec, slave, &act_state);
-        ec_log("EC_STATE_SET", "wkc %d, state %X, act_state %X\n", 
-                wkc, state, act_state);
+        ec_log("EC_STATE_SET", "slave %d, state %X, act_state %X, wkc %d\n", 
+                slave, state, act_state, wkc);
         
         if (act_state & EC_STATE_ERROR) {
             ec_fprd(pec, pec->slaves[slave].fixed_address, 
                     EC_REG_ALSTATCODE, &value, sizeof(value), &wkc);
-            ec_log("EC_STATE_SET", "state switch to %d failed, alstatcode 0x%04X\n", 
-                    state, value);
+            ec_log("EC_STATE_SET", "slave %d, state switch to %d failed, alstatcode 0x%04X\n", 
+                    slave, state, value);
 
-            ec_state_set(pec, slave, (act_state & EC_STATE_MASK) | EC_STATE_RESET);
+            ec_slave_set_state(pec, slave, (act_state & EC_STATE_MASK) | EC_STATE_RESET);
             break;
         }
 
@@ -340,7 +360,7 @@ int ec_coe_calc_pd_len(ec_t *pec, uint16_t slave, uint16_t pdo_reg) {
 //    ec_coe_sdo_read(pec, slave, pdo_reg, 0, buf, 
 }
 
-int ec_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
+int ec_slave_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
     uint16_t wkc;
     ec_state_t act_state = 0;
     ec_slave_t *slv = &pec->slaves[slave];
@@ -348,7 +368,7 @@ int ec_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
     // check error state
     wkc = ec_state_get(pec, slave, &act_state);
     if (act_state & EC_STATE_ERROR) // reset error state first
-        ec_state_set(pec, slave, (act_state & EC_STATE_MASK) | EC_STATE_RESET);
+        ec_slave_set_state(pec, slave, (act_state & EC_STATE_MASK) | EC_STATE_RESET);
             
     // generate transition
     ec_state_transition_t transition = ((act_state & EC_STATE_MASK) << 8) | (state & EC_STATE_MASK); 
@@ -397,13 +417,68 @@ int ec_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
             eeprom_dump(pec, slave);
     
             // write state to slave
-            wkc = ec_state_set(pec, slave, EC_STATE_PREOP);
+            wkc = ec_slave_set_state(pec, slave, EC_STATE_PREOP);
         
 
             if (transition == INIT_2_PREOP)
                 break;
         }
-        case PREOP_2_SAFEOP:
+        case PREOP_2_SAFEOP: {
+            // check sm settings
+            if (1) { // have coe mailbox, check objects 1c12, 1c13
+                int sm_idx;
+                for (sm_idx = 2; sm_idx <= 3; ++sm_idx) {
+
+                    int wkc, i, j, bit_len = 0, idx = 0x1c10 + sm_idx;
+                    uint8_t entry_cnt = 0, entry_cnt_2;
+                    size_t entry_cnt_size = sizeof(entry_cnt);
+                    wkc = ec_coe_sdo_read(pec, slave, idx, 0, 0, &entry_cnt, &entry_cnt_size);
+
+                    if (wkc != 1)
+                        ec_log("PREOP_2_SAFEOP", "slave %d, reading 0x%04X/%d failed\n", slave, idx, 0);
+
+                    ec_log("PREOP_2_SAFEOP", "slave %d, 0x%04X count %d\n", slave, idx, entry_cnt); 
+
+                    for (i = 1; i <= entry_cnt; ++i) {
+                        uint16_t entry_idx;
+                        size_t entry_size = sizeof(entry_idx);
+                        wkc = ec_coe_sdo_read(pec, slave, idx, i, 0, (uint8_t *)&entry_idx, &entry_size);
+
+                        if (wkc != 1)
+                            ec_log("PREOP_2_SAFEOP", "slave %d, reading 0x%04X/%d failed\n", slave, idx, i);
+
+                        entry_cnt_size = sizeof(entry_cnt_2);
+
+                        wkc = ec_coe_sdo_read(pec, slave, entry_idx, 0, 0, (uint8_t *)&entry_cnt_2, &entry_cnt_size);
+
+                        if (wkc != 1)
+                            ec_log("PREOP_2_SAFEOP", "slave %d, reading 0x%04X/%d failed\n", slave, entry_idx, 0);
+
+                        ec_log("PREOP_2_SAFEOP", "slave %d, 0x%04X count %d\n", slave, entry_idx, entry_cnt); 
+
+                        for (j = 1; j <= entry_cnt_2; ++j) {
+                            uint32_t entry;
+                            size_t entry_size = sizeof(entry);
+                            wkc = ec_coe_sdo_read(pec, slave, entry_idx, j, 0, (uint8_t *)&entry, &entry_size);
+
+                            if (wkc != 1)
+                                ec_log("PREOP_2_SAFEOP", "reading 0x%04X/%d failed\n", entry_idx, j);
+
+                            ec_log("PREOP_2_SAFEOP", "slave %d, mapped entry %08X\n", slave, entry);
+
+                            bit_len += entry & 0x000000FF;
+                        }                        
+                    }
+
+                    ec_log("PREOP_2_SAFEOP", "sm%d length bits %d, bytes %d\n", sm_idx, bit_len, (bit_len + 7) / 8);
+                    if (slv->sm && slv->sm_ch > sm_idx)
+                        slv->sm[sm_idx].len = (bit_len + 7) / 8;
+                }
+            }
+
+            if (state == EC_STATE_SAFEOP)
+                break;
+        }
         case PREOP_2_OP: {
             // preop to safeop stuff            
 //            slv->sm[2].len = 10;
@@ -420,27 +495,57 @@ int ec_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
             }
 
             // write state to slave
-            wkc = ec_state_set(pec, slave, EC_STATE_SAFEOP);
+            wkc = ec_slave_set_state(pec, slave, EC_STATE_SAFEOP);
 
             if (transition == INIT_2_SAFEOP || transition == PREOP_2_SAFEOP)
                 break;
         }
-        case SAFEOP_2_OP:
-            // safeop to op stuff 
-            
+        case SAFEOP_2_OP: {
+            int i;
+            for (i = 0; i < slv->fmmu_ch; ++i) { 
+                // safeop to op stuff 
+                ec_log("SAFEOP_2_OP", "log 0x%X, log_len %d, log_bit_start %d, log_bit_stop %d, "
+                        "pyhs 0x%X, phys_bit_start %d, type %d, active %d\n",
+                        slv->fmmu[i].log,
+                        slv->fmmu[i].log_len,
+                        slv->fmmu[i].log_bit_start,
+                        slv->fmmu[i].log_bit_stop,
+                        slv->fmmu[i].phys,
+                        slv->fmmu[i].phys_bit_start,
+                        slv->fmmu[i].type,
+                        slv->fmmu[i].active);
+
+                ec_fpwr(pec, pec->slaves[slave].fixed_address, 0x600 + (16 * i),
+                            (uint8_t *)&pec->slaves[slave].fmmu[i], sizeof(ec_slave_fmmu_t), &wkc);
+
+            }
+
             // write state to slave
-            wkc = ec_state_set(pec, slave, EC_STATE_OP);
+            wkc = ec_slave_set_state(pec, slave, EC_STATE_OP);
             
             break;
-
+        }
         case OP_2_INIT:
         case SAFEOP_2_INIT:
         case PREOP_2_INIT:
+            // write state to slave
+            wkc = ec_slave_set_state(pec, slave, state);
+
+            // free resources
+            if (slv->mbx_read.buf) 
+                free(slv->mbx_read.buf);
+            if (slv->mbx_write.buf) 
+                free(slv->mbx_write.buf);
+
+            if (slv->sm)
+                free(slv->sm);
+            if (slv->fmmu)
+                free(slv->fmmu);
+
         case INIT_2_INIT: {
             int i;
             uint16_t wkc = 0, features = 0;
             uint8_t sm_fmmu_ch[2], ram_size = 0;
-
 
             // get number of sync managers and fmmus
             ec_fprd(pec, pec->slaves[slave].fixed_address, EC_REG_SM_FFMU_CH,
@@ -464,6 +569,8 @@ int ec_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
                 pec->slaves[slave].sm = NULL;
             }
 
+            ec_log("INIT_2_INIT", "slave %d has %d sync managers\n", slave, slv->sm_ch);
+
             if (pec->slaves[slave].sm_ch) {
                 pec->slaves[slave].sm = (ec_slave_sm_t *)malloc(
                         pec->slaves[slave].sm_ch * sizeof(ec_slave_sm_t));
@@ -480,6 +587,8 @@ int ec_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
                 free(pec->slaves[slave].fmmu);
                 pec->slaves[slave].fmmu = NULL;
             }
+            
+            ec_log("INIT_2_INIT", "slave %d has %d fmmus\n", slave, slv->fmmu_ch);
 
             if (pec->slaves[slave].fmmu_ch) {
                 pec->slaves[slave].fmmu = (ec_slave_fmmu_t *)malloc(
@@ -496,13 +605,166 @@ int ec_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
         case SAFEOP_2_SAFEOP:
         case OP_2_OP:
             // write state to slave
-            wkc = ec_state_set(pec, slave, state);
+            wkc = ec_slave_set_state(pec, slave, state);
             break;
         default:
             break;
     };
 
     return wkc;
+}
+
+//! create process data groups
+/*!
+ * \param pec ethercat master pointer
+ * \param pd_group_cnt number of groups to create
+ * \return 0 on success
+ */
+int ec_create_pd_groups(ec_t *pec, int pd_group_cnt) {
+    int i;
+
+    for (i = 0; i < pec->pd_group_cnt; ++i)
+        if (pec->pd_groups[i].pd)
+            free(pec->pd_groups[i].pd);
+    free(pec->pd_groups);
+
+    pec->pd_group_cnt = pd_group_cnt;
+    pec->pd_groups = (ec_pd_group_t *)malloc(sizeof(ec_pd_group_t) * pd_group_cnt);
+    for (i = 0; i < pec->pd_group_cnt; ++i) {
+        pec->pd_groups[i].log = 0x10000 * (i+1);
+        pec->pd_groups[i].log_len = 0;
+        pec->pd_groups[i].pd = NULL;
+        pec->pd_groups[i].pdout_len = 0;
+        pec->pd_groups[i].pdin_len = 0;
+    }
+}
+
+//! set state on ethercat bus
+/*! 
+ * \param pec ethercat master pointer
+ * \param state new ethercat state
+ * \return 0 on success
+ */
+int ec_set_state(ec_t *pec, ec_state_t state) {
+    int ret = 0, i;
+
+    switch (state) {
+        case EC_STATE_INIT: {
+            uint16_t fixed = 1000, wkc, val;
+
+            ec_state_t init_state = EC_STATE_INIT | EC_STATE_RESET;
+            ec_bwr(pec, EC_REG_ALCTL, &init_state, sizeof(init_state), &wkc); 
+
+            // free resources if previosly initialized
+            for (i = 0; i < pec->slave_cnt; ++i)
+                ec_slave_state_transition(pec, i, state);
+
+            pec->slave_cnt = 0;
+            if (pec->slaves)
+                free(pec->slaves);
+
+            // allocating slave structures
+            ret = ec_brd(pec, EC_REG_TYPE, (uint8_t *)&val, sizeof(val), &wkc); 
+            pec->slave_cnt = wkc;
+            pec->slaves = (ec_slave_t *)malloc(pec->slave_cnt * sizeof(ec_slave_t));
+            memset(pec->slaves, 0, pec->slave_cnt * sizeof(ec_slave_t));    
+
+            for (i = 0; i < 65536; ++i) {
+                int auto_inc = -1 * i;
+
+                ret = ec_aprd(pec, auto_inc, EC_REG_TYPE, (uint8_t *)&val, sizeof(val), &wkc);
+
+                if (wkc == 0)
+                    break;  // break here, cause there seems to be no more slave
+
+                ec_log("INITIAL SCAN", "found slave with auto inc address %d, "
+                        "wkc %d\n", auto_inc, wkc);
+
+                pec->slaves[i].assigned_pd_group = -1;
+                pec->slaves[i].auto_inc_address = auto_inc;
+                pec->slaves[i].fixed_address = fixed;
+
+                ec_apwr(pec, auto_inc, EC_REG_STADR, (uint8_t *)&fixed, sizeof(fixed), &wkc); 
+                if (wkc == 1)
+                    ec_log("INITIAL SCAN", "fixed address %d successfully "
+                            "written to slave %d\n", fixed, auto_inc);
+
+                fixed++;
+            }
+
+            for (i = 0; i < pec->slave_cnt; ++i)
+                ec_slave_state_transition(pec, i, state);
+
+            break;
+        }
+        case EC_STATE_OP: {
+            int i, j;
+            for (j = 0; j < pec->pd_group_cnt; ++j) {
+                ec_pd_group_t *pd = &pec->pd_groups[j];
+                pd->pdout_len = 0,
+                pd->pdin_len = 0;
+
+                for (i = 0; i < pec->slave_cnt; ++i) {
+                    ec_slave_t *slv = &pec->slaves[i];
+
+                    if (slv->assigned_pd_group != j)
+                        continue;
+            
+                    // outputs 
+                    pd->pdout_len += slv->sm[3].len;
+                    
+                    // inputs
+                    pd->pdin_len += slv->sm[2].len;
+                }
+
+                pd->log_len = pd->pdout_len + pd->pdin_len;
+                pd->pd = (uint8_t *)malloc(pd->log_len);
+                memset(pd->pd, 0, pd->log_len);
+
+                uint8_t *pdout = pd->pd,
+                        *pdin = pd->pd + pd->pdout_len;
+
+                uint32_t log_base_out = pd->log,
+                         log_base_in = pd->log + pd->pdout_len;
+
+                for (i = 0; i < pec->slave_cnt; ++i) {
+                    ec_slave_t *slv = &pec->slaves[i];
+
+                    if (slv->assigned_pd_group != j)
+                        continue;
+
+                    slv->fmmu[0].log = log_base_out;
+                    slv->fmmu[0].log_len = slv->sm[2].len;
+                    slv->fmmu[0].phys = slv->sm[2].adr;
+                    slv->fmmu[0].type = 2;
+                    slv->fmmu[0].active = 1;
+                    log_base_out += slv->sm[2].len;
+
+                    slv->fmmu[1].log = log_base_in;
+                    slv->fmmu[1].log_len = slv->sm[3].len;
+                    slv->fmmu[1].phys = slv->sm[3].adr;
+                    slv->fmmu[1].type = 1;
+                    slv->fmmu[1].active = 1;
+                    log_base_in += slv->sm[3].len;
+    
+                    slv->pdin = pdin; 
+                    slv->pdin_len = slv->sm[3].len;
+                    pdin += slv->pdin_len;
+
+                    slv->pdout = pdout; 
+                    slv->pdout_len = slv->sm[2].len;
+                    pdout += slv->pdout_len;
+                }
+            }
+        }
+        default:
+            for (i = 0; i < pec->slave_cnt; ++i)
+                ec_slave_state_transition(pec, i, state);
+
+            break;
+    }
+
+    return ret;
 }
 
 pthread_t ec_tx;
@@ -543,126 +805,13 @@ int ec_open(ec_t **ppec, const char *ifname, int prio, int cpumask) {
         ec_index_put(*ppec, entry);
     }
     
+    (*ppec)->slave_cnt = 0;
+    (*ppec)->pd_group_cnt = 0;
+    (*ppec)->slaves = NULL;
+    (*ppec)->pd_groups = NULL;
+
     datagram_pool_open(&(*ppec)->pool, 1000);
     hw_open(&(*ppec)->phw, ifname, prio, cpumask);
-
-    pthread_create(&ec_tx, NULL, ec_tx_thread, *ppec);
-
-    // allocating slave structures
-    ret = ec_brd((*ppec), EC_REG_TYPE, (uint8_t *)&val, sizeof(val), &wkc); 
-    (*ppec)->slave_cnt = wkc;
-    (*ppec)->slaves = (ec_slave_t *)malloc((*ppec)->slave_cnt * sizeof(ec_slave_t));
-    memset((*ppec)->slaves, 0, (*ppec)->slave_cnt * sizeof(ec_slave_t));
-
-    for (i = 0; i < 65536; ++i) {
-        int auto_inc = -1 * i;
-
-        ret = ec_aprd((*ppec), auto_inc, EC_REG_TYPE, (uint8_t *)&val, sizeof(val), &wkc);
-
-        if (wkc == 0)
-            break;  // break here, cause there seems to be no more slave
-        
-        printf("found slave with auto inc address %d, wkc %d\n", auto_inc, wkc);
-        (*ppec)->slaves[i].auto_inc_address = auto_inc;
-        (*ppec)->slaves[i].fixed_address = fixed;
-
-        ec_apwr((*ppec), auto_inc, EC_REG_STADR, (uint8_t *)&fixed, sizeof(fixed), &wkc); 
-        if (wkc == 1)
-            printf("fixed address %d successfully written to slave %d\n", fixed, auto_inc);
-
-        fixed++;
-
-        ec_state_transition(*ppec, i, EC_STATE_INIT);
-        
-        ec_state_transition(*ppec, i, EC_STATE_PREOP);
-
-#if 0
-        ec_coe_odlist_read(*ppec, i, NULL, NULL);
-
-        int k, l, j;
-//        for (k = 0; k < 4; ++k)
-//            ec_coe_sdo_desc_read(*ppec, i, 0x1000+k, NULL, NULL);
-//        for (k = 0; k < 8; ++k)
-//            ec_coe_sdo_desc_read(*ppec, i, 0x1A00+k, NULL, NULL);
-
-        for (k = 0; k < 32; ++k) {            
-            uint8_t idx_cnt = 0;
-            size_t idx_cnt_len = sizeof(idx_cnt);
-            ec_coe_sdo_read(*ppec, i, 0x1600 + k, 0, 0, &idx_cnt, &idx_cnt_len);
-
-            if (!idx_cnt)
-                continue;
-
-            printf("0x%04X: elements: %d\n", 0x1600+k, idx_cnt);
-
-            for (l = 1; l <= idx_cnt; ++l) {
-                uint8_t buf[10];
-                size_t buf_len = sizeof(uint8_t) * 10;
-                ec_coe_sdo_read(*ppec, i, 0x1600 + k, l, 0, buf, &buf_len);
-
-                printf("      : %2d - ", l);
-                for (j = 0; j < buf_len; ++j) {
-                    printf("%02X ", buf[j]);
-                }
-                printf("        0x%04X ", ((uint16_t *)buf)[1]);
-                ec_coe_sdo_desc_read(*ppec, i, ((uint16_t *)buf)[1], 0,0);
-            }
-        }
-
-        for (k = 0; k < 32; ++k) {            
-            uint8_t idx_cnt = 0;
-            size_t idx_cnt_len = sizeof(idx_cnt);
-            ec_coe_sdo_read(*ppec, i, 0x1A00 + k, 0, 0, &idx_cnt, &idx_cnt_len);
-
-            if (!idx_cnt)
-                continue;
-
-            printf("0x%04X: elements: %d\n", 0x1A00+k, idx_cnt);
-
-            for (l = 1; l <= idx_cnt; ++l) {
-                uint8_t buf[10];
-                size_t buf_len = sizeof(uint8_t) * 10;
-                ec_coe_sdo_read(*ppec, i, 0x1A00 + k, l, 0, buf, &buf_len);
-
-                printf("      : %2d - ", l);
-                for (j = 0; j < buf_len; ++j) {
-                    printf("%02X ", buf[j]);
-                }
-                printf("        0x%04X ", ((uint16_t *)buf)[1]);
-                ec_coe_sdo_desc_read(*ppec, i, ((uint16_t *)buf)[1], 0,0);
-            }
-        }
-        
-        for (k = 0; k < 4; ++k) {            
-            uint8_t idx_cnt = 0;
-            size_t idx_cnt_len = sizeof(idx_cnt);
-            ec_coe_sdo_read(*ppec, i, 0x1C10 + k, 0, 0, &idx_cnt, &idx_cnt_len);
-
-            if (!idx_cnt)
-                continue;
-
-            printf("0x%04X: elements: %d\n", 0x1C10+k, idx_cnt);
-
-            for (l = 1; l <= idx_cnt; ++l) {
-                uint8_t buf[10];
-                size_t buf_len = sizeof(uint8_t) * 10;
-                ec_coe_sdo_read(*ppec, i, 0x1C10 + k, l, 0, buf, &buf_len);
-
-                printf("      : %2d - ", l);
-                for (j = 0; j < buf_len; ++j) {
-                    printf("%02X ", buf[j]);
-                }
-                printf("\n");
-//                printf("        0x%04X ", ((uint16_t *)buf)[1]);
-//                ec_coe_sdo_desc_read(*ppec, i, ((uint16_t *)buf)[1], 0,0);
-            }
-        }
-#endif
-
-        ec_state_transition(*ppec, i, EC_STATE_SAFEOP);
-        ec_state_transition(*ppec, i, EC_STATE_OP);
-
-    }
 
     return 0;
 }

@@ -21,7 +21,26 @@ enum {
     EC_COE_SDO_INFO_ODLIST_RESP,
     EC_COE_SDO_INFO_GET_OBJECT_DESC_REQ,
     EC_COE_SDO_INFO_GET_OBJECT_DESC_RESP,
+    EC_COE_SDO_INFO_GET_ENTRY_DESC_REQ,
+    EC_COE_SDO_INFO_GET_ENTRY_DESC_RESP,
 };
+
+#define CANOPEN_MAXNAME 40
+    
+typedef struct PACKED ec_coe_sdo_desc {
+    uint16_t data_type;             //! element data type
+    uint8_t  obj_type;              //! object type
+    uint8_t  max_subindices;        //! maximum number of subindices
+    char     name[CANOPEN_MAXNAME]; //! element name
+} PACKED ec_coe_sdo_desc_t;
+
+typedef struct PACKED ec_coe_sdo_entry_desc {
+    uint16_t            data_type;
+    uint16_t            bit_length;
+    uint16_t            obj_access;
+    uint8_t            *data;
+    size_t              data_len;
+} PACKED ec_coe_sdo_entry_desc_t;
 
 //! read coe sdo 
 /*!
@@ -42,12 +61,23 @@ int ec_coe_sdo_read(ec_t *pec, uint16_t slave, uint16_t index,
  * \param pec pointer to ethercat master
  * \param slave slave number
  * \param index sdo index
+ * \param desc buffer to store answer
+ * \return working counter
+ */
+int ec_coe_sdo_desc_read(ec_t *pec, uint16_t slave, uint16_t index, 
+        ec_coe_sdo_desc_t *desc);
+
+//! read coe sdo entry description
+/*!
+ * \param pec pointer to ethercat master
+ * \param slave slave number
+ * \param index sdo index
  * \param buf buffer to store answer
  * \param len length of buffer, outputs read length
  * \return working counter
  */
-int ec_coe_sdo_desc_read(ec_t *pec, uint16_t slave, uint16_t index, 
-        uint8_t *buf, size_t *len);
+int ec_coe_sdo_entry_desc_read(ec_t *pec, uint16_t slave, uint16_t index, uint8_t sub_index,
+        uint8_t value_info, ec_coe_sdo_entry_desc_t *desc);
 
 //! read coe object dictionary list
 /*!
