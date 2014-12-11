@@ -78,12 +78,12 @@ int datagram_pool_close(datagram_pool_t *pp) {
         TAILQ_REMOVE(&pp->avail, datagram, qh);
         free(datagram);
     }
-
-    free(pp);
     
     pthread_mutex_unlock(&pp->_pool_lock);
     pthread_mutex_destroy(&pp->_pool_lock);
 
+    free(pp);
+    
     return 0;
 }
 

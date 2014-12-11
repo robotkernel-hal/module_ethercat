@@ -75,7 +75,6 @@ int ec_mbx_send(ec_t *pec, uint16_t slave) {
  */
 int ec_mbx_receive(ec_t *pec, uint16_t slave) {
     uint16_t wkc = 0;
-    uint8_t sm_state;
     ec_slave_t *slv = &pec->slaves[slave];
 
     if (!slv->sm[slv->mbx_read.sm_nr].len)

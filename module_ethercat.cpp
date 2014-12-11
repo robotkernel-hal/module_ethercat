@@ -27,6 +27,20 @@
 
 using namespace robotkernel;
 using namespace std;
+using namespace module_ethercat;
+
+//! ethercat state string
+const string module_ethercat::state_strings[] = {
+    "Unknown (0)",
+    "EtherCAT INIT",
+    "EtherCAT PREOP",
+    "Unknown (3)",
+    "EtherCAT SAFEOP",
+    "Unknown (5)",
+    "Unknown (6)",
+    "Unknown (7)",
+    "EtherCAT OP"
+};
 
 //! log to kernel logging facility
 void ethercat_log(robotkernel::loglevel lvl, string name, const char *format, ...) {
@@ -40,7 +54,7 @@ void ethercat_log(robotkernel::loglevel lvl, string name, const char *format, ..
 }
 
 void ethercat_log_func(void *user, const char *format, ...) {
-    ethercat *e = (ethercat *)user;
+    master *e = (master *)user;
     va_list ap;
     va_start(ap, format);
     ethercat_log(module_info, e->_name, format, ap);
@@ -51,14 +65,24 @@ void ethercat_log_func(void *user, const char *format, ...) {
 /*!
  * \param node yaml intialization node
  */
-ethercat::ethercat(const std::string& name, const YAML::Node& node) {
+master::master(const std::string& name, const YAML::Node& node) {
     _name       = name;
     _ifname     = node["ifname"].to<string>();
     _recv_prio  = node["recv_prio"].to<int>();
     _recv_mask  = node["recv_mask"].to<int>();
+    _pec        = NULL;
 
     ec_log_func_user = this;
     ec_log_func = ethercat_log_func;
+
+    if (node.FindValue("slaves") != NULL) {
+        // parsing slave configurations
+        const YAML::Node& slaves = node["slaves"];
+        for (YAML::Iterator it = slaves.begin(); it != slaves.end(); ++it) {
+            slave *slv = new slave(*it, this);
+            _slave_info[slv->index] = slv;
+        }
+    }
 
     int ret = ec_open(&_pec, _ifname.c_str(), _recv_prio, _recv_mask);
     if (ret != 0) 
@@ -74,7 +98,7 @@ ethercat::ethercat(const std::string& name, const YAML::Node& node) {
 }
 
 //! destruction 
-ethercat::~ethercat() {
+master::~master() {
     if (_pec)
         ec_close(_pec);
 
@@ -85,11 +109,11 @@ ethercat::~ethercat() {
 }
         
 //! handler function called if thread is running
-void ethercat::run() {
+void master::run() {
     while (_running) {
         hw_tx(_pec->phw);
 
-        struct timespec ts = { 0, 1000000 };
+        struct timespec ts = { 0, 50000 };
         nanosleep(&ts, NULL);
     }
 }
@@ -100,7 +124,7 @@ void ethercat::run() {
  * \param bufsize size of process data buffer
  * \return size of read bytes
  */
-size_t ethercat::read(void* buf, size_t bufsize) {
+size_t master::read(void* buf, size_t bufsize) {
     return 0;
 }
 
@@ -109,25 +133,22 @@ size_t ethercat::read(void* buf, size_t bufsize) {
  * \param state requested state
  * \return success or failure
  */
-int ethercat::set_state(module_state_t state) {
+int master::set_state(module_state_t state) {
     int ret = 0, nr;
 
     switch (state) {
         case module_state_init: {
-            for (slave_map_t::iterator it = _slave_info.begin();
-                    it != _slave_info.end(); ++it)
-                delete it->second;
-
-            _slave_info.clear();
-
             start();
 
             ec_set_state(_pec, EC_STATE_INIT);
 
             for (nr = 0; nr < _pec->slave_cnt; ++nr) {
-                slave_t *slv = new slave_t();
-                slv->_pd_intf = NULL;
-                slv->_coe_intf = NULL;
+                if (_slave_info.find(nr) != _slave_info.end())
+                    continue;
+
+                ethercat_log(module_info, _name, "slave %d creating empty one\n", nr);
+
+                slave *slv = new slave(nr, this);
                 _slave_info[nr] = slv;
             }
         
@@ -138,14 +159,9 @@ int ethercat::set_state(module_state_t state) {
 
             ec_set_state(_pec, EC_STATE_PREOP);
 
-            for (nr = 0; nr < _pec->slave_cnt; ++nr) {
-                std::stringstream slave_name; 
-                slave_name << "slave_" << nr;
-                _slave_info[nr]->_coe_intf = robotkernel::kernel::register_interface_cb(_name.c_str(), 
-                        "libinterface_canopen_protocol.so", slave_name.str().c_str(), nr);
-                _slave_info[nr]->_pd_intf = robotkernel::kernel::register_interface_cb(_name.c_str(), 
-                        "libinterface_process_data_inspection.so", slave_name.str().c_str(), nr);
-            }
+            for (nr = 0; nr < _pec->slave_cnt; ++nr)
+                _slave_info[nr]->register_interfaces();
+
             break;
         }
         case module_state_safeop:
@@ -154,7 +170,8 @@ int ethercat::set_state(module_state_t state) {
             ec_create_pd_groups(_pec, 1);
             for (nr = 0; nr < _pec->slave_cnt; ++nr) {
                 _pec->slaves[nr].assigned_pd_group = 0;
-            }
+                _slave_info[nr]->prepare_state_transition(preop_to_safeop);
+            }            
             
             ec_set_state(_pec, EC_STATE_SAFEOP);
             break;
@@ -178,7 +195,7 @@ int ethercat::set_state(module_state_t state) {
 /*!
  * \return current state
  */
-module_state_t ethercat::get_state() {
+module_state_t master::get_state() {
     return _state;
 }
 
@@ -188,7 +205,7 @@ module_state_t ethercat::get_state() {
  * \param ptr pointer to request structure
  * \return success or failure
  */
-int ethercat::request(int reqcode, void* ptr) {
+int master::request(int reqcode, void* ptr) {
     int ret = 0;
 
     switch (reqcode) {
@@ -197,12 +214,12 @@ int ethercat::request(int reqcode, void* ptr) {
             pd->pd = NULL;
             pd->len = 0;
 
-            if ((pd->slave_id >= 0) && (pd->slave_id < _pec->slave_cnt)) {
+            if ((pd->slave_id >= 0) && (pd->slave_id < (unsigned)_pec->slave_cnt)) {
                 pd->pd = _pec->slaves[pd->slave_id].pdin;
                 pd->len = _pec->slaves[pd->slave_id].pdin_len;
             }
             
-            ethercat_log(module_info, _name, "GET_PDIN: %p/%d\n", pd->pd, pd->len);
+            ethercat_log(module_verbose, _name, "GET_PDIN: %p/%d\n", pd->pd, pd->len);
             break;
         }
         case MOD_REQUEST_GET_PDOUT: {            
@@ -210,12 +227,12 @@ int ethercat::request(int reqcode, void* ptr) {
             pd->pd = NULL;
             pd->len = 0;
 
-            if ((pd->slave_id >= 0) && (pd->slave_id < _pec->slave_cnt)) {
+            if ((pd->slave_id >= 0) && (pd->slave_id < (unsigned)_pec->slave_cnt)) {
                 pd->pd = _pec->slaves[pd->slave_id].pdout;
                 pd->len = _pec->slaves[pd->slave_id].pdout_len;
             }
 
-            ethercat_log(module_info, _name, "GET_PDOUT: %p/%d\n", pd->pd, pd->len);
+            ethercat_log(module_verbose, _name, "GET_PDOUT: %p/%d\n", pd->pd, pd->len);
             break;
         }
         case MOD_REQUEST_SET_TRIGGER_CB: {
@@ -315,7 +332,7 @@ static void cb_block(void *user_arg, struct datagram_entry *p) {
 }
 
 //! module trigger callback
-void ethercat::trigger() {
+void master::trigger() {
     int i = 0;
 
     if (_state == module_state_op) {
@@ -381,13 +398,13 @@ extern "C" {
   \return size of read bytes
  */
 size_t mod_read(MODULE_HANDLE hdl, void* buf, size_t bufsize) {
-    ethercat *ethercat_dev = (ethercat *)hdl;
-    if (!ethercat_dev) {
+    master *master_dev = (master *)hdl;
+    if (!master_dev) {
         errno = EINVAL;
         return -1;
     }
 
-    return ethercat_dev->read(buf, bufsize);
+    return master_dev->read(buf, bufsize);
 }
 
 //! cyclic process data write
@@ -408,7 +425,7 @@ size_t mod_write(MODULE_HANDLE hdl, void* buf, size_t bufsize) {
   \return handle on success, NULL otherwise
 */
 MODULE_HANDLE mod_configure(const char* name, const char* config) {
-    ethercat *ethercat_dev;
+    master *master_dev;
 
     // open config
     std::stringstream stream(config);
@@ -423,13 +440,13 @@ MODULE_HANDLE mod_configure(const char* name, const char* config) {
         return (MODULE_HANDLE)NULL;
     }
     
-    ethercat_dev = new ethercat(name, doc);
-    if (!ethercat_dev) {
+    master_dev = new master(name, doc);
+    if (!master_dev) {
         ethercat_log(module_error, name, "cannot allocate memory");
         return (MODULE_HANDLE)NULL;
     }
 
-    return (MODULE_HANDLE)ethercat_dev;
+    return (MODULE_HANDLE)master_dev;
 }
 
 //! unconfigure module
@@ -438,13 +455,13 @@ MODULE_HANDLE mod_configure(const char* name, const char* config) {
   \return success or failure
  */
 int mod_unconfigure(MODULE_HANDLE hdl) {
-    ethercat *ethercat_dev = (ethercat *)hdl;
-    if (!ethercat_dev) {
+    master *master_dev = (master *)hdl;
+    if (!master_dev) {
         errno = EINVAL;
         return -1;
     }
 
-    delete ethercat_dev;
+    delete master_dev;
     return 0;
 }
 
@@ -455,13 +472,13 @@ int mod_unconfigure(MODULE_HANDLE hdl) {
   \return success or failure
  */
 int mod_set_state(MODULE_HANDLE hdl, module_state_t state) {
-    ethercat *ethercat_dev = (ethercat *)hdl;
-    if (!ethercat_dev) {
+    master *master_dev = (master *)hdl;
+    if (!master_dev) {
         errno = EINVAL;
         return -1;
     }
 
-    return ethercat_dev->set_state(state);
+    return master_dev->set_state(state);
 }
 
 //! get module state machine state
@@ -470,13 +487,13 @@ int mod_set_state(MODULE_HANDLE hdl, module_state_t state) {
   \return current state
  */
 module_state_t mod_get_state(MODULE_HANDLE hdl) {
-    ethercat *ethercat_dev = (ethercat *)hdl;
-    if (!ethercat_dev) {
+    master *master_dev = (master *)hdl;
+    if (!master_dev) {
         errno = EINVAL;
         return module_state_unknown;
     }
 
-    return ethercat_dev->get_state();
+    return master_dev->get_state();
 }
 
 //! send a request to module
@@ -487,13 +504,13 @@ module_state_t mod_get_state(MODULE_HANDLE hdl) {
   \return success or failure
  */
 int mod_request(MODULE_HANDLE hdl, int reqcode, void* ptr) {
-    ethercat *ethercat_dev = (ethercat *)hdl;
-    if (!ethercat_dev) {
+    master *master_dev = (master *)hdl;
+    if (!master_dev) {
         errno = EINVAL;
         return -1;
     }
 
-    return ethercat_dev->request(reqcode, ptr);
+    return master_dev->request(reqcode, ptr);
 }
 
 //! module trigger callback
@@ -501,13 +518,13 @@ int mod_request(MODULE_HANDLE hdl, int reqcode, void* ptr) {
  * \param hdl module handle
  */
 void mod_trigger(MODULE_HANDLE hdl) {
-    ethercat *ethercat_dev = (ethercat *)hdl;
-    if (!ethercat_dev) {
+    master *master_dev = (master *)hdl;
+    if (!master_dev) {
         errno = EINVAL;
         return;
     }
 
-    ethercat_dev->trigger();
+    master_dev->trigger();
 }
 
 #if 0

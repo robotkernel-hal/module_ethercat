@@ -56,6 +56,20 @@ typedef struct PACKED ec_coe_sdo_entry_desc {
 int ec_coe_sdo_read(ec_t *pec, uint16_t slave, uint16_t index, 
         uint8_t sub_index, int complete, uint8_t *buf, size_t *len);
 
+//! write coe sdo 
+/*!
+ * \param pec pointer to ethercat master
+ * \param slave slave number
+ * \param index sdo index
+ * \param sub_index sdo sub index
+ * \param complete complete access (only if sub_index == 0)
+ * \param buf buffer to write to sdo
+ * \param len length of buffer, outputs written length
+ * \return working counter
+ */
+int ec_coe_sdo_write(ec_t *pec, uint16_t slave, uint16_t index, 
+        uint8_t sub_index, int complete, uint8_t *buf, size_t *len);
+
 //! read coe sdo description
 /*!
  * \param pec pointer to ethercat master

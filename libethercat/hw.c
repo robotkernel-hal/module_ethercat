@@ -24,6 +24,8 @@
  */
 
 #include "hw.h"
+#include "ec.h"
+
 #include <pthread.h>
 #include <stdlib.h>
 #include <errno.h>

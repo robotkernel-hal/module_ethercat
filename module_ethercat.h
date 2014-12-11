@@ -30,37 +30,43 @@
 #include "robotkernel/kernel.h"
 #include "robotkernel/trigger_base.h"
 #include "robotkernel/runnable.h"
+#include "slave.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 #include "libethercat/ec.h"
 #include "libethercat/coe.h"
+#include "libethercat/mbx.h"
 #ifdef __cplusplus
 }
 #endif
 
 void ethercat_log(robotkernel::loglevel lvl, std::string name, const char *format, ...);
 
-class ethercat : public robotkernel::trigger_base, public robotkernel::runnable {
+namespace module_ethercat {
+
+extern const std::string state_strings[];
+
+class master : public robotkernel::trigger_base, public robotkernel::runnable {
     private: 
         robotkernel::kernel::interface_id_t _pd_interface_id;
 
     public:
-        typedef struct slave {
-            ~slave() {
-                if (_pd_intf)
-                    robotkernel::kernel::unregister_interface_cb(_pd_intf);
-                if (_coe_intf)
-                    robotkernel::kernel::unregister_interface_cb(_coe_intf);
-            }
+//        typedef struct slave {
+//            ~slave() {
+//                if (_pd_intf)
+//                    robotkernel::kernel::unregister_interface_cb(_pd_intf);
+//                if (_coe_intf)
+//                    robotkernel::kernel::unregister_interface_cb(_coe_intf);
+//            }
+//
+//            int group;
+//            robotkernel::kernel::interface_id_t _coe_intf;
+//            robotkernel::kernel::interface_id_t _pd_intf;
+//        } slave_t;
 
-            int group;
-            robotkernel::kernel::interface_id_t _coe_intf;
-            robotkernel::kernel::interface_id_t _pd_intf;
-        } slave_t;
-
-        typedef std::map<int, slave_t *> slave_map_t;
+        typedef std::map<int, slave *> slave_map_t;
         slave_map_t _slave_info;
 
         ec_t *_pec;
@@ -76,10 +82,10 @@ class ethercat : public robotkernel::trigger_base, public robotkernel::runnable 
         /*!
          * \param node yaml intialization node
          */
-        ethercat(const std::string& name, const YAML::Node& node);
+        master(const std::string& name, const YAML::Node& node);
 
         //! destruction 
-        ~ethercat();
+        ~master();
 
         //! cyclic process data read
         /*!
@@ -115,6 +121,8 @@ class ethercat : public robotkernel::trigger_base, public robotkernel::runnable 
         
         void run();     //! handler function called if thread is running
 };
+
+}; // namespace module_ethercat
 
 #endif // __MODULE_ETHERCAT_H__
 

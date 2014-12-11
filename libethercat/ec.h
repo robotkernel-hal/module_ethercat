@@ -34,6 +34,7 @@
 #include "regs.h"
 #include "datagram.h"
 #include "datagram_pool.h"
+#include "eeprom.h"
 
 typedef uint16_t ec_state_t;
 #define EC_STATE_INIT        0x01
@@ -96,6 +97,7 @@ typedef struct ec_slave {
 
     uint32_t vendor_id;
     uint32_t product_code;
+    uint16_t mbx_supported;
 
     uint8_t sm_ch;      //!< number of sync manager channels
     uint8_t fmmu_ch;    //!< number of fmmu channels
@@ -113,6 +115,8 @@ typedef struct ec_slave {
     size_t pdin_len;
     uint8_t *pdout;
     size_t pdout_len;
+
+    eeprom_info_t eeprom;
 } ec_slave_t;
 
 typedef struct ec {
@@ -161,6 +165,13 @@ int ec_close(ec_t *pec);
  * \return 0 on success
  */
 int ec_create_pd_groups(ec_t *pec, int pd_group_cnt);
+
+//! destroy process data groups
+/*!
+ * \param pec ethercat master pointer
+ * \return 0 on success
+ */
+int ec_destroy_pd_groups(ec_t *pec);
 
 //! get next free index entry
 /*!

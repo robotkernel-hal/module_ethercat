@@ -36,6 +36,15 @@ typedef struct PACKED ec_sdo {
     ec_data_t      sdo_data;
 } PACKED ec_sdo_t;
 
+typedef struct PACKED ec_sdo_download {
+    ec_mbxheader_t mbx_hdr;
+    ec_coeheader_t coe_hdr;
+    ec_sdoheader_t sdo_hdr;
+    uint32_t complete_size;
+
+    ec_data_t      sdo_data;
+} PACKED ec_sdo_download_t;
+
 //! read coe sdo 
 /*!
  * \param pec pointer to ethercat master
@@ -70,6 +79,69 @@ int ec_coe_sdo_read(ec_t *pec, uint16_t slave, uint16_t index, uint8_t sub_index
     write_buf->sdo_hdr.complete     = complete;
     write_buf->sdo_hdr.index        = index;
     write_buf->sdo_hdr.sub_index    = sub_index;
+
+    // send request
+    wkc = ec_mbx_send(pec, slave);
+
+    // wait for answer
+    ec_mbx_clear(pec, slave, 1);
+    wkc = ec_mbx_receive(pec, slave);
+
+    size_t sdo_len = min(*len, read_buf->mbx_hdr.length - 6);
+    memcpy(buf, read_buf->sdo_data.bdata, sdo_len);
+    *len = sdo_len;
+
+    return wkc;
+}
+
+//! write coe sdo 
+/*!
+ * \param pec pointer to ethercat master
+ * \param slave slave number
+ * \param index sdo index
+ * \param sub_index sdo sub index
+ * \param complete complete access (only if sub_index == 0)
+ * \param buf buffer to write to sdo
+ * \param len length of buffer, outputs written length
+ * \return working counter
+ */
+int ec_coe_sdo_write(ec_t *pec, uint16_t slave, uint16_t index, 
+        uint8_t sub_index, int complete, uint8_t *buf, size_t *len) {
+    int wkc;
+
+    ec_mbx_clear(pec, slave, 0);
+    ec_sdo_t *write_buf = 
+        (ec_sdo_t *)(pec->slaves[slave].mbx_write.buf);
+    ec_sdo_t *read_buf  = 
+        (ec_sdo_t *)(pec->slaves[slave].mbx_read.buf); 
+
+    // mailbox header
+    write_buf->mbx_hdr.length           = 10;// + *len; // (mbxhdr - length) + coehdr + sdohdr
+    write_buf->mbx_hdr.address          = 0x0000;
+    write_buf->mbx_hdr.priority         = 0x00;
+    write_buf->mbx_hdr.mbxtype          = EC_MBX_COE;
+
+    // coe header
+    write_buf->coe_hdr.service          = EC_COE_SDOREQ;
+    write_buf->coe_hdr.number           = 0x00;
+
+    // sdo header
+    write_buf->sdo_hdr.size_indicator   = 1;
+    write_buf->sdo_hdr.command          = EC_COE_SDO_DOWNLOAD_REQ;
+    write_buf->sdo_hdr.transfer_type    = 0;
+    write_buf->sdo_hdr.data_set_size    = 0;
+    write_buf->sdo_hdr.complete         = complete;
+    write_buf->sdo_hdr.index            = index;
+    write_buf->sdo_hdr.sub_index        = sub_index;
+
+    if (*len <= 4) {
+        write_buf->sdo_hdr.transfer_type = 1;
+        write_buf->sdo_hdr.data_set_size = 4 - *len;
+        memcpy(&write_buf->sdo_data.ldata[0], buf, *len);
+    } else {
+        write_buf->sdo_data.ldata[0] = *len;
+        memcpy(&write_buf->sdo_data.ldata[1], buf, *len);
+    }
 
     // send request
     wkc = ec_mbx_send(pec, slave);
@@ -141,23 +213,19 @@ int ec_coe_odlist_read(ec_t *pec, uint16_t slave, uint8_t *buf, size_t *len) {
     int val = 0;
 
     do {
-    // wait for answer
-    ec_mbx_clear(pec, slave, 1);
-    wkc = ec_mbx_receive(pec, slave);
+        // wait for answer
+        ec_mbx_clear(pec, slave, 1);
+        wkc = ec_mbx_receive(pec, slave);
+        
+        uint8_t *from = val == 0 ? &read_buf->sdo_info_data.bdata[4] : 
+            &read_buf->sdo_info_data.bdata[0];
+        size_t len = val == 0 ? (read_buf->mbx_hdr.length - 10) : (read_buf->mbx_hdr.length - 6);
 
-    int j;
-    for (j = 0; j < (read_buf->mbx_hdr.length - 8) / 2; ++j) {
-        printf("%02X ", read_buf->sdo_info_data.wdata[j]);
-    }
-    printf("\n");
-    memcpy(buf + val, &read_buf->sdo_info_data.bdata[0], (read_buf->mbx_hdr.length - 6));
-    val += (read_buf->mbx_hdr.length - 6);
+        memcpy(buf + val, from, len);
+        val += len;
     } while (read_buf->sdo_info_hdr.fragments_left);
 
     *len = val;
-//    size_t sdo_len = min(*len, read_buf->mbx_hdr.length - 6);
-//    memcpy(buf, read_buf->sdo_data.bdata, sdo_len);
-//    *len = sdo_len;
 
     return wkc;
 }
@@ -209,8 +277,6 @@ int ec_coe_sdo_desc_read(ec_t *pec, uint16_t slave, uint16_t index,
 
     // send request
     wkc = ec_mbx_send(pec, slave);
-
-    int val = 0;
 
     // wait for answer
     ec_mbx_clear(pec, slave, 1);
@@ -296,8 +362,6 @@ int ec_coe_sdo_entry_desc_read(ec_t *pec, uint16_t slave, uint16_t index, uint8_
 
     // send request
     wkc = ec_mbx_send(pec, slave);
-
-    int val = 0;
 
     // wait for answer
     ec_mbx_clear(pec, slave, 1);
