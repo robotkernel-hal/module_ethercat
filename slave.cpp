@@ -43,7 +43,8 @@ coe_init_cmd::coe_init_cmd(const YAML::Node& node) {
     transition = (transition_t)node["transition"].to<int>();
     convert_string_to_hex(node["data"].to<string>(), &data, &datalen);
 
-    ethercat_log(module_info, string("coe"), "got coe init cmd: 0x%X/%d\n", index, subindex);
+    ethercat_log(module_verbose, string("coe"), "got coe init cmd: 0x%X/%d\n", 
+            index, subindex);
 }
 
 //! destruction
@@ -194,7 +195,8 @@ slave::slave(const YAML::Node& node, master *master_dev)
     }
 
     if (node.FindValue("init_cmds") != NULL) {
-        ethercat_log(module_info, master_dev->_name, "slave %s parsing init commands\n", name.c_str());
+        ethercat_log(module_verbose, master_dev->_name, 
+                "slave %s parsing init commands\n", name.c_str());
 
         // parsing slave configurations
         const YAML::Node& init_cmds = node["init_cmds"];
@@ -208,7 +210,8 @@ slave::slave(const YAML::Node& node, master *master_dev)
         }
     }
 
-    ethercat_log(module_info, master_dev->_name, "slave %s index %d created\n", name.c_str(), index);
+    ethercat_log(module_verbose, master_dev->_name, 
+            "slave %s index %d created\n", name.c_str(), index);
 }
 
 //! destruction
@@ -274,8 +277,8 @@ bool slave::prepare_state_transition(transition_t transition) {
 //        ctx->slavelist[1].CoEdetails &= ~ECT_COEDET_SDOCA;
 
         if (cmd->transition == transition) {
-            ethercat_log(module_info, master_dev->_name, "sending coe init command slave %d, index %X\n",
-                 index, cmd->index);
+            ethercat_log(module_verbose, master_dev->_name, "sending coe init "
+                    "command slave %d, index %X\n", index, cmd->index);
 
             uint8_t *buf = (uint8_t *)cmd->data;
             size_t buf_len = cmd->datalen;
@@ -287,7 +290,8 @@ bool slave::prepare_state_transition(transition_t transition) {
                      "todo");//ecx_elist2string(ctx));
             }
         } else 
-            ethercat_log(module_info, master_dev->_name, "transition does not match %02X\n", cmd->transition);
+            ethercat_log(module_verbose, master_dev->_name, 
+                    "transition does not match %02X\n", cmd->transition);
         
     }
 
@@ -385,55 +389,15 @@ bool slave::state_check() {
  * \return N/A
  */
 void slave::register_interfaces() {
-//    stringstream slave_nr;
-//    slave_nr << "slave_" << index;
-//    
-//    if (ctx->slavelist[index].mbx_proto & ECT_MBXPROT_COE) {
-//        try {
-//            kernel::interface_id_t id = kernel::register_interface_cb(master_dev->_name.c_str(), 
-//                    "libinterface_canopen_protocol.so", slave_nr.str().c_str(), index);
-//            _interface_id_list.push_back(id);
-//        } catch (exception& e) {
-//            ethercat_log(module_info, master_dev->_name, "got exception while registering canopen protcol "
-//                    "interface:\n what: %s\n", e.what());
-//        }
-//    }
-//
-//    if (ctx->slavelist[index].mbx_proto & ECT_MBXPROT_SOE) {
-//        try {
-//            kernel::interface_id_t id = kernel::register_interface_cb(master_dev->_name.c_str(), 
-//                    "libinterface_sercos_protocol.so", slave_nr.str().c_str(), index);
-//            _interface_id_list.push_back(id);
-//        } catch (exception& e) {
-//            ethercat_log(module_info, master_dev->_name, "got exception while registering sercos protcol "
-//                    "interface:\n what: %s\n", e.what());
-//        }
-//    }
-//
-//    try {
-//        kernel::interface_id_t id = kernel::register_interface_cb(master_dev->_name.c_str(), 
-//                "libinterface_process_data_inspection.so", slave_nr.str().c_str(), index);
-//        _interface_id_list.push_back(id);
-//    } catch (exception& e) {
-//        ethercat_log(module_info, master_dev->_name, "got exception while registering pd inspection "
-//                "interface:\n what: %s\n", e.what());
-//    }
-//
-//    try {
-//        kernel::interface_id_t id = kernel::register_interface_cb(master_dev->_name.c_str(), 
-//                "libinterface_key_value.so", slave_nr.str().c_str(), index);
-//        _interface_id_list.push_back(id);
-//    } catch (exception& e) {
-//        ethercat_log(module_info, master_dev->_name, "got exception while registering key value"
-//                "interface:\n what: %s\n", e.what());
-//    }
-                
     std::stringstream slave_name; 
     slave_name << "slave_" << index;
 
-    if (master_dev->_pec->slaves[index].mbx_supported & EC_MBX_COE)
+    if (master_dev->_pec->slaves[index].eeprom.mbx_supported & EC_EEPROM_MBX_COE)
         _coe_intf = robotkernel::kernel::register_interface_cb(master_dev->_name.c_str(), 
                 "libinterface_canopen_protocol.so", slave_name.str().c_str(), index);
+    if (master_dev->_pec->slaves[index].eeprom.mbx_supported & EC_EEPROM_MBX_SOE)
+        _soe_intf = robotkernel::kernel::register_interface_cb(master_dev->_name.c_str(), 
+                "libinterface_sercos_protocol.so", slave_name.str().c_str(), index);
 
     _pd_intf = robotkernel::kernel::register_interface_cb(master_dev->_name.c_str(), 
             "libinterface_process_data_inspection.so", slave_name.str().c_str(), index);
@@ -444,11 +408,19 @@ void slave::register_interfaces() {
  * \return N/A
  */
 void slave::unregister_interfaces() {
-    while(!_interface_id_list.empty()) {
-        kernel::interface_id_t id = _interface_id_list.front();
-        _interface_id_list.pop_front();
-
-        kernel::unregister_interface_cb(id);
+    if (_pd_intf) {
+        kernel::unregister_interface_cb(_pd_intf);
+        _pd_intf = NULL; 
+    }
+    
+    if (_soe_intf) {
+        kernel::unregister_interface_cb(_soe_intf);
+        _soe_intf = NULL; 
+    }
+    
+    if (_coe_intf) {
+        kernel::unregister_interface_cb(_coe_intf);
+        _coe_intf = NULL; 
     }
 }
 

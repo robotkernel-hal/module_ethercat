@@ -26,6 +26,8 @@
 #include "eeprom.h"
 #include "ec.h"
 
+#include <string.h>
+
 //! set eeprom control to ethercat master
 /*!
  * \param pec pointer to ethercat master
@@ -147,4 +149,167 @@ int ec_eepromread_len(ec_t *pec, uint16_t slave, uint32_t eepadr, uint8_t *buf, 
 
     return 0;
 };
+
+//! read out whole eeprom and categories
+/*!
+ * \param pec pointer to ethercat master
+ * \param slave ethercat slave number
+ */
+void ec_eeprom_dump(ec_t *pec, uint16_t slave) {
+    int cat_offset = EC_EEPROM_ADR_CAT_OFFSET;
+    uint16_t size, cat_len, cat_type = 0;
+    uint32_t value32;
+    ec_slave_t *slv = &pec->slaves[slave];
+
+#define eeprom(adr, mem) \
+    ec_eepromread_len(pec, slave, (adr), (uint8_t *)&(mem), sizeof(mem));
+
+    // read soem eeprom values
+    eeprom(EC_EEPROM_ADR_VENDOR_ID,     slv->eeprom.vendor_id);
+    eeprom(EC_EEPROM_ADR_PRODUCT_CODE,  slv->eeprom.product_code);
+    eeprom(EC_EEPROM_ADR_MBX_SUPPORTED, slv->eeprom.mbx_supported);
+    eeprom(EC_EEPROM_ADR_SIZE,          value32);
+    eeprom(EC_EEPROM_ADR_MBX_RECV_OFF,  slv->eeprom.mbx_receive_offset);
+    eeprom(EC_EEPROM_ADR_MBX_RECV_SIZE, slv->eeprom.mbx_receive_size);
+    eeprom(EC_EEPROM_ADR_MBX_SEND_OFF,  slv->eeprom.mbx_send_offset);
+    eeprom(EC_EEPROM_ADR_MBX_SEND_SIZE, slv->eeprom.mbx_send_size);
+
+    size = value32 & 0x0000FFFF;
+
+    while (cat_type != EC_EEPROM_CAT_END) {
+        eeprom(cat_offset, value32);
+        cat_type = (value32 & 0x0000FFFF);
+        cat_len  = (value32 & 0xFFFF0000) >> 16;
+
+        switch (cat_type) {
+            default: 
+            case EC_EEPROM_CAT_END:
+            case EC_EEPROM_CAT_NOP:
+                break;
+            case EC_EEPROM_CAT_STRINGS: {
+                uint8_t *buf = malloc(cat_len*2);
+                ec_eepromread_len(pec, slave, cat_offset+2, buf, cat_len*2);
+
+                int local_offset = 0, i;
+                slv->eeprom.strings_cnt = buf[local_offset++];
+
+                if (!slv->eeprom.strings_cnt) {
+                    free(buf);
+                    break;
+                }
+
+                slv->eeprom.strings = (char **)malloc(sizeof(char *) * slv->eeprom.strings_cnt);
+
+                for (i = 0; i < slv->eeprom.strings_cnt; ++i) {
+                    uint8_t string_len = buf[local_offset++];
+
+                    slv->eeprom.strings[i] = malloc(sizeof(char) * (string_len + 1));
+                    strncpy(slv->eeprom.strings[i], (char *)&buf[local_offset], string_len);
+                    local_offset+=string_len;
+                    slv->eeprom.strings[i][string_len] = '\0';
+                }
+
+                free(buf);
+                break;
+            }
+            case EC_EEPROM_CAT_DATATYPES:
+                break;
+            case EC_EEPROM_CAT_GENERAL: {
+                eeprom(cat_offset+2, slv->eeprom.general);
+                break;
+            }
+            case EC_EEPROM_CAT_FMMU: {
+                // skip cat type and len
+                int local_offset = cat_offset + 2;
+                unsigned i, fmmu_idx = 0;
+                while (local_offset < (cat_offset + cat_len + 2)) {
+                    eeprom(local_offset, value32);
+                    uint8_t *tmp = (uint8_t *)&value32;
+                    for (i = 0; i < 4 && i < (cat_len*2); ++i, ++fmmu_idx)
+                        if ((fmmu_idx < slv->fmmu_ch) && (tmp[i] >= 1) && (tmp[i] <= 3))
+                            slv->fmmu[fmmu_idx].type = tmp[i];
+
+                    local_offset += 2;
+                }
+                break;
+            }
+            case EC_EEPROM_CAT_SM: {
+                // skip cat type and len
+                int j = 0, local_offset = cat_offset + 2;
+                slv->eeprom.sms_cnt = cat_len/(sizeof(ec_eeprom_cat_sm_t)/2);
+
+                if (!slv->eeprom.sms_cnt)
+                    break;
+
+                // alloc sms
+                slv->eeprom.sms = (ec_eeprom_cat_sm_t *)malloc(
+                        sizeof(ec_eeprom_cat_sm_t) * slv->eeprom.sms_cnt);
+
+                // reallocate if we have more sm that previously declared
+                if ((cat_len/(sizeof(ec_eeprom_cat_sm_t)/2)) > slv->sm_ch) {
+                    if (slv->sm)
+                        free(slv->sm);
+
+                    slv->sm_ch = cat_len/(sizeof(ec_eeprom_cat_sm_t)/2);
+                    slv->sm = (ec_slave_sm_t *)malloc(slv->sm_ch * sizeof(ec_slave_sm_t));
+                    memset(slv->sm, 0, slv->sm_ch * sizeof(ec_slave_sm_t));
+                }
+
+                while (local_offset < (cat_offset + cat_len + 2)) {
+                    eeprom(local_offset, slv->eeprom.sms[j]);
+                    local_offset += sizeof(ec_eeprom_cat_sm_t) / 2;
+
+                    slv->sm[j].adr = slv->eeprom.sms[j].adr;
+                    slv->sm[j].len = slv->eeprom.sms[j].len;
+                    slv->sm[j].flags = (slv->eeprom.sms[j].activate << 16) | slv->eeprom.sms[j].ctrl_reg;
+                    j++;
+                }
+                break;
+            }
+            case EC_EEPROM_CAT_TXPDO: {
+                // skip cat type and len
+                int j = 0, local_offset = cat_offset + 2;
+                slv->eeprom.txpdos_cnt = cat_len/(sizeof(ec_eeprom_cat_pdo_t)/2);
+
+                if (!slv->eeprom.txpdos_cnt)
+                    break;
+
+                // alloc pdos
+                slv->eeprom.txpdos = (ec_eeprom_cat_pdo_t *)malloc(
+                        sizeof(ec_eeprom_cat_pdo_t) * slv->eeprom.txpdos_cnt);
+
+                while (local_offset < (cat_offset + cat_len + 2)) {
+                    eeprom(local_offset, slv->eeprom.txpdos[j++]);
+                    local_offset += sizeof(ec_eeprom_cat_pdo_t) / 2;
+                }
+
+                break;
+            }
+            case EC_EEPROM_CAT_RXPDO: {
+                // skip cat type and len
+                int j = 0, local_offset = cat_offset + 2;
+                slv->eeprom.rxpdos_cnt = cat_len/(sizeof(ec_eeprom_cat_pdo_t)/2);
+
+                if (!slv->eeprom.rxpdos_cnt)
+                    break;
+
+                // alloc pdos
+                slv->eeprom.rxpdos = (ec_eeprom_cat_pdo_t *)malloc(
+                        sizeof(ec_eeprom_cat_pdo_t) * slv->eeprom.rxpdos_cnt);
+
+                while (local_offset < (cat_offset + cat_len + 2)) {
+                    eeprom(local_offset, slv->eeprom.rxpdos[j++]);
+                    local_offset += sizeof(ec_eeprom_cat_pdo_t) / 2;
+                }
+
+                break;
+            }
+            case EC_EEPROM_CAT_DC:
+                ec_log("EEPROM_DC", "\n");
+                break;
+        }
+
+        cat_offset += cat_len + 2; 
+    }
+}
 

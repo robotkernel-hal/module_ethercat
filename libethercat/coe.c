@@ -87,9 +87,16 @@ int ec_coe_sdo_read(ec_t *pec, uint16_t slave, uint16_t index, uint8_t sub_index
     ec_mbx_clear(pec, slave, 1);
     wkc = ec_mbx_receive(pec, slave);
 
-    size_t sdo_len = min(*len, read_buf->mbx_hdr.length - 6);
-    memcpy(buf, read_buf->sdo_data.bdata, sdo_len);
-    *len = sdo_len;
+    if (*len == 0)
+        *len = read_buf->mbx_hdr.length - 6 - read_buf->sdo_hdr.size_indicator;
+    else {
+        size_t sdo_len = min(*len, read_buf->mbx_hdr.length - 6);
+        if (read_buf->sdo_hdr.size_indicator && !read_buf->sdo_hdr.transfer_type)
+            memcpy(buf, &read_buf->sdo_data.ldata[1], sdo_len);
+        else
+            memcpy(buf, read_buf->sdo_data.bdata, sdo_len);
+        *len = sdo_len;
+    }
 
     return wkc;
 }

@@ -138,7 +138,9 @@ int master::set_state(module_state_t state) {
 
     switch (state) {
         case module_state_init: {
-            start();
+            _pec->tx_sync = 1;
+
+//            start();
 
             ec_set_state(_pec, EC_STATE_INIT);
 
@@ -155,7 +157,8 @@ int master::set_state(module_state_t state) {
             break;
         }
         case module_state_preop: {
-            start();
+            _pec->tx_sync = 1;
+//            start();
 
             ec_set_state(_pec, EC_STATE_PREOP);
 
@@ -165,18 +168,20 @@ int master::set_state(module_state_t state) {
             break;
         }
         case module_state_safeop:
-            stop();
+            _pec->tx_sync = 0;
+//            stop();
 
-            ec_create_pd_groups(_pec, 1);
+            ec_create_pd_groups(_pec, _pec->slave_cnt);
             for (nr = 0; nr < _pec->slave_cnt; ++nr) {
-                _pec->slaves[nr].assigned_pd_group = 0;
+                _pec->slaves[nr].assigned_pd_group = nr;
                 _slave_info[nr]->prepare_state_transition(preop_to_safeop);
             }            
             
             ec_set_state(_pec, EC_STATE_SAFEOP);
             break;
         case module_state_op:
-            stop();
+            _pec->tx_sync = 0;
+//            stop();
             
             ec_set_state(_pec, EC_STATE_OP);
             break;
@@ -315,6 +320,28 @@ int master::request(int reqcode, void* ptr) {
             desc->name[name_len] = '\0';
 
             free(entry_desc.data);
+            break;
+        }
+        case MOD_REQUEST_CANOPEN_READ_ELEMENT_VALUE: {
+            canopen_element_value *value = (canopen_element_value *)ptr;
+            size_t size = value->value_len;
+
+//            ethercat_log(module_info, "MOD_REQUEST_CANOPEN_READ_ELEMENT_VALUE", "slave %d: index 0x%X, "
+//                    "sub_index %d, want to read %d bytes\n", value->slave_id, value->index,
+//                    value->sub_index, value->value_len);
+
+            ec_coe_sdo_read(_pec, value->slave_id, value->index, value->sub_index, 
+                    0, (uint8_t *)value->value, &size);
+            break;
+        }
+        case MOD_REQUEST_CANOPEN_WRITE_ELEMENT_VALUE: {
+//            canopen_element_value *value = (canopen_element_value *)ptr;
+//            int size = value->value_len;
+
+//            pthread_mutex_lock(&_mbx_lock);
+//            ret = ecx_SDOwrite(_ctx, value->slave_id, value->index, value->sub_index, 0, 
+//                    size, value->value, EC_TIMEOUTRXM);
+//            pthread_mutex_unlock(&_mbx_lock);
             break;
         }
         default:

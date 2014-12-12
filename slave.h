@@ -103,7 +103,7 @@ class slave {
         struct slave_dc {
             bool has_dc;
 
-            int type;            //! dc type, 0 = sync0, 1 = sync01
+            int type;              //! dc type, 0 = sync0, 1 = sync01
             uint32_t cycle_time_0; //! cycle time of sync 0 [ns]
             uint32_t cycle_time_1; //! cycle time of sync 1 [ns]
             uint32_t cycle_shift;  //! cycle shift time [ns]
@@ -218,7 +218,7 @@ class slave {
         void unregister_interfaces();
 
     private:
-        std::list<robotkernel::kernel::interface_id_t> _interface_id_list;     //! interface id list
+        robotkernel::kernel::interface_id_t _soe_intf;
         robotkernel::kernel::interface_id_t _coe_intf;
         robotkernel::kernel::interface_id_t _pd_intf;
 

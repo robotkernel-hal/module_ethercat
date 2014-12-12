@@ -74,6 +74,15 @@ typedef struct PACKED ec_eeprom_cat_fmmu {
 } PACKED ec_eeprom_cat_fmmu_t;
     
 typedef struct eeprom_info {
+    uint32_t vendor_id;
+    uint32_t product_code;
+    uint16_t mbx_supported;
+
+    uint16_t mbx_receive_offset;
+    uint16_t mbx_receive_size;
+    uint16_t mbx_send_offset;
+    uint16_t mbx_send_size;
+
     ec_eeprom_cat_general_t general;
 
     uint8_t strings_cnt;
@@ -92,9 +101,25 @@ typedef struct eeprom_info {
     ec_eeprom_cat_pdo_t *rxpdos;
 } eeprom_info_t;
 
+enum {
+    EC_EEPROM_MBX_AOE = 0x01,
+    EC_EEPROM_MBX_EOE = 0x02,
+    EC_EEPROM_MBX_COE = 0x04,
+    EC_EEPROM_MBX_FOE = 0x08,
+    EC_EEPROM_MBX_SOE = 0x10,
+    EC_EEPROM_MBX_VOE = 0x20,
+};
 
 enum {
-    EC_EEPROM_SIZE  = 0x3E,
+    EC_EEPROM_ADR_VENDOR_ID     = 0x0008,
+    EC_EEPROM_ADR_PRODUCT_CODE  = 0x000A,
+    EC_EEPROM_ADR_MBX_RECV_OFF  = 0x0018,  
+    EC_EEPROM_ADR_MBX_RECV_SIZE = 0x0019, 
+    EC_EEPROM_ADR_MBX_SEND_OFF  = 0x001A,  
+    EC_EEPROM_ADR_MBX_SEND_SIZE = 0x001B, 
+    EC_EEPROM_ADR_MBX_SUPPORTED = 0x001C,
+    EC_EEPROM_ADR_SIZE          = 0x003E,
+    EC_EEPROM_ADR_CAT_OFFSET    = 0x0040,
 };
 
 enum {
@@ -110,6 +135,12 @@ enum {
     EC_EEPROM_CAT_END       = 0xFFFF
 };
 
+#ifdef __cplusplus
+extern "C" {
+#elif defined my_little_dummy
+}
+#endif
+
 // forward decl
 struct ec;
 
@@ -121,7 +152,8 @@ struct ec;
  * \param returns data value
  * \return 0 on success
  */
-int ec_eepromread(struct ec *pec, uint16_t slave, uint32_t eepadr, uint32_t *data);
+int ec_eepromread(struct ec *pec, uint16_t slave, 
+        uint32_t eepadr, uint32_t *data);
 
 //! read a burst of eeprom
 /*!
@@ -132,7 +164,21 @@ int ec_eepromread(struct ec *pec, uint16_t slave, uint32_t eepadr, uint32_t *dat
  * \param buflen length in bytes to return
  * \return 0 on success
  */
-int ec_eepromread_len(struct ec *pec, uint16_t slave, uint32_t eepadr, uint8_t *buf, size_t buflen);
+int ec_eepromread_len(struct ec *pec, uint16_t slave, 
+        uint32_t eepadr, uint8_t *buf, size_t buflen);
+
+//! read out whole eeprom and categories
+/*!
+ * \param pec pointer to ethercat master
+ * \param slave ethercat slave number
+ */
+void ec_eeprom_dump(struct ec *pec, uint16_t slave);
+
+#ifdef my_little_dummy
+{
+#elif defined __cplusplus
+}
+#endif
 
 #endif // __EEPROM_H__
 

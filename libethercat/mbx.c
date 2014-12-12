@@ -11,8 +11,8 @@
  * \return full (0) or empty (1)
  */
 int ec_mbx_is_empty(ec_t *pec, uint16_t slave, uint8_t mbx_nr) {
-    uint16_t wkc;
-    uint8_t sm_state;
+    uint16_t wkc = 0;
+    uint8_t sm_state = 0;
       
     ec_fprd(pec, pec->slaves[slave].fixed_address, EC_REG_SM0STAT + (mbx_nr * 8), 
             &sm_state, sizeof(sm_state), &wkc);

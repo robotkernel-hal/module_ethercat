@@ -95,10 +95,6 @@ typedef struct ec_slave {
     int16_t auto_inc_address;
     uint16_t fixed_address;
 
-    uint32_t vendor_id;
-    uint32_t product_code;
-    uint16_t mbx_supported;
-
     uint8_t sm_ch;      //!< number of sync manager channels
     uint8_t fmmu_ch;    //!< number of fmmu channels
     int ram_size;       //!< ram size in bytes
@@ -121,6 +117,7 @@ typedef struct ec_slave {
 
 typedef struct ec {
     hw_t *phw;
+    int tx_sync;
     datagram_pool_t *pool;
 
     struct idx_queue idx;

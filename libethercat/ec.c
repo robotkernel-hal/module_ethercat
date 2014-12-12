@@ -132,160 +132,6 @@ typedef enum ec_state_transition {
     OP_2_OP          = 0x0808,
 } ec_state_transition_t;
 
-void eeprom_dump(ec_t *pec, uint16_t slave) {
-    uint16_t size;
-    uint32_t value32;
-    ec_eepromread(pec, slave, EC_EEPROM_SIZE, &value32);
-    size = value32 & 0x0000FFFF;
-    ec_slave_t *slv = &pec->slaves[slave];
-
-    int cat_offset = 0x40;
-    uint16_t cat_type = 0, cat_len;
-    while (cat_type != EC_EEPROM_CAT_END) {
-        ec_eepromread(pec, slave, cat_offset, &value32);
-        cat_type = value32 & 0x0000FFFF;
-        cat_len  = (value32 & 0xFFFF0000) >> 16;
-
-        switch (cat_type) {
-            default: 
-            case EC_EEPROM_CAT_END:
-            case EC_EEPROM_CAT_NOP:
-                break;
-            case EC_EEPROM_CAT_STRINGS: {
-                uint8_t *buf = malloc(cat_len*2);
-                ec_eepromread_len(pec, slave, cat_offset+2, buf, cat_len*2);
-
-                int local_offset = 0, i;
-                slv->eeprom.strings_cnt = buf[local_offset++];
-
-                if (!slv->eeprom.strings_cnt) {
-                    free(buf);
-                    break;
-                }
-
-                slv->eeprom.strings = (char **)malloc(sizeof(char *) * slv->eeprom.strings_cnt);
-
-                for (i = 0; i < slv->eeprom.strings_cnt; ++i) {
-                    uint8_t string_len = buf[local_offset++];
-
-                    slv->eeprom.strings[i] = malloc(sizeof(char) * (string_len + 1));
-                    strncpy(slv->eeprom.strings[i], (char *)&buf[local_offset], string_len);
-                    local_offset+=string_len;
-                    slv->eeprom.strings[i][string_len] = '\0';
-                }
-
-                free(buf);
-                break;
-            }
-            case EC_EEPROM_CAT_DATATYPES:
-                ec_log("EEPROM_DATATYPES", "\n");
-                break;
-            case EC_EEPROM_CAT_GENERAL: {
-                ec_eepromread_len(pec, slave, cat_offset+2, 
-                        (uint8_t *)&slv->eeprom.general, sizeof(slv->eeprom.general));
-                break;
-            }
-            case EC_EEPROM_CAT_FMMU: {
-                // skip cat type and len
-                int local_offset = cat_offset + 2;
-                unsigned i, j;
-                while (local_offset < (cat_offset + cat_len + 2)) {
-                    ec_eepromread(pec, slave, local_offset, &value32);
-                    uint8_t *tmp = (uint8_t *)&value32;
-                    for (i = 0; i < 4 && i < (cat_len*2); ++i, ++j)
-                        if ((j < slv->fmmu_ch) && (tmp[i] >= 1) && (tmp[i] <= 3)) {
-                            slv->fmmu[j].type = tmp[i];
-                            ec_log("EEPROM_FMMU", "fmmu%d type: %d\n", i, tmp[i]);
-                        }
-
-                    local_offset += 2;
-                }
-                break;
-            }
-            case EC_EEPROM_CAT_SM: {
-                // skip cat type and len
-                int j = 0, local_offset = cat_offset + 2;
-                slv->eeprom.sms_cnt = cat_len/(sizeof(ec_eeprom_cat_sm_t)/2);
-
-                if (!slv->eeprom.sms_cnt)
-                    break;
-
-                // alloc sms
-                slv->eeprom.sms = (ec_eeprom_cat_sm_t *)malloc(
-                        sizeof(ec_eeprom_cat_sm_t) * slv->eeprom.sms_cnt);
-
-                // reallocate if we have more sm that previously declared
-                if ((cat_len/(sizeof(ec_eeprom_cat_sm_t)/2)) > slv->sm_ch) {
-                    if (slv->sm)
-                        free(slv->sm);
-
-                    slv->sm_ch = cat_len/(sizeof(ec_eeprom_cat_sm_t)/2);
-                    slv->sm = (ec_slave_sm_t *)malloc(slv->sm_ch * sizeof(ec_slave_sm_t));
-                    memset(slv->sm, 0, slv->sm_ch * sizeof(ec_slave_sm_t));
-                }
-
-                while (local_offset < (cat_offset + cat_len + 2)) {
-                    ec_eepromread_len(pec, slave, local_offset, 
-                            (uint8_t *)&slv->eeprom.sms[j], sizeof(ec_eeprom_cat_sm_t));
-                    local_offset += sizeof(ec_eeprom_cat_sm_t) / 2;
-
-                    slv->sm[j].adr = slv->eeprom.sms[j].adr;
-                    slv->sm[j].len = slv->eeprom.sms[j].len;
-                    slv->sm[j].flags = (slv->eeprom.sms[j].activate << 16) | slv->eeprom.sms[j].ctrl_reg;
-                    j++;
-                }
-                break;
-            }
-            case EC_EEPROM_CAT_TXPDO: {
-                // skip cat type and len
-                int j = 0, local_offset = cat_offset + 2;
-                slv->eeprom.txpdos_cnt = cat_len/(sizeof(ec_eeprom_cat_pdo_t)/2);
-
-                if (!slv->eeprom.txpdos_cnt)
-                    break;
-
-                // alloc pdos
-                slv->eeprom.txpdos = (ec_eeprom_cat_pdo_t *)malloc(
-                        sizeof(ec_eeprom_cat_pdo_t) * slv->eeprom.txpdos_cnt);
-
-                while (local_offset < (cat_offset + cat_len + 2)) {
-                    ec_eepromread_len(pec, slave, local_offset, 
-                            (uint8_t *)&slv->eeprom.txpdos[j], sizeof(ec_eeprom_cat_pdo_t));
-                    local_offset += sizeof(ec_eeprom_cat_pdo_t) / 2;
-                    j++;
-                }
-
-                break;
-            }
-            case EC_EEPROM_CAT_RXPDO: {
-                // skip cat type and len
-                int j = 0, local_offset = cat_offset + 2;
-                slv->eeprom.rxpdos_cnt = cat_len/(sizeof(ec_eeprom_cat_pdo_t)/2);
-
-                if (!slv->eeprom.rxpdos_cnt)
-                    break;
-
-                // alloc pdos
-                slv->eeprom.rxpdos = (ec_eeprom_cat_pdo_t *)malloc(
-                        sizeof(ec_eeprom_cat_pdo_t) * slv->eeprom.rxpdos_cnt);
-
-                while (local_offset < (cat_offset + cat_len + 2)) {
-                    ec_eepromread_len(pec, slave, local_offset, 
-                            (uint8_t *)&slv->eeprom.rxpdos[j], sizeof(ec_eeprom_cat_pdo_t));
-                    local_offset += sizeof(ec_eeprom_cat_pdo_t) / 2;
-                    j++;
-                }
-
-                break;
-            }
-            case EC_EEPROM_CAT_DC:
-                ec_log("EEPROM_DC", "\n");
-                break;
-        }
-
-        cat_offset += cat_len + 2; 
-    }
-}
 
 int ec_coe_calc_pd_len(ec_t *pec, uint16_t slave, uint16_t pdo_reg) {
 //    ec_coe_sdo_read(pec, slave, pdo_reg, 0, buf, 
@@ -310,117 +156,109 @@ int ec_slave_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
         case INIT_2_SAFEOP:
         case INIT_2_OP: {
             // init to preop stuff
-            uint32_t value32;
-            ec_eepromread_len(pec, slave, 0x0008, (uint8_t *)&slv->vendor_id,    sizeof(slv->vendor_id));
-            ec_eepromread_len(pec, slave, 0x000a, (uint8_t *)&slv->product_code, sizeof(slv->product_code));
+            ec_eeprom_dump(pec, slave);
+            
+            ec_log("INIT_2_PREOP", "slave %d, vendor 0x%08X, product 0x%08X, mbx 0x%04X\n",
+                slave, slv->eeprom.vendor_id, slv->eeprom.product_code, slv->eeprom.mbx_supported);
 
-            ec_log("INIT_2_PREOP", "slave %d, vendor 0x%08X, product 0x%08X\n",
-                slave, slv->vendor_id, slv->product_code);
+            // configure mailboxes if any supported
+            if (slv->eeprom.mbx_supported) {
+                // read mailbox
+                slv->sm[1].adr = slv->eeprom.mbx_send_offset;
+                slv->sm[1].len = slv->eeprom.mbx_send_size;
+                slv->sm[1].flags = 0x00010022;
+                slv->mbx_read.sm_nr = 1;
+                if (slv->mbx_read.buf) free(slv->mbx_read.buf);
+                slv->mbx_read.buf = malloc(slv->sm[1].len);
+                memset(slv->mbx_read.buf, 0, slv->sm[1].len);
 
-            ec_eepromread(pec, slave, 0x001a, &value32);
-            slv->sm[1].adr = value32 & 0x0000FFFF;
-            slv->sm[1].len = (value32 & 0xFFFF0000) >> 16;
-            slv->sm[1].flags = 0x00010022;
-            slv->mbx_read.sm_nr = 1;
-            if (slv->mbx_read.buf) free(slv->mbx_read.buf);
-            slv->mbx_read.buf = malloc(slv->sm[1].len);
-            memset(slv->mbx_read.buf, 0, slv->sm[1].len);
+                // write mailbox
+                slv->sm[0].adr = slv->eeprom.mbx_receive_offset;
+                slv->sm[0].len = slv->eeprom.mbx_receive_size;
+                slv->sm[0].flags = 0x00010026;
+                slv->mbx_write.sm_nr = 0;
+                if (slv->mbx_write.buf) free(slv->mbx_write.buf);
+                slv->mbx_write.buf = malloc(slv->sm[0].len);
+                memset(slv->mbx_write.buf, 0, slv->sm[0].len);
 
-            ec_eepromread(pec, slave, 0x0018, &value32);
-            slv->sm[0].adr = value32 & 0x0000FFFF;
-            slv->sm[0].len = (value32 & 0xFFFF0000) >> 16;
-            slv->sm[0].flags = 0x00010026;
-            slv->mbx_write.sm_nr = 0;
-            if (slv->mbx_write.buf) free(slv->mbx_write.buf);
-            slv->mbx_write.buf = malloc(slv->sm[0].len);
-            memset(slv->mbx_write.buf, 0, slv->sm[0].len);
+                for (int sm_idx = 0; sm_idx < 2; ++sm_idx) {
+                    ec_log("INIT_2_PREOP", "slave %d: sm%d, adr 0x%X, len %d, flags 0x%X\n",
+                            slave, sm_idx, slv->sm[sm_idx].adr, 
+                            slv->sm[sm_idx].len, slv->sm[sm_idx].flags);
 
-            uint16_t mbx_supported[2];
-            ec_eepromread(pec, slave, 0x001C, (uint32_t *)mbx_supported);
-            ec_log("INIT_2_PREOP", "slave %d, mailboxes %04X\n", slave, mbx_supported[0]);
-            slv->mbx_supported = mbx_supported[0];
-
-            int i, j;
-            for (i = 0; i < 2; ++i) {
-                ec_log("INIT_2_PREOP", "slave %d: sm%d, adr 0x%X, len %d, flags 0x%X\n",
-                        slave, i, slv->sm[i].adr, 
-                        slv->sm[i].len, slv->sm[i].flags);
-
-                ec_fpwr(pec, slv->fixed_address, 0x800 + (i * 8),
-                        &slv->sm[i], sizeof(ec_slave_sm_t), &wkc);
+                    ec_fpwr(pec, slv->fixed_address, 0x800 + (sm_idx * 8),
+                            &slv->sm[sm_idx], sizeof(ec_slave_sm_t), &wkc);
+                }
             }
             
-            eeprom_dump(pec, slave);
-
             // write state to slave
             wkc = ec_slave_set_state(pec, slave, EC_STATE_PREOP);
 
             // check sm settings
-            if (slv->mbx_supported & 0x04/*EC_MBX_COE*/) { // have coe mailbox, check objects 1c12, 1c13
-                int sm_idx;
-                for (sm_idx = 2; sm_idx <= 3; ++sm_idx) {
-
+            if (slv->eeprom.mbx_supported & EC_EEPROM_MBX_COE) { // have coe mailbox, check objects 1c12, 1c13
+                for (int sm_idx = 2; sm_idx <= 3; ++sm_idx) {
                     int wkc, bit_len = 0, idx = 0x1c10 + sm_idx;
                     uint8_t entry_cnt = 0, entry_cnt_2;
                     size_t entry_cnt_size = sizeof(entry_cnt);
                     wkc = ec_coe_sdo_read(pec, slave, idx, 0, 0, &entry_cnt, &entry_cnt_size);
 
                     if (wkc != 1)
-                        ec_log("PREOP_2_SAFEOP", "slave %d, reading 0x%04X/%d failed\n", slave, idx, 0);
+                        ec_log("INIT_2_PREOP", "slave %d: reading 0x%04X/%d failed\n", slave, idx, 0);
 
-                    ec_log("PREOP_2_SAFEOP", "slave %d, 0x%04X count %d\n", slave, idx, entry_cnt); 
+                    ec_log("INIT_2_PREOP", "slave %d: 0x%04X count %d\n", slave, idx, entry_cnt); 
 
-                    for (i = 1; i <= entry_cnt; ++i) {
+                    for (int i = 1; i <= entry_cnt; ++i) {
                         uint16_t entry_idx;
                         size_t entry_size = sizeof(entry_idx);
                         wkc = ec_coe_sdo_read(pec, slave, idx, i, 0, (uint8_t *)&entry_idx, &entry_size);
 
                         if (wkc != 1)
-                            ec_log("PREOP_2_SAFEOP", "slave %d, reading 0x%04X/%d failed\n", slave, idx, i);
+                            ec_log("INIT_2_PREOP", "slave %d: reading 0x%04X/%d failed\n", slave, idx, i);
 
                         entry_cnt_size = sizeof(entry_cnt_2);
 
                         wkc = ec_coe_sdo_read(pec, slave, entry_idx, 0, 0, (uint8_t *)&entry_cnt_2, &entry_cnt_size);
 
                         if (wkc != 1)
-                            ec_log("PREOP_2_SAFEOP", "slave %d, reading 0x%04X/%d failed\n", slave, entry_idx, 0);
+                            ec_log("INIT_2_PREOP", "slave %d: reading 0x%04X/%d failed\n", slave, entry_idx, 0);
 
-                        ec_log("PREOP_2_SAFEOP", "slave %d, 0x%04X count %d\n", slave, entry_idx, entry_cnt); 
+                        ec_log("INIT_2_PREOP", "slave %d: 0x%04X count %d\n", slave, entry_idx, entry_cnt_2); 
 
-                        for (j = 1; j <= entry_cnt_2; ++j) {
+                        for (int j = 1; j <= entry_cnt_2; ++j) {
                             uint32_t entry;
                             size_t entry_size = sizeof(entry);
                             wkc = ec_coe_sdo_read(pec, slave, entry_idx, j, 0, (uint8_t *)&entry, &entry_size);
 
                             if (wkc != 1)
-                                ec_log("PREOP_2_SAFEOP", "reading 0x%04X/%d failed\n", entry_idx, j);
+                                ec_log("INIT_2_PREOP", "slave %d: reading 0x%04X/%d failed\n", 
+                                        slave, entry_idx, j);
 
-                            ec_log("PREOP_2_SAFEOP", "slave %d, mapped entry %08X\n", slave, entry);
+                            ec_log("INIT_2_PREOP", "slave %d: mapped entry %08X\n", slave, entry);
 
                             bit_len += entry & 0x000000FF;
                         }                        
                     }
 
-                    ec_log("PREOP_2_SAFEOP", "sm%d length bits %d, bytes %d\n", sm_idx, bit_len, (bit_len + 7) / 8);
+                    ec_log("INIT_2_PREOP", "slave %d: sm%d length bits %d, bytes %d\n", 
+                            slave, sm_idx, bit_len, (bit_len + 7) / 8);
+
                     if (slv->sm && slv->sm_ch > sm_idx)
                         slv->sm[sm_idx].len = (bit_len + 7) / 8;
                 }
             } else {
                 // try eeprom
-                int i, j;
-                for (i = 0; i < slv->sm_ch; ++i) {
+                for (int sm_idx = 0; sm_idx < slv->sm_ch; ++sm_idx) {
                     size_t bit_len = 0;
 
-                    // inputs
-                    for (j = 0; j < slv->eeprom.txpdos_cnt; ++j) {
-                        ec_eeprom_cat_pdo_t *pdo = &slv->eeprom.txpdos[j];
+                    // inputs and outputs
+                    for (int txpdo_idx = 0; txpdo_idx < slv->eeprom.txpdos_cnt; ++txpdo_idx) {
+                        ec_eeprom_cat_pdo_t *pdo = &slv->eeprom.txpdos[txpdo_idx];
 
-                        if (i == pdo->sm_nr) 
+                        if (sm_idx == pdo->sm_nr) 
                             bit_len += pdo->bit_len;
                     }
 
-                    slv->sm[i].len = (bit_len + 7) / 8;
-                    
+                    slv->sm[sm_idx].len = (bit_len + 7) / 8;
                 }
             }
             
@@ -429,38 +267,32 @@ int ec_slave_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
         }
         case PREOP_2_SAFEOP: 
         case PREOP_2_OP: {
-            int i;
-
-            for (i = 0; i < slv->sm_ch; ++i) {
-                if (!slv->sm[i].adr)
+            for (int sm_idx = 0; sm_idx < slv->sm_ch; ++sm_idx) {
+                if (!slv->sm[sm_idx].adr)
                     continue;
 
                 ec_log("PREOP_2_SAFEOP", "slave %d: sm%d, adr 0x%X, len %d, flags 0x%X\n",
-                        slave, i, slv->sm[i].adr, 
-                        slv->sm[i].len, slv->sm[i].flags);
+                        slave, sm_idx, slv->sm[sm_idx].adr, 
+                        slv->sm[sm_idx].len, slv->sm[sm_idx].flags);
 
-                ec_fpwr(pec, slv->fixed_address, 0x800 + (i * 8),
-                        &slv->sm[i], sizeof(ec_slave_sm_t), &wkc);
+                ec_fpwr(pec, slv->fixed_address, 0x800 + (sm_idx * 8),
+                        &slv->sm[sm_idx], sizeof(ec_slave_sm_t), &wkc);
             }
 
-            for (i = 0; i < slv->fmmu_ch; ++i) { 
-                if (!slv->fmmu[i].active) 
+            for (int fmmu_idx = 0; fmmu_idx < slv->fmmu_ch; ++fmmu_idx) { 
+                if (!slv->fmmu[fmmu_idx].active) 
                     continue;
 
                 // safeop to op stuff 
-                ec_log("PREOP_2_SAFEOP", "slave %d, log 0x%X/%d/%d, len %d, "
+                ec_log("PREOP_2_SAFEOP", "slave %d: log 0x%X/%d/%d, len %d, "
                         "pyhs 0x%X/%d, type %d, active %d\n", slave,
-                        slv->fmmu[i].log,
-                        slv->fmmu[i].log_bit_start,
-                        slv->fmmu[i].log_bit_stop,
-                        slv->fmmu[i].log_len,
-                        slv->fmmu[i].phys,
-                        slv->fmmu[i].phys_bit_start,
-                        slv->fmmu[i].type,
-                        slv->fmmu[i].active);
+                        slv->fmmu[fmmu_idx].log, slv->fmmu[fmmu_idx].log_bit_start,
+                        slv->fmmu[fmmu_idx].log_bit_stop, slv->fmmu[fmmu_idx].log_len,
+                        slv->fmmu[fmmu_idx].phys, slv->fmmu[fmmu_idx].phys_bit_start,
+                        slv->fmmu[fmmu_idx].type, slv->fmmu[fmmu_idx].active);
 
-                ec_fpwr(pec, slv->fixed_address, 0x600 + (16 * i),
-                            (uint8_t *)&slv->fmmu[i], sizeof(ec_slave_fmmu_t), &wkc);
+                ec_fpwr(pec, slv->fixed_address, 0x600 + (16 * fmmu_idx),
+                            (uint8_t *)&slv->fmmu[fmmu_idx], sizeof(ec_slave_fmmu_t), &wkc);
 
             }
             
@@ -482,18 +314,17 @@ int ec_slave_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
         case PREOP_2_INIT:
             // write state to slave
             wkc = ec_slave_set_state(pec, slave, state);
+#define free_resource(a) \
+            if ((a)) { \
+                free((a)); \
+                (a) = NULL; \
+            }
 
             // free resources
-            if (slv->mbx_read.buf) 
-                free(slv->mbx_read.buf);
-            if (slv->mbx_write.buf) 
-                free(slv->mbx_write.buf);
-
-            if (slv->sm)
-                free(slv->sm);
-            if (slv->fmmu)
-                free(slv->fmmu);
-
+            free_resource(slv->mbx_read.buf);
+            free_resource(slv->mbx_write.buf);
+            free_resource(slv->sm);
+            free_resource(slv->fmmu);
         case INIT_2_INIT: {
             int i;
             uint16_t wkc = 0, features = 0, pdi_ctrl = 0;
@@ -826,6 +657,7 @@ int ec_open(ec_t **ppec, const char *ifname, int prio, int cpumask) {
     (*ppec)->pd_group_cnt = 0;
     (*ppec)->slaves = NULL;
     (*ppec)->pd_groups = NULL;
+    (*ppec)->tx_sync = 1;
 
     datagram_pool_open(&(*ppec)->pool, 1000);
     hw_open(&(*ppec)->phw, ifname, prio, cpumask);
@@ -968,6 +800,10 @@ int ec_transceive(ec_t *pec, uint8_t cmd, uint32_t adr,
     // queue frame and trigger tx
     datagram_pool_put(pec->phw->tx_low, p_de);
 
+    // send frame immediately if in sync mode
+    if (pec->tx_sync)
+        hw_tx(pec->phw);
+
     // wait for completion
     sem_wait(&p_idx->waiter);
 
@@ -1025,6 +861,10 @@ int ec_transmit_no_reply(ec_t *pec, uint8_t cmd, uint32_t adr,
 
     // queue frame and return, we don't care about an answer
     datagram_pool_put(pec->phw->tx_low, p_de);
+
+    // send frame immediately if in sync mode
+    if (pec->tx_sync)
+        hw_tx(pec->phw);
 
     return 0;
 }
