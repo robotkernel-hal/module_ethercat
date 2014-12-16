@@ -53,19 +53,6 @@ class master : public robotkernel::trigger_base, public robotkernel::runnable {
         robotkernel::kernel::interface_id_t _pd_interface_id;
 
     public:
-//        typedef struct slave {
-//            ~slave() {
-//                if (_pd_intf)
-//                    robotkernel::kernel::unregister_interface_cb(_pd_intf);
-//                if (_coe_intf)
-//                    robotkernel::kernel::unregister_interface_cb(_coe_intf);
-//            }
-//
-//            int group;
-//            robotkernel::kernel::interface_id_t _coe_intf;
-//            robotkernel::kernel::interface_id_t _pd_intf;
-//        } slave_t;
-
         typedef std::map<int, slave *> slave_map_t;
         slave_map_t _slave_info;
 

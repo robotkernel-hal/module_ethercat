@@ -80,86 +80,14 @@ int ec_mbx_receive(ec_t *pec, uint16_t slave) {
     if (!slv->sm[slv->mbx_read.sm_nr].len)
         return 0;
 
-//    uint16 mbxro,mbxl,configadr;
-//    int wkc=0;
-//    int wkc2;
-//    uint16 SMstat;
-//    uint8 SMcontr;
-//    ec_mbxheadert *mbxh;
-//    ec_emcyt *EMp;
-//    ec_mbxerrort *MBXEp;
-//
-//    configadr = context->slavelist[slave].configadr;
-//    mbxl = context->slavelist[slave].mbx_rl;
-        
     // wait for read mailbox available 
     while (ec_mbx_is_empty(pec, slave, slv->mbx_read.sm_nr) != 0) {
         struct timespec ts = { 0, 1000000 };
         nanosleep(&ts, NULL);
     }
 
-//    ec_log(__func__, "read mailbox on slave %d available\n", slave);
-
-//    uint8_t mbx_buffer2[140];
-//    memset(mbx_buffer2, 0, sizeof(mbx_buffer2));
     ec_fprd(pec, slv->fixed_address, slv->sm[slv->mbx_read.sm_nr].adr,
             slv->mbx_read.buf, slv->sm[slv->mbx_read.sm_nr].len, &wkc);
-
-//      if ((wkc > 0) && ((SMstat & 0x08) > 0)) /* read mailbox available ? */
-//      {
-//         mbxro = context->slavelist[slave].mbx_ro;
-//         mbxh = (ec_mbxheadert *)mbx;
-//         do
-//         {
-//            wkc = ecx_FPRD(context->port, configadr, mbxro, mbxl, mbx, EC_TIMEOUTRET); /* get mailbox */
-//            if ((wkc > 0) && ((mbxh->mbxtype & 0x0f) == 0x00)) /* Mailbox error response? */
-//            {
-//               MBXEp = (ec_mbxerrort *)mbx;
-//               ecx_mbxerror(context, slave, etohs(MBXEp->Detail));
-//               wkc = 0; /* prevent emergency to cascade up, it is already handled. */
-//            }
-//            else if ((wkc > 0) && ((mbxh->mbxtype & 0x0f) == 0x03)) /* CoE response? */
-//            {
-//               EMp = (ec_emcyt *)mbx;
-//               if ((etohs(EMp->CANOpen) >> 12) == 0x01) /* Emergency request? */
-//               {
-//                  ecx_mbxemergencyerror(context, slave, etohs(EMp->ErrorCode), EMp->ErrorReg,
-//                          EMp->bData, etohs(EMp->w1), etohs(EMp->w2));
-//                  wkc = 0; /* prevent emergency to cascade up, it is already handled. */
-//               }
-//            }
-//            else
-//            {
-//               if (wkc <= 0) /* read mailbox lost */
-//               {
-//                  SMstat ^= 0x0200; /* toggle repeat request */
-//                  SMstat = htoes(SMstat);
-//                  wkc2 = ecx_FPWR(context->port, configadr, ECT_REG_SM1STAT, sizeof(SMstat), &SMstat, EC_TIMEOUTRET);
-//                  SMstat = etohs(SMstat);
-//                  SMcontr = 0;
-//                  do /* wait for toggle ack */
-//                  {
-//                     
-//                     wkc2 = ecx_FPRD(context->port, configadr, ECT_REG_SM1CONTR, sizeof(SMcontr), &SMcontr, EC_TIMEOUTRET);
-//                   } while (((wkc2 <= 0) || ((SMcontr & 0x02) != (HI_BYTE(SMstat) & 0x02))) && (osal_timer_is_expired(&timer) == FALSE));
-//                  do /* wait for read mailbox available */
-//                  {
-//                     wkc2 = ecx_FPRD(context->port, configadr, ECT_REG_SM1STAT, sizeof(SMstat), &SMstat, EC_TIMEOUTRET);
-//                     SMstat = etohs(SMstat);
-//                     if (((SMstat & 0x08) == 0) && (timeout > EC_LOCALDELAY))
-//                     {
-//                        osal_usleep(EC_LOCALDELAY);
-//                     }
-//                  } while (((wkc2 <= 0) || ((SMstat & 0x08) == 0)) && (osal_timer_is_expired(&timer) == FALSE));
-//               }
-//            }
-//         } while ((wkc <= 0) && (osal_timer_is_expired(&timer) == FALSE)); /* if WKC<=0 repeat */
-//      }
-//      else /* no read mailbox available */
-//      {
-//          wkc = 0;
-//      }
-//   }
 
    return wkc;
 }

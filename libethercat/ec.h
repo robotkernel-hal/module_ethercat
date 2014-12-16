@@ -99,6 +99,7 @@ typedef struct ec_slave {
     uint8_t fmmu_ch;    //!< number of fmmu channels
     int ram_size;       //!< ram size in bytes
     uint16_t features;  //!< fmmu operation, dc available
+    uint16_t pdi_ctrl;
 
     ec_slave_sm_t *sm;
     ec_slave_fmmu_t *fmmu;

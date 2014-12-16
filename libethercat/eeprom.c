@@ -187,6 +187,8 @@ void ec_eeprom_dump(ec_t *pec, uint16_t slave) {
             case EC_EEPROM_CAT_NOP:
                 break;
             case EC_EEPROM_CAT_STRINGS: {
+                ec_log("EEPROM_STRINGS", "slave %d:\n", slave);
+
                 uint8_t *buf = malloc(cat_len*2);
                 ec_eepromread_len(pec, slave, cat_offset+2, buf, cat_len*2);
 
@@ -213,12 +215,18 @@ void ec_eeprom_dump(ec_t *pec, uint16_t slave) {
                 break;
             }
             case EC_EEPROM_CAT_DATATYPES:
+                ec_log("EEPROM_DATATYPES", "slave %d:\n", slave);
+
                 break;
             case EC_EEPROM_CAT_GENERAL: {
+                ec_log("EEPROM_GENERAL", "slave %d:\n", slave);
+
                 eeprom(cat_offset+2, slv->eeprom.general);
                 break;
             }
             case EC_EEPROM_CAT_FMMU: {
+                ec_log("EEPROM_FMMU", "slave %d:\n", slave);
+
                 // skip cat type and len
                 int local_offset = cat_offset + 2;
                 unsigned i, fmmu_idx = 0;
@@ -234,6 +242,8 @@ void ec_eeprom_dump(ec_t *pec, uint16_t slave) {
                 break;
             }
             case EC_EEPROM_CAT_SM: {
+                ec_log("EEPROM_SM", "slave %d:\n", slave);
+
                 // skip cat type and len
                 int j = 0, local_offset = cat_offset + 2;
                 slv->eeprom.sms_cnt = cat_len/(sizeof(ec_eeprom_cat_sm_t)/2);
@@ -267,6 +277,8 @@ void ec_eeprom_dump(ec_t *pec, uint16_t slave) {
                 break;
             }
             case EC_EEPROM_CAT_TXPDO: {
+                ec_log("EEPROM_TXPDO", "slave %d:\n", slave);
+
                 // skip cat type and len
                 int j = 0, local_offset = cat_offset + 2;
                 slv->eeprom.txpdos_cnt = cat_len/(sizeof(ec_eeprom_cat_pdo_t)/2);
@@ -286,6 +298,8 @@ void ec_eeprom_dump(ec_t *pec, uint16_t slave) {
                 break;
             }
             case EC_EEPROM_CAT_RXPDO: {
+                ec_log("EEPROM_RXPDO", "slave %d:\n", slave);
+
                 // skip cat type and len
                 int j = 0, local_offset = cat_offset + 2;
                 slv->eeprom.rxpdos_cnt = cat_len/(sizeof(ec_eeprom_cat_pdo_t)/2);
@@ -305,7 +319,7 @@ void ec_eeprom_dump(ec_t *pec, uint16_t slave) {
                 break;
             }
             case EC_EEPROM_CAT_DC:
-                ec_log("EEPROM_DC", "\n");
+                ec_log("EEPROM_DC", "slave %d:\n", slave);
                 break;
         }
 

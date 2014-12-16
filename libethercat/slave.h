@@ -1,0 +1,90 @@
+//! ethercat master
+/*!
+ * author: Robert Burger
+ *
+ * $Id$
+ */
+
+/*
+ * This file is part of libethercat.
+ *
+ * libethercat is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * libethercat is distributed in the hope that 
+ * it will be useful, but WITHOUT ANY WARRANTY; without even the implied 
+ * warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with libethercat
+ * If not, see <http://www.gnu.org/licenses/>.
+ */
+
+#ifndef __SLAVE_H__
+#define __SLAVE_H__
+
+#include <stdint.h>
+
+#include "common.h"
+#include "slave.h"
+#include "ec.h"
+
+typedef enum ec_state_transition {
+    INIT_2_INIT      = 0x0101,
+    INIT_2_PREOP     = 0x0102,
+    INIT_2_SAFEOP    = 0x0104,
+    INIT_2_OP        = 0x0108,
+    PREOP_2_INIT     = 0x0201,
+    PREOP_2_PREOP    = 0x0202,
+    PREOP_2_SAFEOP   = 0x0204,
+    PREOP_2_OP       = 0x0208,
+    SAFEOP_2_INIT    = 0x0401,
+    SAFEOP_2_PREOP   = 0x0402,
+    SAFEOP_2_SAFEOP  = 0x0404,
+    SAFEOP_2_OP      = 0x0408,
+    OP_2_INIT        = 0x0801,
+    OP_2_PREOP       = 0x0802,
+    OP_2_SAFEOP      = 0x0804,
+    OP_2_OP          = 0x0808,
+} ec_state_transition_t;
+
+//! set ethercat state on slave 
+/*!
+ * \param pec ethercat master pointer
+ * \param slave number
+ * \param state new ethercat state
+ * \return wkc
+ */
+int ec_slave_set_state(struct ec *pec, uint16_t slave, ec_state_t state);
+
+//! get ethercat state from slave 
+/*!
+ * \param pec ethercat master pointer
+ * \param slave number
+ * \param state return ethercat state
+ * \return wkc
+ */
+int ec_slave_state_get(struct ec *pec, uint16_t slave, ec_state_t *state);
+
+//! generate pd mapping
+/*!
+ * \param pec ethercat master pointer
+ * \param slave slave number
+ * \return wkc
+ */
+int ec_slave_generate_mapping(struct ec *pec, uint16_t slave);
+
+//! state transition on ethercat slave
+/*!
+ * \param pec ethercat master pointer
+ * \param slave slave number
+ * \param state switch to state
+ * \return wkc
+ */
+int ec_slave_state_transition(struct ec *pec, uint16_t slave, ec_state_t state);
+
+#endif // __SLAVE_H__
+

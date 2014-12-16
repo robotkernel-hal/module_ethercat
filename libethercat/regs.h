@@ -21,6 +21,8 @@ enum {
 enum {
     EC_REG_TYPE         = 0x0000,
     EC_REG_SM_FFMU_CH   = 0x0004,
+    EC_REG_FMMU_CH      = 0x0004,
+    EC_REG_SM_CH        = 0x0005,
     EC_REG_RAM_SIZE     = 0x0006,
     EC_REG_PORTDES      = 0x0007,
     EC_REG_ESCSUP       = 0x0008,

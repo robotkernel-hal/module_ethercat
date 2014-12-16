@@ -293,8 +293,8 @@ int ec_coe_sdo_desc_read(ec_t *pec, uint16_t slave, uint16_t index,
         if (read_buf->sdo_info_hdr.opcode == EC_COE_SDO_INFO_GET_OBJECT_DESC_RESP) {
             // transfer was successfull
             desc->data_type         = read_buf->sdo_info_data.wdata[1];
-            desc->obj_type          = read_buf->sdo_info_data.bdata[4];
-            desc->max_subindices    = read_buf->sdo_info_data.bdata[5];
+            desc->max_subindices    = read_buf->sdo_info_data.bdata[4];
+            desc->obj_code          = read_buf->sdo_info_data.bdata[5];
 
             size_t name_len = min(read_buf->mbx_hdr.length - 6 - 6, CANOPEN_MAXNAME - 1);
             memcpy(desc->name, &read_buf->sdo_info_data.bdata[6], name_len);
@@ -302,7 +302,7 @@ int ec_coe_sdo_desc_read(ec_t *pec, uint16_t slave, uint16_t index,
         }
     } else if (read_buf->coe_hdr.service == EC_COE_SDOREQ) {
         desc->data_type         = 0;
-        desc->obj_type          = 0;
+        desc->obj_code          = 0;
         desc->max_subindices    = 0;
         desc->name[0] = '\0';
 
@@ -384,10 +384,10 @@ int ec_coe_sdo_entry_desc_read(ec_t *pec, uint16_t slave, uint16_t index, uint8_
             
             if (desc->data) {
                 memcpy(desc->data, read_buf->desc_data.bdata, desc->data_len);
-                int h;
-                for (h = 0; h < desc->data_len; ++h) 
-                    printf("%02X ", desc->data[h]);
-                printf("\n");
+//                int h;
+//                for (h = 0; h < desc->data_len; ++h) 
+//                    printf("%02X ", desc->data[h]);
+//                printf("\n");
             }
 
         }

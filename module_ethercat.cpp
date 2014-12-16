@@ -288,7 +288,7 @@ int master::request(int reqcode, void* ptr) {
             ret2 = ec_coe_sdo_desc_read(_pec, desc->slave_id, desc->index, &obj_desc);
             
             desc->data_type      = obj_desc.data_type;
-            desc->object_code    = obj_desc.obj_type;
+            desc->object_code    = obj_desc.obj_code;
             desc->max_subindices = obj_desc.max_subindices;
             strcpy(desc->name, obj_desc.name);          
             break;
@@ -385,7 +385,7 @@ void master::trigger() {
             pd->p_de->user_arg = pd->p_idx;
 
             // queue frame and trigger tx
-            datagram_pool_put(_pec->phw->tx_low, pd->p_de);
+            datagram_pool_put(_pec->phw->tx_high, pd->p_de);
         }
     }
 
