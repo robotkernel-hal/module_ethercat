@@ -30,6 +30,7 @@
 #include "robotkernel/kernel.h"
 #include "robotkernel/trigger_base.h"
 #include "robotkernel/runnable.h"
+#include "interface_memory_inspection/module_intf.h"
 #include "slave.h"
 
 #ifdef __cplusplus
@@ -41,6 +42,12 @@ extern "C" {
 #ifdef __cplusplus
 }
 #endif
+
+
+#define MEM_SLAVE_ID(x)         ((x) & 0x0000FFFF)
+#define MEM_TYPE(x)             (((x) & 0x00FF0000) >> 16)
+#define MEM_TYPE_SLAVE_MEM      1
+#define MEM_TYPE_SLAVE_EEPROM   2
 
 void ethercat_log(robotkernel::loglevel lvl, std::string name, const char *format, ...);
 

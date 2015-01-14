@@ -1,4 +1,4 @@
-//! robotkernel module soemslave
+//! robotkernel module ethercat slave
 /*!
   $Id$
  */
@@ -114,8 +114,8 @@ slave::slave_dc::slave_dc(const YAML::Node& node) {
  * \param master_dev master device
  */
 slave::slave(int index, master *master_dev) 
-    : index(index), state_req(1), disable_ca(false), 
-    print_cnt(0), master_dev(master_dev), config(NULL) {
+    : config(NULL), index(index), state_req(1), disable_ca(false), 
+    print_cnt(0), master_dev(master_dev) {
                 
     _pd_intf = NULL;
     _coe_intf = NULL;
@@ -129,7 +129,7 @@ slave::slave(int index, master *master_dev)
  * \param master_dev master device
  */
 slave::slave(const YAML::Node& node, master *master_dev)
-    : master_dev(master_dev), config(NULL) {
+    : config(NULL), master_dev(master_dev) {
     _pd_intf = NULL;
     _coe_intf = NULL;
 
@@ -360,6 +360,16 @@ void slave::register_interfaces() {
 
     _pd_intf = robotkernel::kernel::register_interface_cb(master_dev->_name.c_str(), 
             "libinterface_process_data_inspection.so", slave_name.str().c_str(), index);
+
+    slave_name.str("");
+    slave_name << "slave_" << index << ".mem";
+    _mem_intf = robotkernel::kernel::register_interface_cb(master_dev->_name.c_str(),
+            "libinterface_memory_inspection.so", slave_name.str().c_str(), index | (MEM_TYPE_SLAVE_MEM << 16));
+    
+    slave_name.str("");
+    slave_name << "slave_" << index << ".eeprom";
+    _eeprom_intf = robotkernel::kernel::register_interface_cb(master_dev->_name.c_str(),
+            "libinterface_memory_inspection.so", slave_name.str().c_str(), index | (MEM_TYPE_SLAVE_EEPROM << 16));
 }
 
 //! unregister interfaces of slave

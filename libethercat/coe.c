@@ -64,8 +64,10 @@ int ec_coe_sdo_read(ec_t *pec, uint16_t slave, uint16_t index, uint8_t sub_index
     ec_sdo_t *write_buf = (ec_sdo_t *)(pec->slaves[slave].mbx_write.buf);
     ec_sdo_t *read_buf  = (ec_sdo_t *)(pec->slaves[slave].mbx_read.buf); 
 
+#define EC_SDO_LENGTH 10
+
     // mailbox header
-    write_buf->mbx_hdr.length       = 10; // (mbxhdr - length) + coehdr + sdohdr
+    write_buf->mbx_hdr.length       = EC_SDO_LENGTH; ////10; // (mbxhdr (6) - mbxhdr.length (2)) + coehdr (2) + sdohdr (4)
     write_buf->mbx_hdr.address      = 0x0000;
     write_buf->mbx_hdr.priority     = 0x00;
     write_buf->mbx_hdr.mbxtype      = EC_MBX_COE;
@@ -123,7 +125,7 @@ int ec_coe_sdo_write(ec_t *pec, uint16_t slave, uint16_t index,
         (ec_sdo_t *)(pec->slaves[slave].mbx_read.buf); 
 
     // mailbox header
-    write_buf->mbx_hdr.length           = 10;// + *len; // (mbxhdr - length) + coehdr + sdohdr
+    write_buf->mbx_hdr.length           = 10;// (mbxhdr (6) - mbxhdr.length (2)) + coehdr (2) + sdohdr (4)
     write_buf->mbx_hdr.address          = 0x0000;
     write_buf->mbx_hdr.priority         = 0x00;
     write_buf->mbx_hdr.mbxtype          = EC_MBX_COE;
@@ -201,7 +203,7 @@ int ec_coe_odlist_read(ec_t *pec, uint16_t slave, uint8_t *buf, size_t *len) {
     ec_sdo_odlist_resp_t *read_buf = (ec_sdo_odlist_resp_t *)(pec->slaves[slave].mbx_read.buf); 
 
     // mailbox header
-    write_buf->mbx_hdr.length       = 12; // (mbxhdr - length) + coehdr + sdohdr
+    write_buf->mbx_hdr.length       = 12; // (mbxhdr (6) - length (2)) + coehdr (2) + sdoinfohdr (4)
     write_buf->mbx_hdr.address      = 0x0000;
     write_buf->mbx_hdr.priority     = 0x02;
     write_buf->mbx_hdr.mbxtype      = EC_MBX_COE;

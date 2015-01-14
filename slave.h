@@ -236,6 +236,8 @@ class slave {
         robotkernel::kernel::interface_id_t _soe_intf;
         robotkernel::kernel::interface_id_t _coe_intf;
         robotkernel::kernel::interface_id_t _pd_intf;
+        robotkernel::kernel::interface_id_t _mem_intf;
+        robotkernel::kernel::interface_id_t _eeprom_intf;
 
         module_ethercat::master *master_dev;
 };

@@ -51,6 +51,10 @@ AC_SUBST(ARCH_CFLAGS)
 PKG_CHECK_MODULES([ROBOTKERNEL], [robotkernel], [], [
                     RMPM_CHECK_MODULES([ROBOTKERNEL], [robotkernel.robotkernel])
                    ])
+PKG_CHECK_MODULES([INTERFACE_MEMORY_INSPECTION], [interface_memory_inspection], [], [
+                    RMPM_CHECK_MODULES([INTERFACE_MEMORY_INSPECTION], [robotkernel.interface_memory_inspection])
+                   ])
+
 LN_BASE=$(env -i "$srcdir"/scripts/get_ln_base.py $ROBOTKERNEL_DEPENDS)
 LN_GENERATE_ARGS='-md_dir $(srcdir)/share/message_definitions'
 LN_GENERATE="env -i $LN_BASE/scripts/ln_generate $LN_GENERATE_ARGS"

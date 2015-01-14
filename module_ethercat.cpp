@@ -323,6 +323,36 @@ int master::request(int reqcode, void* ptr) {
             ethercat_log(module_verbose, _name, "GET_PDOUT: %p/%d\n", pd->pd, pd->len);
             break;
         }
+
+        case MOD_REQUEST_MEMORY_READ: {
+            memory_t *memory_req = (memory_t *)ptr;
+            int slave_id = MEM_SLAVE_ID(memory_req->slave_id);
+            int type = MEM_TYPE(memory_req->slave_id);
+                
+            ethercat_log(module_verbose, _name, "MEMORY_READ slave_id %X -> 0x%llX/%d\n", 
+                    memory_req->slave_id, memory_req->address, memory_req->length); 
+
+            if (type == MEM_TYPE_SLAVE_MEM) {
+                uint16_t wkc;
+
+                for (unsigned offset = 0; offset < memory_req->length; offset+=100) {
+                    uint32_t act_len = min(100, memory_req->length - offset);
+
+                    ec_fprd(_pec, _pec->slaves[slave_id].fixed_address, memory_req->address + offset, 
+                            memory_req->data + offset, act_len, &wkc);
+                }
+            } else if (type == MEM_TYPE_SLAVE_EEPROM) {
+                int ret = ec_eepromread_len(_pec, slave_id,
+                        memory_req->address, memory_req->data, memory_req->length);
+            }
+            break;
+        }
+        case MOD_REQUEST_MEMORY_WRITE: {
+            break;
+        }
+        case MOD_REQUEST_MEMORY_GET_INFO: {
+            break;
+        }
         case MOD_REQUEST_SET_TRIGGER_CB: {
             set_trigger_cb_t *cb = (set_trigger_cb_t *)ptr;
             if (cb->cb == NULL) {
@@ -415,6 +445,7 @@ int master::request(int reqcode, void* ptr) {
 
             ec_coe_sdo_read(_pec, value->slave_id, value->index, value->sub_index, 
                     0, (uint8_t *)value->value, &size);
+            value->value_len = size;
             break;
         }
         case MOD_REQUEST_CANOPEN_WRITE_ELEMENT_VALUE: {
