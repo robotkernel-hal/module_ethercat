@@ -155,7 +155,22 @@ class slave {
 
             //! destruction
             ~slave_config();
-        } config;
+
+            typedef struct sm_settings {
+                sm_settings(int address, unsigned flags, unsigned length) {
+                    _address = address;
+                    _flags = flags;
+                    _length = length;
+                }
+
+                int      _address;
+                unsigned _flags;
+                unsigned _length;
+            } sm_settings_t;
+
+            typedef std::map<int, sm_settings_t *> sm_map_t;
+            sm_map_t _sm_map;
+        } *config;
 
         std::string name;
         int index;

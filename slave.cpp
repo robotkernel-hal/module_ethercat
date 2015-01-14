@@ -63,76 +63,31 @@ slave::slave_config::slave_config()
  * \param node yaml intialization node
  */
 slave::slave_config::slave_config(const YAML::Node& node) {
-    manufacturer = node["manufacturer"].to<uint32_t>();
-    id           = node["id"].to<uint32_t>();
-    dtype        = node["dtype"].to<uint32_t>();
-    input_bits   = node["input_bits"].to<uint32_t>();
-    output_bits  = node["output_bits"].to<uint32_t>();
 
-    if (node.FindValue("sm0a"))
-        sm0a     = node["sm0a"].to<uint32_t>();
-    else 
-        sm0a     = 0;
-    
-    if (node.FindValue("sm0f"))
-        sm0f     = node["sm0f"].to<uint32_t>();
-    else 
-        sm0f     = 0;
-    
-    if (node.FindValue("sm0l"))
-        sm0l     = node["sm0l"].to<uint32_t>();
-    else 
-        sm0l     = 0;
+    // sync manager settings
+    const YAML::Node *sm_node = node.FindValue("sm");
+    if (sm_node) {
+        for (YAML::Iterator it = sm_node->begin();
+                it != sm_node->end(); ++it) {
+            int sm_nr = it.first().to<int>();
 
-    if (node.FindValue("sm1a"))
-        sm1a     = node["sm1a"].to<uint32_t>();
-    else 
-        sm1a     = 0;
-    
-    if (node.FindValue("sm1f"))
-        sm1f     = node["sm1f"].to<uint32_t>();
-    else 
-        sm1f     = 0;
+            int address     = it.second()["address"].to<int>();
+            unsigned flags  = it.second()["flags"].to<unsigned>();
+            unsigned length = it.second()["length"].to<unsigned>();
 
-    if (node.FindValue("sm1l"))        
-        sm1l     = node["sm1l"].to<uint32_t>();
-    else 
-        sm1l     = 0;
-
-    sm2a         = node["sm2a"].to<uint32_t>();
-    sm2f         = node["sm2f"].to<uint32_t>();
-    sm3a         = node["sm3a"].to<uint32_t>();
-    sm3f         = node["sm3f"].to<uint32_t>();
-    
-    if (node.FindValue("sm0type"))
-        sm0type  = node["sm0type"].to<uint32_t>();
-    else 
-        sm0type  = 0;
-
-    if (node.FindValue("sm1type"))
-        sm1type  = node["sm1type"].to<uint32_t>();
-    else 
-        sm1type  = 0;
-    
-    fm0ac        = node["fm0ac"].to<uint32_t>();
-    fm1ac        = node["fm1ac"].to<uint32_t>();
-
-    if (node.FindValue("fm0func"))
-        fm0func  = node["fm0func"].to<uint32_t>();
-    else 
-        fm0func  = 0;
-
-    if (node.FindValue("fm1func"))
-        fm1func  = node["fm1func"].to<uint32_t>();
-    else 
-        fm1func  = 0;
+            _sm_map[sm_nr] = new sm_settings(address, flags, length);
+        }
+    }
 
     has_config   = true;
 }
 
 //! destruction
-slave::slave_config::~slave_config()
-{}
+slave::slave_config::~slave_config() { 
+    printf("destruction ????\n");
+    for (sm_map_t::iterator it = _sm_map.begin(); it != _sm_map.end(); ++it)
+        delete it->second;
+}
             
 //! default construction
 slave::slave_dc::slave_dc() {
@@ -159,7 +114,8 @@ slave::slave_dc::slave_dc(const YAML::Node& node) {
  * \param master_dev master device
  */
 slave::slave(int index, master *master_dev) 
-    : index(index), state_req(1), disable_ca(false), print_cnt(0), master_dev(master_dev) {
+    : index(index), state_req(1), disable_ca(false), 
+    print_cnt(0), master_dev(master_dev), config(NULL) {
                 
     _pd_intf = NULL;
     _coe_intf = NULL;
@@ -173,7 +129,7 @@ slave::slave(int index, master *master_dev)
  * \param master_dev master device
  */
 slave::slave(const YAML::Node& node, master *master_dev)
-    : master_dev(master_dev) {
+    : master_dev(master_dev), config(NULL) {
     _pd_intf = NULL;
     _coe_intf = NULL;
 
@@ -187,7 +143,7 @@ slave::slave(const YAML::Node& node, master *master_dev)
         disable_ca = 0;
 
     if (node.FindValue("config") != NULL) {
-        config = slave_config(node["config"]);
+        config = new slave_config(node["config"]);
     }
     
     if (node.FindValue("dc") != NULL) {
@@ -220,6 +176,9 @@ slave::~slave() {
             it != coe_init_cmds.end(); ++it) {
         delete(*it);
     }
+
+    if (config)
+        delete config;
 }
 
 //! prepare state transitions

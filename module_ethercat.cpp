@@ -61,6 +61,37 @@ void ethercat_log_func(void *user, const char *format, ...) {
     va_end(ap);
 }
 
+master::group::group(int index, const YAML::Node& node) {
+    _index    = index;
+    _divisor  = node["divisor"].to<int>();
+
+    for (YAML::Iterator it = node["slaves"].begin(); it != node["slaves"].end(); ++it)
+        _slaves.push_back(it->to<int>());
+}
+//! register interfaces for group
+/*!
+ * \param ctx ethercat context
+ * \return N/A
+ */
+void master::group::register_interfaces(std::string name) {
+    std::stringstream group_name; 
+    group_name << "group_" << _index;
+
+    _pd_intf = robotkernel::kernel::register_interface_cb(name.c_str(), 
+            "libinterface_process_data_inspection.so", group_name.str().c_str(), _index | 0x80000000);
+}
+
+//! unregister interfaces of group
+/*!
+ * \return N/A
+ */
+void master::group::unregister_interfaces() {
+    if (_pd_intf) {
+        kernel::unregister_interface_cb(_pd_intf);
+        _pd_intf = NULL; 
+    }
+}
+
 //! construction
 /*!
  * \param node yaml intialization node
@@ -74,6 +105,16 @@ master::master(const std::string& name, const YAML::Node& node) {
 
     ec_log_func_user = this;
     ec_log_func = ethercat_log_func;
+
+    // group settings
+    const YAML::Node *groups_node = node.FindValue("groups");
+    if (groups_node) {
+        for (YAML::Iterator it = groups_node->begin();
+                it != groups_node->end(); ++it) {
+            int g_nr = it.first().to<int>();
+            _group_info[g_nr] = new group(g_nr, it.second());
+        }
+    }
 
     if (node.FindValue("slaves") != NULL) {
         // parsing slave configurations
@@ -158,7 +199,23 @@ int master::set_state(module_state_t state) {
         }
         case module_state_preop: {
             _pec->tx_sync = 1;
-//            start();
+            
+            for (nr = 0; nr < _pec->slave_cnt; ++nr) {
+                if (!_slave_info[nr]->config)
+                    continue;
+
+                // apply sm and fmmu config
+                for (slave::slave_config::sm_map_t::iterator it = _slave_info[nr]->config->_sm_map.begin();
+                        it != _slave_info[nr]->config->_sm_map.end(); ++it) {
+                    int sm_nr = it->first;
+
+                    if (sm_nr < _pec->slaves[nr].sm_ch) {
+                        _pec->slaves[nr].sm[sm_nr].adr = it->second->_address;
+                        _pec->slaves[nr].sm[sm_nr].len = it->second->_length;
+                        _pec->slaves[nr].sm[sm_nr].flags = it->second->_flags;
+                    }
+                }
+            }
 
             ec_set_state(_pec, EC_STATE_PREOP);
 
@@ -171,11 +228,19 @@ int master::set_state(module_state_t state) {
             _pec->tx_sync = 0;
 //            stop();
 
-            ec_create_pd_groups(_pec, _pec->slave_cnt);
-            for (nr = 0; nr < _pec->slave_cnt; ++nr) {
-                _pec->slaves[nr].assigned_pd_group = nr;
-                _slave_info[nr]->prepare_state_transition(preop_to_safeop);
-            }            
+            ec_create_pd_groups(_pec, _group_info.size());
+            for (group_map_t::iterator it = _group_info.begin(); it != _group_info.end(); ++it) {
+                int g_nr = it->first;
+
+                for (std::list<int>::iterator it2 = it->second->_slaves.begin();
+                        it2 != it->second->_slaves.end(); ++it2) {
+
+                    _pec->slaves[*it2].assigned_pd_group = g_nr;
+                    _slave_info[*it2]->prepare_state_transition(preop_to_safeop);
+                }
+
+                it->second->register_interfaces(_name);
+            }
             
             ec_set_state(_pec, EC_STATE_SAFEOP);
             break;
@@ -219,9 +284,18 @@ int master::request(int reqcode, void* ptr) {
             pd->pd = NULL;
             pd->len = 0;
 
-            if ((pd->slave_id >= 0) && (pd->slave_id < (unsigned)_pec->slave_cnt)) {
-                pd->pd = _pec->slaves[pd->slave_id].pdin;
-                pd->len = _pec->slaves[pd->slave_id].pdin_len;
+            if (pd->slave_id & 0x80000000) {
+                // group case
+                int g_nr = pd->slave_id & ~0x80000000; 
+                if (g_nr < (unsigned)_pec->pd_group_cnt) {
+                    pd->pd = _pec->pd_groups[g_nr].pd + _pec->pd_groups[g_nr].pdout_len;
+                    pd->len = _pec->pd_groups[g_nr].pdin_len;
+                }
+            } else {
+                if ((pd->slave_id >= 0) && (pd->slave_id < (unsigned)_pec->slave_cnt)) {
+                    pd->pd = _pec->slaves[pd->slave_id].pdin;
+                    pd->len = _pec->slaves[pd->slave_id].pdin_len;
+                }
             }
             
             ethercat_log(module_verbose, _name, "GET_PDIN: %p/%d\n", pd->pd, pd->len);
@@ -232,9 +306,18 @@ int master::request(int reqcode, void* ptr) {
             pd->pd = NULL;
             pd->len = 0;
 
-            if ((pd->slave_id >= 0) && (pd->slave_id < (unsigned)_pec->slave_cnt)) {
-                pd->pd = _pec->slaves[pd->slave_id].pdout;
-                pd->len = _pec->slaves[pd->slave_id].pdout_len;
+            if (pd->slave_id & 0x80000000) {
+                // group case
+                int g_nr = pd->slave_id & ~0x80000000; 
+                if (g_nr < (unsigned)_pec->pd_group_cnt) {
+                    pd->pd = _pec->pd_groups[g_nr].pd;
+                    pd->len = _pec->pd_groups[g_nr].pdout_len;
+                }
+            } else {
+                if ((pd->slave_id >= 0) && (pd->slave_id < (unsigned)_pec->slave_cnt)) {
+                    pd->pd = _pec->slaves[pd->slave_id].pdout;
+                    pd->len = _pec->slaves[pd->slave_id].pdout_len;
+                }
             }
 
             ethercat_log(module_verbose, _name, "GET_PDOUT: %p/%d\n", pd->pd, pd->len);

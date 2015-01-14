@@ -151,7 +151,8 @@ int ec_slave_generate_mapping(ec_t *pec, uint16_t slave) {
                     bit_len += pdo->bit_len;
             }
 
-            slv->sm[sm_idx].len = (bit_len + 7) / 8;
+            if (bit_len > 0)
+                slv->sm[sm_idx].len = (bit_len + 7) / 8;
         }
     }
 

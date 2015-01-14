@@ -53,6 +53,30 @@ class master : public robotkernel::trigger_base, public robotkernel::runnable {
         robotkernel::kernel::interface_id_t _pd_interface_id;
 
     public:
+        typedef struct group {
+            group(int index, const YAML::Node& node);
+
+        //! register interfaces for slave
+        /*!
+         * \param ctx ethercat context
+         * \return N/A
+         */
+        void register_interfaces(std::string name);
+
+        //! unregister interfaces of slave
+        /*!
+         * \return N/A
+         */
+        void unregister_interfaces();
+            int _index;
+            int _divisor;
+            std::list<int> _slaves;
+                    robotkernel::kernel::interface_id_t _pd_intf;
+        } group_t;
+
+        typedef std::map<int, group *> group_map_t;
+        group_map_t _group_info;
+
         typedef std::map<int, slave *> slave_map_t;
         slave_map_t _slave_info;
 
