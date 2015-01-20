@@ -351,7 +351,9 @@ void slave::register_interfaces() {
     std::stringstream slave_name; 
     slave_name << "slave_" << index;
 
-    if (master_dev->_pec->slaves[index].eeprom.mbx_supported & EC_EEPROM_MBX_COE)
+    if (master_dev->_pec->slaves[index].eeprom.mbx_supported & EC_EEPROM_MBX_COE ||
+            master_dev->_pec->slaves[index].eeprom.txpdos_cnt ||
+            master_dev->_pec->slaves[index].eeprom.rxpdos_cnt)
         _coe_intf = robotkernel::kernel::register_interface_cb(master_dev->_name.c_str(), 
                 "libinterface_canopen_protocol.so", slave_name.str().c_str(), index);
     if (master_dev->_pec->slaves[index].eeprom.mbx_supported & EC_EEPROM_MBX_SOE)

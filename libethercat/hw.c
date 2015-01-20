@@ -225,9 +225,13 @@ int hw_tx(hw_t *phw) {
             // no more datagrams need to be sent or no more space in frame
             size_t bytesrx = send(phw->sockfd, pframe, pframe->len, 0);
 
-            if (pframe->len != bytesrx) 
-                ec_log("RX_THREAD", "got only %d bytes out of %d bytes through.\n", 
+            if (pframe->len != bytesrx) {
+                ec_log("TX", "got only %d bytes out of %d bytes through.\n", 
                         bytesrx, pframe->len);
+
+                if (bytesrx == -1)
+                    ec_log("TX", "error: %s\n", strerror(errno));
+            }
             
             // reset length to send new frame
             pframe->len = sizeof(ec_frame_t);
@@ -269,9 +273,13 @@ int hw_tx(hw_t *phw) {
             // no more datagrams need to be sent or no more space in frame
             size_t bytesrx = send(phw->sockfd, pframe, pframe->len, 0);
 
-            if (pframe->len != bytesrx) 
-                ec_log("RX_THREAD", "got only %d bytes out of %d bytes through.\n", 
+            if (pframe->len != bytesrx) {
+                ec_log("TX", "got only %d bytes out of %d bytes through.\n", 
                         bytesrx, pframe->len);
+
+                if (bytesrx == -1)
+                    ec_log("TX", "error: %s\n", strerror(errno));
+            }
 
             // reset length to send new frame
             pframe->len = sizeof(ec_frame_t);

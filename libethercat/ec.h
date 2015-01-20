@@ -89,7 +89,22 @@ typedef struct PACKED ec_pd_group {
     
     datagram_entry_t *p_de;
     idx_entry_t *p_idx;
+    
+    datagram_entry_t *p_de_dc;
+    idx_entry_t *p_idx_dc;
 } PACKED ec_pd_group_t;
+
+typedef struct PACKED ec_slave_dc_info {
+    struct {
+        int32_t time;
+    } receive_times[4];
+
+    int have_dc;
+    int next;
+    int prev;
+
+    int consumedports;
+} ec_slave_dc_info_t;
 
 typedef struct ec_slave {
     int16_t auto_inc_address;
@@ -100,6 +115,14 @@ typedef struct ec_slave {
     int ram_size;       //!< ram size in bytes
     uint16_t features;  //!< fmmu operation, dc available
     uint16_t pdi_ctrl;
+    uint8_t link_cnt;
+    uint8_t active_ports;
+    uint16_t ptype;
+    int32_t pdelay;
+    
+    int entryport;
+    int parent;
+    int parentport;
 
     ec_slave_sm_t *sm;
     ec_slave_fmmu_t *fmmu;
@@ -114,7 +137,14 @@ typedef struct ec_slave {
     size_t pdout_len;
 
     eeprom_info_t eeprom;
+    ec_slave_dc_info_t dc;
 } ec_slave_t;
+
+typedef struct ec_dc_info {
+    int have_dc;
+    int next;
+    int prev;
+} ec_dc_info_t;
 
 typedef struct ec {
     hw_t *phw;
@@ -128,6 +158,8 @@ typedef struct ec {
 
     int pd_group_cnt;
     ec_pd_group_t *pd_groups;
+
+    ec_dc_info_t dc;
 } ec_t;
 
 #ifdef __cplusplus
@@ -255,6 +287,9 @@ int ec_state_transition(ec_t *pec, uint16_t slave, ec_state_t state);
 #define ec_fprw(pec, adp, ado, data, datalen, wkc) \
     ec_transceive((pec), EC_CMD_FPRW, ((uint32_t)(ado) << 16) | ((adp) & 0xFFFF), \
             (uint8_t *)(data), (datalen), (wkc))
+
+#define ec_frmw(pec, ado, data, datalen, wkc) \
+    ec_transceive((pec), EC_CMD_FRMW, ((uint32_t)(ado) << 16), (uint8_t *)(data), (datalen), (wkc))
 
 #endif // __EC_H__
 

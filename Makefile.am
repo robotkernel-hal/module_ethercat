@@ -12,7 +12,8 @@ libmodule_ethercat_la_SOURCES  = module_ethercat.cpp \
 								 libethercat/ec.c \
 								 libethercat/hw.c \
 								 libethercat/mbx.c \
-								 libethercat/eeprom.c
+								 libethercat/eeprom.c \
+								 libethercat/dc.c
 
 libmodule_ethercat_la_CXXFLAGS = -Wall \
 								 -I$(top_srcdir)/kernel/source \

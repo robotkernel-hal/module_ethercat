@@ -172,8 +172,71 @@ int ec_set_state(ec_t *pec, ec_state_t state) {
                 fixed++;
             }
 
-            for (i = 0; i < pec->slave_cnt; ++i)
-                ec_slave_state_transition(pec, i, state);
+            for (int slave = 0; slave < pec->slave_cnt; ++slave) {
+                ec_slave_t *slv = &pec->slaves[slave]; 
+                ec_slave_state_transition(pec, slave, state);
+
+                uint16_t topology;
+                ec_fprd(pec, slv->fixed_address, EC_REG_DLSTAT, &topology, sizeof(topology), &wkc);
+
+                slv->link_cnt = 0;
+                slv->active_ports = 0;
+
+                if ((topology & 0x0300) == 0x0200) { // port 0 open and communication established
+                    slv->link_cnt++;
+                    slv->active_ports |= 0x01;
+                }
+                if ((topology & 0x0c00) == 0x0800) { // port1 open and communication established
+                    slv->link_cnt++;
+                    slv->active_ports |= 0x02;
+                }
+                if ((topology & 0x3000) == 0x2000) { // port2 open and communication established
+                    slv->link_cnt++;
+                    slv->active_ports |= 0x04;
+                }
+                if ((topology & 0xc000) == 0x8000) { // port3 open and communication established
+                    slv->link_cnt++;
+                    slv->active_ports |= 0x08;
+                }
+
+                // read out physical type
+                ec_fprd(pec, slv->fixed_address, EC_REG_PORTDES, &slv->ptype, sizeof(slv->ptype), &wkc);
+
+                // 0=no links, not possible 
+                // 1=1 link  , end of line 
+                // 2=2 links , one before and one after 
+                // 3=3 links , split point 
+                // 4=4 links , cross point 
+
+                // search for parent
+                slv->parent = -1; // parent is master at beginning
+                if (slave >= 1) {
+                    int topoc = 0, tmp_slave = slave - 1;
+                    do {
+                        topology = pec->slaves[tmp_slave].link_cnt;
+                        if (topology == 1)
+                            topoc--;    // endpoint found
+                        if (topology == 3)
+                            topoc++;    // split found
+                        if (topology == 4)
+                            topoc += 2; // cross found
+                        if (((topoc >= 0) && (topology > 1)) || (tmp_slave == 0)) { 
+                            slv->parent = tmp_slave; // parent found
+                            tmp_slave = 0;
+                        }
+                        tmp_slave--;
+                    }
+                    while (tmp_slave >= 0);
+                }
+
+                ec_log("TOPOLOGY", "slave %d has parent %d\n", slave, slv->parent);
+
+            }
+
+            ec_dc_config(pec);
+            
+            for (int slave = 0; slave < pec->slave_cnt; ++slave)
+                ec_dc_sync0(pec, slave, 1, 10000000, 0);
 
             break;
         }
@@ -327,6 +390,8 @@ int ec_open(ec_t **ppec, const char *ifname, int prio, int cpumask) {
     (*ppec)->slaves = NULL;
     (*ppec)->pd_groups = NULL;
     (*ppec)->tx_sync = 1;
+
+    (*ppec)->dc.have_dc = 0;
 
     datagram_pool_open(&(*ppec)->pool, 1000);
     hw_open(&(*ppec)->phw, ifname, prio, cpumask);
