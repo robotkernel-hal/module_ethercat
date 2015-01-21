@@ -28,117 +28,15 @@
 #include <sys/queue.h>
 #include "robotkernel/module_intf.h"
 #include "robotkernel/kernel.h"
-#include "robotkernel/trigger_base.h"
-#include "robotkernel/runnable.h"
-#include "interface_memory_inspection/module_intf.h"
-#include "slave.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-#include "libethercat/ec.h"
-#include "libethercat/coe.h"
-#include "libethercat/mbx.h"
-#ifdef __cplusplus
-}
-#endif
-
-
-#define MEM_SLAVE_ID(x)         ((x) & 0x0000FFFF)
-#define MEM_TYPE(x)             (((x) & 0x00FF0000) >> 16)
-#define MEM_TYPE_SLAVE_MEM      1
-#define MEM_TYPE_SLAVE_EEPROM   2
+#define MEM_ADDRESS(x)          ((x) & 0x0000FFFF)
+#define MEM_TYPE_SLAVE_MEM      0x00000000
+#define MEM_TYPE_SLAVE_EEPROM   0x00010000
+#define MEM_TYPE_MASK           0x000F0000
 
 void ethercat_log(robotkernel::loglevel lvl, std::string name, const char *format, ...);
 
 namespace module_ethercat {
-
-extern const std::string state_strings[];
-
-class master : public robotkernel::trigger_base, public robotkernel::runnable {
-    private: 
-        robotkernel::kernel::interface_id_t _pd_interface_id;
-
-    public:
-        typedef struct group {
-            group(int index, const YAML::Node& node);
-
-        //! register interfaces for slave
-        /*!
-         * \param ctx ethercat context
-         * \return N/A
-         */
-        void register_interfaces(std::string name);
-
-        //! unregister interfaces of slave
-        /*!
-         * \return N/A
-         */
-        void unregister_interfaces();
-            int _index;
-            int _divisor;
-            std::list<int> _slaves;
-                    robotkernel::kernel::interface_id_t _pd_intf;
-        } group_t;
-
-        typedef std::map<int, group *> group_map_t;
-        group_map_t _group_info;
-
-        typedef std::map<int, slave *> slave_map_t;
-        slave_map_t _slave_info;
-
-        ec_t *_pec;
-
-        int _recv_prio;
-        int _recv_mask;
-        std::string _ifname;
-        std::string _name;          //!< module name
-        module_state_t   _state;    //!< actual module state
-
-    public:
-        //! construction
-        /*!
-         * \param node yaml intialization node
-         */
-        master(const std::string& name, const YAML::Node& node);
-
-        //! destruction 
-        ~master();
-
-        //! cyclic process data read
-        /*!
-         * \param buf process data buffer
-         * \param bufsize size of process data buffer
-         * \return size of read bytes
-         */
-        size_t read(void* buf, size_t bufsize);
-        
-        //! module trigger callback
-        void trigger();
-
-        //! set module state machine to defined state
-        /*!
-         * \param state requested state
-         * \return success or failure
-         */
-        int set_state(module_state_t state);
-
-        //! get module state machine state
-        /*!
-         * \return current state
-         */
-        module_state_t get_state();
-
-        //! send a request to module
-        /*!
-         * \param reqcode request code
-         * \param ptr pointer to request structure
-         * \return success or failure
-         */
-        int request(int reqcode, void* ptr);
-        
-        void run();     //! handler function called if thread is running
-};
 
 }; // namespace module_ethercat
 

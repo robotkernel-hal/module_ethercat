@@ -4,6 +4,7 @@ libdir = $(prefix)/lib
 lib_LTLIBRARIES = libmodule_ethercat.la
 
 libmodule_ethercat_la_SOURCES  = module_ethercat.cpp \
+								 master.cpp \
 								 slave.cpp \
 								 libethercat/coe.c \
 								 libethercat/slave.c \

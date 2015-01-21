@@ -234,9 +234,6 @@ int ec_set_state(ec_t *pec, ec_state_t state) {
             }
 
             ec_dc_config(pec);
-            
-            for (int slave = 0; slave < pec->slave_cnt; ++slave)
-                ec_dc_sync0(pec, slave, 1, 10000000, 0);
 
             break;
         }

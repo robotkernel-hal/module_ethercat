@@ -1,3 +1,30 @@
+//! ethercat master
+/*!
+ * author: Robert Burger
+ *
+ * $Id$
+ */
+
+/*
+ * This file is part of libethercat.
+ *
+ * libethercat is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * libethercat is distributed in the hope that 
+ * it will be useful, but WITHOUT ANY WARRANTY; without even the implied 
+ * warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with libethercat
+ * If not, see <http://www.gnu.org/licenses/>.
+ */
+
+#ifndef __LIBETHERCAT_COE_H__
+#define __LIBETHERCAT_COE_H__
 
 /** CoE mailbox types */
 enum {
@@ -102,4 +129,6 @@ int ec_coe_sdo_entry_desc_read(ec_t *pec, uint16_t slave, uint16_t index, uint8_
  * \return working counter
  */
 int ec_coe_odlist_read(ec_t *pec, uint16_t slave, uint8_t *buf, size_t *len);
+
+#endif // __LIBETHERCAT_COE_H__
 

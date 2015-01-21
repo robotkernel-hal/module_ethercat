@@ -1,4 +1,4 @@
-//! robotkernel module soem slave
+//! robotkernel module ethercat slave
 /*!
  * author: Robert Burger
  *
@@ -32,6 +32,7 @@
 
 #include "yaml-cpp/yaml.h"
 #include "robotkernel/kernel.h"
+#include "interface_memory_inspection/module_intf.h"
 
 #define LN_UNREGISTER_SERVICE_IN_BASE_DETOR  
 //#include "ln_messages.h"
@@ -39,7 +40,7 @@
 
 extern "C" void convert_string_to_hex(std::string input, char **output, size_t *outlen);
 
-//! soem::
+//! module_ethercat::
 namespace module_ethercat {
 
 class master;
@@ -64,40 +65,40 @@ typedef enum transition {
     op_to_op         =  0x88,
 } transition_t;
 
-//! canopen over ethercat init cmd
-typedef struct coe_init_cmd {
-    int index;                        //! canopen dictionary identifier
-    int subindex;                     //! canopen sub index
-    int ca;                           //! write in complete access mode
-    char *data;                       //! new id data
-    size_t datalen;                   //! new id data length
-    transition_t transition; //! init command transition
-
-    //! construction
-    /*!
-     * \param node yaml intialization node
-     */
-    coe_init_cmd(const YAML::Node& node);
-
-    //! destruction
-    ~coe_init_cmd();
-} coe_init_cmd_t;
-
-//! servodrive over ethercat init cmd
-typedef struct soe_init_cmd {
-    int idx;     //! servodrive id number
-    int element; //! servodrive element number
-    int drive;   //! servodrive drive number
-    int val;     //! servodrive id value
-} soe_init_cmd_t;
 
 class slave {
     public:
+        //! canopen over ethercat init cmd
+        typedef struct coe_init_cmd {
+            int index;                        //! canopen dictionary identifier
+            int subindex;                     //! canopen sub index
+            int ca;                           //! write in complete access mode
+            char *data;                       //! new id data
+            size_t datalen;                   //! new id data length
+            transition_t transition; //! init command transition
+
+            //! construction
+            /*!
+             * \param node yaml intialization node
+             */
+            coe_init_cmd(const YAML::Node& node);
+
+            //! destruction
+            ~coe_init_cmd();
+        } coe_init_cmd_t;
         typedef std::list<coe_init_cmd_t *> coe_list_t;
+
+        //! servodrive over ethercat init cmd
+        typedef struct soe_init_cmd {
+            int idx;     //! servodrive id number
+            int element; //! servodrive element number
+            int drive;   //! servodrive drive number
+            int val;     //! servodrive id value
+        } soe_init_cmd_t;
         typedef std::list<soe_init_cmd_t *> soe_list_t;
 
-        coe_list_t coe_init_cmds;
-        soe_list_t soe_init_cmds;
+        coe_list_t coe_init_cmds;   //! canopen over ethercat init commands
+        soe_list_t soe_init_cmds;   //! sercos over ethercat init commands
 
         //! slave distributed clocks
         struct slave_dc {
@@ -118,66 +119,23 @@ class slave {
             slave_dc(const YAML::Node& node);
         } dc;
 
-        //! slave config override
-        struct slave_config {
-            uint32_t manufacturer; //! manufacturer id
-            uint32_t id;           //! device id
-            uint32_t dtype;        //! dtype
-            uint32_t input_bits;   //! input size in bits
-            uint32_t output_bits;  //! output size in bits
-            uint32_t sm0a;         //! sync manager 0 start address
-            uint32_t sm0f;         //! sync manager 0 flags
-            uint32_t sm0l;         //! sync manager 0 length
-            uint32_t sm1a;         //! sync manager 1 start address
-            uint32_t sm1f;         //! sync manager 1 flags
-            uint32_t sm1l;         //! sync manager 1 length
-            uint32_t sm2a;         //! sync manager 2 start address
-            uint32_t sm2f;         //! sync manager 2 flags
-            uint32_t sm3a;         //! sync manager 3 start address
-            uint32_t sm3f;         //! sync manager 3 flags
-            uint32_t sm0type;      //! sync manager 0 type
-            uint32_t sm1type;      //! sync manager 1 type
-            uint32_t fm0ac;        //! fmmu0 active
-            uint32_t fm1ac;        //! fmmu1 active
-            uint32_t fm0func;      //! fmmu0 function
-            uint32_t fm1func;      //! fmmu1 function
-
-            bool has_config;
-
-            //! default construction
-            slave_config();
-
+        typedef struct sync_manager_settings {
+            int      _address;      //! sync manager address
+            unsigned _flags;        //! sync manager flags
+            unsigned _length;       //! sync manager length
+            
             //! construction
             /*!
              * \param node yaml intialization node
              */
-            slave_config(const YAML::Node& node);
+            sync_manager_settings(const YAML::Node& node);
+        } sync_manager_settings_t;
 
-            //! destruction
-            ~slave_config();
+        typedef std::map<int, sync_manager_settings_t *> sm_map_t;
+        sm_map_t _sm_map;       //! sync manager configs
 
-            typedef struct sm_settings {
-                sm_settings(int address, unsigned flags, unsigned length) {
-                    _address = address;
-                    _flags = flags;
-                    _length = length;
-                }
-
-                int      _address;
-                unsigned _flags;
-                unsigned _length;
-            } sm_settings_t;
-
-            typedef std::map<int, sm_settings_t *> sm_map_t;
-            sm_map_t _sm_map;
-        } *config;
-
-        std::string name;
-        int index;
-        int state_req;
-        bool disable_ca;
-
-        int print_cnt;
+        std::string name;       //! slave name
+        int index;              //! slave bus index
 
         //! construction
         /*!
@@ -204,21 +162,6 @@ class slave {
          */
         bool prepare_state_transition(transition_t transition);
 
-        //! state transitions
-        /*!
-         * \param dev ethercat master device
-         * \param transition state transition
-         * \return success
-         */
-        bool state_transition(transition_t transition);
-
-        //! state check
-        /*!
-         * \param dev ethercat master device
-         * \return success
-         */
-        bool state_check();
-
         //! register interfaces for slave
         /*!
          * \param ctx ethercat context
@@ -232,17 +175,25 @@ class slave {
          */
         void unregister_interfaces();
 
+        //! perform memory request
+        /*!
+         * \param code request code
+         * \param memreq memory request structure
+         *               address in range 0x00000000 - 0x0000FFFF slave memory
+         *                       above    0x00010000              eeprom memory
+         */
+        void memory_request(int code, memory_t *memreq);
+
     private:
         robotkernel::kernel::interface_id_t _soe_intf;
         robotkernel::kernel::interface_id_t _coe_intf;
         robotkernel::kernel::interface_id_t _pd_intf;
         robotkernel::kernel::interface_id_t _mem_intf;
-        robotkernel::kernel::interface_id_t _eeprom_intf;
 
         module_ethercat::master *master_dev;
 };
 
-// soem::
+//! module_ethercat::
 };
 
 #endif // __SLAVE_H__ 

@@ -4,6 +4,7 @@
  */
 
 #include "slave.h"
+#include "master.h"
 #include "module_ethercat.h"
 #include "robotkernel/kernel.h"
 #include <iomanip>
@@ -16,7 +17,7 @@ using namespace module_ethercat;
 pthread_mutex_t slave_lock = PTHREAD_MUTEX_INITIALIZER;
 
 //! forward declaration ethercat state string
-extern const string state_strings[];
+extern const string module_ethercat::state_strings[];
 
 void convert_string_to_hex(string input, char **output, size_t *outlen) {
     size_t len = input.length();
@@ -36,59 +37,24 @@ void convert_string_to_hex(string input, char **output, size_t *outlen) {
 /*!
  * \param node yaml intialization node
  */
-coe_init_cmd::coe_init_cmd(const YAML::Node& node) {
+slave::coe_init_cmd::coe_init_cmd(const YAML::Node& node) {
     index      = node["index"].to<int>();
     subindex   = node["subindex"].to<int>();
     ca         = node["ca"].to<int>();
     transition = (transition_t)node["transition"].to<int>();
     convert_string_to_hex(node["data"].to<string>(), &data, &datalen);
 
-    ethercat_log(module_verbose, string("coe"), "got coe init cmd: 0x%X/%d\n", 
-            index, subindex);
+    ethercat_log(module_verbose, string("coe"), "got coe init "
+            "cmd: 0x%X/%d\n", index, subindex);
 }
 
 //! destruction
-coe_init_cmd::~coe_init_cmd() {
+slave::coe_init_cmd::~coe_init_cmd() {
     if (data) {
         delete[] data;
     }
 }
 
-//! default construction
-slave::slave_config::slave_config()
-    : has_config(false) {}
-
-//! construction
-/*!
- * \param node yaml intialization node
- */
-slave::slave_config::slave_config(const YAML::Node& node) {
-
-    // sync manager settings
-    const YAML::Node *sm_node = node.FindValue("sm");
-    if (sm_node) {
-        for (YAML::Iterator it = sm_node->begin();
-                it != sm_node->end(); ++it) {
-            int sm_nr = it.first().to<int>();
-
-            int address     = it.second()["address"].to<int>();
-            unsigned flags  = it.second()["flags"].to<unsigned>();
-            unsigned length = it.second()["length"].to<unsigned>();
-
-            _sm_map[sm_nr] = new sm_settings(address, flags, length);
-        }
-    }
-
-    has_config   = true;
-}
-
-//! destruction
-slave::slave_config::~slave_config() { 
-    printf("destruction ????\n");
-    for (sm_map_t::iterator it = _sm_map.begin(); it != _sm_map.end(); ++it)
-        delete it->second;
-}
-            
 //! default construction
 slave::slave_dc::slave_dc() {
     has_dc = false;
@@ -110,12 +76,22 @@ slave::slave_dc::slave_dc(const YAML::Node& node) {
 
 //! construction
 /*!
+ * \param node yaml intialization node
+ */
+slave::sync_manager_settings::sync_manager_settings(const YAML::Node& node) {
+    _address = node["address"].to<int>();
+    _flags   = node["flags"].to<unsigned>();
+    _length  = node["length"].to<unsigned>();
+}
+
+//! construction
+/*!
  * \param index slave index
  * \param master_dev master device
  */
 slave::slave(int index, master *master_dev) 
-    : config(NULL), index(index), state_req(1), disable_ca(false), 
-    print_cnt(0), master_dev(master_dev) {
+    : index(index),
+    master_dev(master_dev) {
                 
     _pd_intf = NULL;
     _coe_intf = NULL;
@@ -129,21 +105,21 @@ slave::slave(int index, master *master_dev)
  * \param master_dev master device
  */
 slave::slave(const YAML::Node& node, master *master_dev)
-    : config(NULL), master_dev(master_dev) {
+    : master_dev(master_dev) {
     _pd_intf = NULL;
     _coe_intf = NULL;
 
     name  = node["name"].to<string>();
     index = node["index"].to<int>();
-    state_req = 1;
 
-    if (node.FindValue("disable_ca") != NULL)
-        disable_ca = node["disable_ca"].to<bool>();
-    else
-        disable_ca = 0;
-
-    if (node.FindValue("config") != NULL) {
-        config = new slave_config(node["config"]);
+    // sync manager settings
+    const YAML::Node *sm_node = node.FindValue("sm");
+    if (sm_node) {
+        for (YAML::Iterator it = sm_node->begin();
+                it != sm_node->end(); ++it) {
+            int sm_nr = it.first().to<int>();
+            _sm_map[sm_nr] = new sync_manager_settings(it.second());
+        }
     }
     
     if (node.FindValue("dc") != NULL) {
@@ -176,9 +152,6 @@ slave::~slave() {
             it != coe_init_cmds.end(); ++it) {
         delete(*it);
     }
-
-    if (config)
-        delete config;
 }
 
 //! prepare state transitions
@@ -194,19 +167,20 @@ bool slave::prepare_state_transition(transition_t transition) {
         // configure distributed clocks if needed 
         if (dc.has_dc) {
             if (dc.type == 1) {
-                ethercat_log(module_info, master_dev->_name, "slave %2d configuring dc sync 01, cycle_times %d/%d, cycle_shift %d\n",
+                ethercat_log(module_info, master_dev->_name, "slave %2d configuring dc sync 01, "
+                        "cycle_times %d/%d, cycle_shift %d\n",
                         index, dc.cycle_time_0, dc.cycle_time_1, dc.cycle_shift);
 
-//                ecx_dcsync01(ctx, index, true, dc.cycle_time_0, dc.cycle_time_1, dc.cycle_shift);
+                ec_dc_sync01(master_dev->_pec, index, 1, dc.cycle_time_0, dc.cycle_time_1, dc.cycle_shift);
             } else {
-                ethercat_log(module_info, master_dev->_name, "slave %2d configuring dc sync 0, cycle_time %d, cycle_shift %d\n",
+                ethercat_log(module_info, master_dev->_name, "slave %2d configuring dc sync 0, "
+                        "cycle_time %d, cycle_shift %d\n",
                         index, dc.cycle_time_0, dc.cycle_shift);
 
-//                ecx_dcsync0(ctx, index, true, dc.cycle_time_0, dc.cycle_shift);
+                ec_dc_sync0(master_dev->_pec, index, 1, dc.cycle_time_0, dc.cycle_shift);
             }
         } else
-            ;
-//            ecx_dcsync0(ctx, index, false, 0, 0);
+            ec_dc_sync0(master_dev->_pec, index, 0, 0, 0);
     }
 
     ethercat_log(module_info, master_dev->_name, 
@@ -214,26 +188,10 @@ bool slave::prepare_state_transition(transition_t transition) {
             index, state_from, state_strings[state_from].c_str(),
             state_to, state_strings[state_to].c_str());
 
-//    if (state_from < (ctx->slavelist[index].state & 0x0F)) {
-//        ethercat_log(module_info, master_dev->_name, 
-//                "slave %2d state mismatch, requested 0x%x/%s but have 0x%x/%s\n",
-//                index, state_from&0xF, state_strings[state_from&0xF].c_str(),
-//                ctx->slavelist[index].state&0xF, state_strings[ctx->slavelist[index].state&0xF].c_str());
-//        return false;
-//    }
-//
-//    if (ctx->slavelist[index].state & EC_STATE_ERROR) {
-//        ethercat_log(module_verbose, master_dev->_name, "slave %2d is in ERROR, attempting ack.\n", index);
-//        ctx->slavelist[index].state |= EC_STATE_ACK;
-//        ecx_writestate(ctx, index);
-//    }
-
     for (coe_list_t::iterator it = coe_init_cmds.begin();
             it != coe_init_cmds.end(); ++it) {
 
         coe_init_cmd_t *cmd = *it;
-
-//        ctx->slavelist[1].CoEdetails &= ~ECT_COEDET_SDOCA;
 
         if (cmd->transition == transition) {
             ethercat_log(module_verbose, master_dev->_name, "sending coe init "
@@ -248,98 +206,50 @@ bool slave::prepare_state_transition(transition_t transition) {
                 ethercat_log(module_info, master_dev->_name, "writing sdo, %s\n",
                      "todo");//ecx_elist2string(ctx));
             }
-        } else 
-            ethercat_log(module_verbose, master_dev->_name, 
-                    "transition does not match %02X\n", cmd->transition);
-        
+        } 
     }
 
     return true;
 }
-
-//! state transitions
+        
+//! perform memory request
 /*!
- * \param dev ethercat master device
- * \param state current state
- * \param transition state transition
+ * \param code request code
+ * \param memreq memory request structure
+ *               address in range 0x00000000 - 0x0000FFFF slave memory
+ *                       above    0x00010000              eeprom memory
  */
-bool slave::state_transition(transition_t transition) {
-    int state_from = (transition & 0xF0) >> 4,
-        state_to = transition & 0x0F;
+void slave::memory_request(int code, memory_t *memreq) {
+    switch (code) {
+        case MOD_REQUEST_MEMORY_READ: {
+            uint16_t address = MEM_ADDRESS(memreq->address);
 
-    ethercat_log(module_verbose, master_dev->_name, "slave %2d state transition from 0x%x/%s to 0x%x/%s\n",
-         index, state_from, state_strings[state_from].c_str(),
-         state_to, state_strings[state_to].c_str());
+            switch (memreq->address & MEM_TYPE_MASK) {
+                case MEM_TYPE_SLAVE_EEPROM:
+                    ec_eepromread_len(master_dev->_pec, index, address, memreq->data, memreq->length);
+                    break;
+                case MEM_TYPE_SLAVE_MEM:
+                    {
+                        uint16_t wkc;
 
-//    if (state_from < (ctx->slavelist[index].state & 0x0F)) {
-//        ethercat_log(module_info, master_dev->_name, "slave %2d state mismatch, requested 0x%x/%s but have 0x%x/%s\n",
-//             index, state_from&0xF, state_strings[state_from&0xF].c_str(),
-//             ctx->slavelist[index].state&0xF, state_strings[ctx->slavelist[index].state&0xF].c_str());
-//        return false;
-//    }
-//
-//    pthread_mutex_lock(&slave_lock);
-//
-//    if (ctx->slavelist[index].state & EC_STATE_ERROR) {
-//        ethercat_log(module_info, master_dev->_name, "slave %2d is in ERROR, attempting ack.\n", index);
-//        ctx->slavelist[index].state |= EC_STATE_ACK;
-//        ecx_writestate(ctx, index);
-//    }
-//
-//    // switching state
-//    ctx->slavelist[index].state = state_req = state_to;
-//    ecx_writestate(ctx, index);
-//
-//    if (state_to >= EC_STATE_SAFE_OP) {
-//        ecx_send_processdata_group(ctx, ctx->slavelist[index].group);
-//        ecx_receive_processdata_group(ctx, ctx->slavelist[index].group, EC_TIMEOUTRET);
-//    }
-//
-//    pthread_mutex_unlock(&slave_lock);
-//
-//    return ctx->slavelist[index].state == state_to;
-    return false;
-}
+                        for (unsigned offset = 0; offset < memreq->length; offset+=100) {
+                            uint32_t act_len = min(100, memreq->length - offset);
 
-//! state check
-/*!
- * \param ctx ethercat master device
- * \return success
- */
-bool slave::state_check() {
-//    pthread_mutex_lock(&slave_lock);
-//
-//    int state = ecx_statecheck(ctx, index, state_req, EC_TIMEOUTRET);
-//    if (state == state_req) {
-//        ethercat_log(module_verbose, master_dev->_name, "slave %2d checked state (act 0x%x/%s)\n", index, state_req, 
-//                state_strings[ctx->slavelist[index].state&0xF].c_str());
-//        pthread_mutex_unlock(&slave_lock);
-//        return true;
-//    } else if (state & EC_STATE_ERROR) {
-//        ethercat_log(module_info, master_dev->_name, "slave %2d is in ERROR %X, attempting ack.\n",
-//             index, ctx->slavelist[index].ALstatuscode);
-//        ctx->slavelist[index].state |= EC_STATE_ACK;
-//        int wkc = ecx_writestate(ctx, index);
-//        ethercat_log(module_info, master_dev->_name, "slave %2d ackhnowledge error %s\n",
-//             index, wkc == 1 ? "SUCCESSFULL" : "NOT SUCCESSFULL");
-//    }
-//
-//    pthread_mutex_unlock(&slave_lock);
-//
-//    if (ctx->slavelist[index].state != state_req) {
-//        ethercat_log(module_info, master_dev->_name, "slave %2d is not in requested state (act 0x%x/%s, req 0x%x/%s)\n",
-//             index, ctx->slavelist[index].state&0xF,
-//             state_strings[ctx->slavelist[index].state&0xF].c_str(), state_req&0xF,
-//             state_strings[state_req&0xF].c_str());
-//
-//        int wkc = state_transition(ctx, (transition_t)(
-//                                       ((ctx->slavelist[index].state&0xF) << 4) | (state_req&0xF))) ? 1 : 0;
-//        ethercat_log(module-info, master_dev->_name, "slave %2d switching to requested state %s\n",
-//             index, wkc == 1 ? "SUCCESSFULL" : "NOT SUCCESSFULL");
-//    } else
-//        ethercat_log(module_info, master_dev->_name, "slave %2d checked %d\n", index, state_req);
-//
-    return true;
+                            ec_fprd(master_dev->_pec, master_dev->_pec->slaves[index].fixed_address, 
+                                    address + offset, memreq->data + offset, act_len, &wkc);
+                        }
+                    }
+                    break;
+            }
+            break;
+        }
+        case MOD_REQUEST_MEMORY_WRITE: {
+            break;
+        }
+        case MOD_REQUEST_MEMORY_GET_INFO: {
+            break;
+        }
+    }
 }
 
 //! register interfaces for slave
@@ -362,16 +272,8 @@ void slave::register_interfaces() {
 
     _pd_intf = robotkernel::kernel::register_interface_cb(master_dev->_name.c_str(), 
             "libinterface_process_data_inspection.so", slave_name.str().c_str(), index);
-
-    slave_name.str("");
-    slave_name << "slave_" << index << ".mem";
     _mem_intf = robotkernel::kernel::register_interface_cb(master_dev->_name.c_str(),
-            "libinterface_memory_inspection.so", slave_name.str().c_str(), index | (MEM_TYPE_SLAVE_MEM << 16));
-    
-    slave_name.str("");
-    slave_name << "slave_" << index << ".eeprom";
-    _eeprom_intf = robotkernel::kernel::register_interface_cb(master_dev->_name.c_str(),
-            "libinterface_memory_inspection.so", slave_name.str().c_str(), index | (MEM_TYPE_SLAVE_EEPROM << 16));
+            "libinterface_memory_inspection.so", slave_name.str().c_str(), index);
 }
 
 //! unregister interfaces of slave
@@ -379,6 +281,11 @@ void slave::register_interfaces() {
  * \return N/A
  */
 void slave::unregister_interfaces() {
+    if (_mem_intf) {
+        kernel::unregister_interface_cb(_mem_intf);
+        _mem_intf = NULL;
+    }
+
     if (_pd_intf) {
         kernel::unregister_interface_cb(_pd_intf);
         _pd_intf = NULL; 
