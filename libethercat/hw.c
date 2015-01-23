@@ -213,8 +213,6 @@ void *hw_rx_thread(void *arg) {
 static const uint8_t mac_dest[] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
 static const uint8_t mac_src[]  = { 0x00, 0x1B, 0x21, 0xB8, 0x77, 0xCC };
 
-pthread_mutex_t tx_lock = PTHREAD_MUTEX_INITIALIZER;
-
 //! start sending queued ethercat datagrams
 /*!
  * \param phw hardware handle
@@ -230,8 +228,6 @@ int hw_tx(hw_t *phw) {
     pframe->ethertype = htons(ETH_P_ECAT);
     pframe->type = 0x01;
     pframe->len = sizeof(ec_frame_t);
-
-    pthread_mutex_lock(&tx_lock);
 
     ec_datagram_t *pdg = ec_datagram_first(pframe), *pdg_prev = NULL;
     size_t len;
@@ -250,7 +246,7 @@ int hw_tx(hw_t *phw) {
         if (((len == 0) && (pool_idx == 1)) || ((pframe->len + len) >= ETH_FRAME_LEN)) {
             if (pframe->len == sizeof(ec_frame_t))
                 break; // nothing to send
-                    
+
             // no more datagrams need to be sent or no more space in frame
             size_t bytesrx = send(phw->sockfd, pframe, pframe->len, 0);
 
@@ -261,7 +257,7 @@ int hw_tx(hw_t *phw) {
                 if (bytesrx == -1)
                     ec_log("TX", "error: %s\n", strerror(errno));
             }
-            
+
             // reset length to send new frame
             pframe->len = sizeof(ec_frame_t);
             pdg = ec_datagram_first(pframe);
@@ -287,57 +283,6 @@ int hw_tx(hw_t *phw) {
         // store as sent
         phw->tx_send[entry->datagram.idx] = entry;
     }
-
-    /*
-    // reset
-    pframe->len = sizeof(ec_frame_t);
-    pdg = ec_datagram_first(pframe);
-    pdg_prev = NULL;
-    
-    // send low priority acyclic frames
-    while (1) {
-        datagram_pool_get_next_len(phw->tx_low, &len);
-
-        if ((len == 0) || ((pframe->len + len) >= ETH_FRAME_LEN)) {
-            if (pframe->len == sizeof(ec_frame_t))
-                break; // nothing to send
-        
-            if (pframe->len == 1514)
-                sleep(10);
-
-            // no more datagrams need to be sent or no more space in frame
-            size_t bytesrx = send(phw->sockfd, pframe, pframe->len, 0);
-
-            if (pframe->len != bytesrx) {
-                ec_log("TX", "got only %d bytes out of %d bytes through.\n", 
-                        bytesrx, pframe->len);
-
-                if (bytesrx == -1)
-                    ec_log("TX", "error: %s\n", strerror(errno));
-            }
-
-            // reset length to send new frame
-            pframe->len = sizeof(ec_frame_t);
-            pdg = ec_datagram_first(pframe);
-            continue;
-        }
-
-        datagram_entry_t *entry;
-        if (datagram_pool_get(phw->tx_low, &entry, NULL) != 0)
-            break;  // no more frames
-
-        if (pdg_prev)
-            ec_datagram_mark_next(pdg_prev);
-        memcpy(pdg, &entry->datagram, ec_datagram_length(&entry->datagram));    
-        pframe->len += ec_datagram_length(&entry->datagram);
-        pdg_prev = pdg;
-        pdg = ec_datagram_next(pdg);
-
-        // store as sent
-        phw->tx_send[entry->datagram.idx] = entry;
-    }
-    */
-    pthread_mutex_unlock(&tx_lock);
 
     return 0;
 }

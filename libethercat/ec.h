@@ -230,7 +230,7 @@ int ec_index_put(ec_t *pec, struct idx_entry *entry);
  * \return 0 on succes, otherwise error code
  */
 int ec_transceive(ec_t *pec, uint8_t cmd, uint32_t adr, 
-        uint8_t *data, size_t datalen, uint16_t *wkc, int tx);
+        uint8_t *data, size_t datalen, uint16_t *wkc);
 
 //! asyncronous ethercat read/write, answer don't care
 /*!
@@ -262,41 +262,34 @@ int ec_state_transition(ec_t *pec, uint16_t slave, ec_state_t state);
     ((uint32_t)(ado) << 16) | ((adp) & 0xFFFF)
 
 #define ec_brd(pec, ado, data, datalen, wkc) \
-    ec_transceive((pec), EC_CMD_BRD, ((uint32_t)(ado) << 16), (uint8_t *)(data), (datalen), (wkc), 0)
+    ec_transceive((pec), EC_CMD_BRD, ((uint32_t)(ado) << 16), (uint8_t *)(data), (datalen), (wkc))
 #define ec_bwr(pec, ado, data, datalen, wkc) \
-    ec_transceive((pec), EC_CMD_BWR, ((uint32_t)(ado) << 16), (uint8_t *)(data), (datalen), (wkc), 0)
+    ec_transceive((pec), EC_CMD_BWR, ((uint32_t)(ado) << 16), (uint8_t *)(data), (datalen), (wkc))
 #define ec_brw(pec, ado, data, datalen, wkc) \
-    ec_transceive((pec), EC_CMD_BRW, ((uint32_t)(ado) << 16), (uint8_t *)(data), (datalen), (wkc), 0)
+    ec_transceive((pec), EC_CMD_BRW, ((uint32_t)(ado) << 16), (uint8_t *)(data), (datalen), (wkc))
 
 #define ec_aprd(pec, adp, ado, data, datalen, wkc) \
     ec_transceive((pec), EC_CMD_APRD, ((uint32_t)(ado) << 16) | ((adp) & 0xFFFF), \
-            (uint8_t *)(data), (datalen), (wkc), 0)
+            (uint8_t *)(data), (datalen), (wkc))
 #define ec_apwr(pec, adp, ado, data, datalen, wkc) \
     ec_transceive((pec), EC_CMD_APWR, ((uint32_t)(ado) << 16) | ((adp) & 0xFFFF), \
-            (uint8_t *)(data), (datalen), (wkc), 0)
+            (uint8_t *)(data), (datalen), (wkc))
 #define ec_aprw(pec, adp, ado, data, datalen, wkc) \
     ec_transceive((pec), EC_CMD_APRW, ((uint32_t)(ado) << 16) | ((adp) & 0xFFFF), \
-            (uint8_t *)(data), (datalen), (wkc), 0)
+            (uint8_t *)(data), (datalen), (wkc))
 
 #define ec_fprd(pec, adp, ado, data, datalen, wkc) \
     ec_transceive((pec), EC_CMD_FPRD, ((uint32_t)(ado) << 16) | ((adp) & 0xFFFF), \
-            (uint8_t *)(data), (datalen), (wkc), 0)
+            (uint8_t *)(data), (datalen), (wkc))
 #define ec_fpwr(pec, adp, ado, data, datalen, wkc) \
     ec_transceive((pec), EC_CMD_FPWR, ((uint32_t)(ado) << 16) | ((adp) & 0xFFFF), \
-            (uint8_t *)(data), (datalen), (wkc), 0)
+            (uint8_t *)(data), (datalen), (wkc))
 #define ec_fprw(pec, adp, ado, data, datalen, wkc) \
     ec_transceive((pec), EC_CMD_FPRW, ((uint32_t)(ado) << 16) | ((adp) & 0xFFFF), \
-            (uint8_t *)(data), (datalen), (wkc), 0)
-
-#define ec_fprd_tx(pec, adp, ado, data, datalen, wkc) \
-    ec_transceive((pec), EC_CMD_FPRD, ((uint32_t)(ado) << 16) | ((adp) & 0xFFFF), \
-            (uint8_t *)(data), (datalen), (wkc), 1)
-#define ec_fpwr_tx(pec, adp, ado, data, datalen, wkc) \
-    ec_transceive((pec), EC_CMD_FPWR, ((uint32_t)(ado) << 16) | ((adp) & 0xFFFF), \
-            (uint8_t *)(data), (datalen), (wkc), 1)
+            (uint8_t *)(data), (datalen), (wkc))
 
 #define ec_frmw(pec, ado, data, datalen, wkc) \
-    ec_transceive((pec), EC_CMD_FRMW, ((uint32_t)(ado) << 16), (uint8_t *)(data), (datalen), (wkc), 0)
+    ec_transceive((pec), EC_CMD_FRMW, ((uint32_t)(ado) << 16), (uint8_t *)(data), (datalen), (wkc))
 
 #endif // __EC_H__
 

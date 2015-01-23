@@ -508,7 +508,7 @@ static void cb_block(void *user_arg, struct datagram_entry *p) {
  * \return 0 on succes, otherwise error code
  */
 int ec_transceive(ec_t *pec, uint8_t cmd, uint32_t adr, 
-        uint8_t *data, size_t datalen, uint16_t *wkc, int tx) {
+        uint8_t *data, size_t datalen, uint16_t *wkc) {
     datagram_entry_t *p_de;
     idx_entry_t *p_idx;
 
@@ -535,7 +535,7 @@ int ec_transceive(ec_t *pec, uint8_t cmd, uint32_t adr,
     datagram_pool_put(pec->phw->tx_low, p_de);
 
     // send frame immediately if in sync mode
-    if (pec->tx_sync || tx)
+    if (pec->tx_sync)
         hw_tx(pec->phw);
 
     // wait for completion
