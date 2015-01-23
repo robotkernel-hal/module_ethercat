@@ -165,7 +165,7 @@ int ec_dc_config(ec_t *pec) {
 
     int prev = -1;
 
-    for (int slave = 0; slave <= pec->slave_cnt; slave++) {        
+    for (int slave = 0; slave < pec->slave_cnt; slave++) {        
         ec_slave_t *slv = &pec->slaves[slave];
         slv->dc.consumedports = slv->active_ports;
 
@@ -191,6 +191,7 @@ int ec_dc_config(ec_t *pec) {
             /* 64bit latched DCrecvTimeA of each specific slave */
 //            wc = ec_FPRD(pec, slaveh, ECT_REG_DCSOF, sizeof(hrt), &hrt, EC_TIMEOUTRET);
             // read out distributed slave offset
+            hrt = 0;
             ec_fprd(pec, slv->fixed_address, EC_REG_DCSOF, &hrt, sizeof(hrt), &wkc);
 
             // use it as offset in order to set local time around 0 

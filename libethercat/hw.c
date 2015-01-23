@@ -219,9 +219,9 @@ static const uint8_t mac_src[]  = { 0x00, 0x1B, 0x21, 0xB8, 0x77, 0xCC };
  * \return 0 or error code
  */
 int hw_tx(hw_t *phw) {
-    uint8_t recv_frame[ETH_FRAME_LEN];
-    memset(recv_frame, 0, ETH_FRAME_LEN);
-    ec_frame_t *pframe = (ec_frame_t *)recv_frame;
+    uint8_t send_frame[ETH_FRAME_LEN];
+    memset(send_frame, 0, ETH_FRAME_LEN);
+    ec_frame_t *pframe = (ec_frame_t *)send_frame;
 
     memcpy(pframe->mac_dest, mac_dest, 6);
     memcpy(pframe->mac_src , mac_src , 6);

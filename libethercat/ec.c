@@ -176,7 +176,7 @@ int ec_set_state(ec_t *pec, ec_state_t state) {
                 ec_slave_t *slv = &pec->slaves[slave]; 
                 ec_slave_state_transition(pec, slave, state);
 
-                uint16_t topology;
+                uint16_t topology = 0;
                 ec_fprd(pec, slv->fixed_address, EC_REG_DLSTAT, &topology, sizeof(topology), &wkc);
 
                 slv->link_cnt = 0;
