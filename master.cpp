@@ -567,7 +567,6 @@ void master::trigger() {
             pd->p_de_dc->datagram.adr = (EC_REG_DCSYSTIME << 16) | 1000;
             pd->p_de_dc->datagram.len = 8;
             pd->p_de_dc->datagram.irq = 0;
-//            memcpy(ec_datagram_payload(&pd->p_de->datagram), pd->pd, pd->pdout_len);
 
             pd->p_de_dc->user_cb = cb_block;
             pd->p_de_dc->user_arg = pd->p_idx_dc;
@@ -608,7 +607,8 @@ void master::trigger() {
             datagram_pool_put(_pec->pool, pd->p_de_dc);
             ec_index_put(_pec, pd->p_idx_dc);
 
-            trigger_modules(i);
+            for (std::list<int>::iterator it = g->_slaves.begin(); it != g->_slaves.end(); ++it)
+                trigger_modules(*it);
         }
     }
 }
