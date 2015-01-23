@@ -220,6 +220,8 @@ bool slave::prepare_state_transition(transition_t transition) {
  *                       above    0x00010000              eeprom memory
  */
 void slave::memory_request(int code, memory_t *memreq) {
+    ethercat_log(module_verbose, master_dev->_name, "slave %d: incoming memory request\n", index);
+    
     switch (code) {
         case MOD_REQUEST_MEMORY_READ: {
             uint16_t address = MEM_ADDRESS(memreq->address);
