@@ -218,6 +218,8 @@ int ec_coe_odlist_read(ec_t *pec, uint16_t slave, uint8_t *buf, size_t *len) {
 
     // send request
     wkc = ec_mbx_send(pec, slave);
+    if (wkc != 1)
+        ec_log(__func__, "send mailbox failed\n");
 
     int val = 0;
 
@@ -225,6 +227,8 @@ int ec_coe_odlist_read(ec_t *pec, uint16_t slave, uint8_t *buf, size_t *len) {
         // wait for answer
         ec_mbx_clear(pec, slave, 1);
         wkc = ec_mbx_receive(pec, slave);
+        if (wkc != 1)
+            ec_log(__func__, "receive mailbox failed\n");
         
         uint8_t *from = val == 0 ? &read_buf->sdo_info_data.bdata[4] : 
             &read_buf->sdo_info_data.bdata[0];
@@ -286,10 +290,14 @@ int ec_coe_sdo_desc_read(ec_t *pec, uint16_t slave, uint16_t index,
 
     // send request
     wkc = ec_mbx_send(pec, slave);
+    if (wkc != 1)
+        ec_log(__func__, "send mailbox failed\n");
 
     // wait for answer
     ec_mbx_clear(pec, slave, 1);
     wkc = ec_mbx_receive(pec, slave);
+    if (wkc != 1)
+        ec_log(__func__, "receive mailbox failed\n");
     
     if (read_buf->coe_hdr.service == EC_COE_SDOINFO) {
         if (read_buf->sdo_info_hdr.opcode == EC_COE_SDO_INFO_GET_OBJECT_DESC_RESP) {
@@ -371,10 +379,14 @@ int ec_coe_sdo_entry_desc_read(ec_t *pec, uint16_t slave, uint16_t index, uint8_
 
     // send request
     wkc = ec_mbx_send(pec, slave);
+    if (wkc != 1)
+        ec_log(__func__, "send mailbox failed\n");
 
     // wait for answer
     ec_mbx_clear(pec, slave, 1);
     wkc = ec_mbx_receive(pec, slave);
+    if (wkc != 1)
+        ec_log(__func__, "receive mailbox failed\n");
     
     if (read_buf->coe_hdr.service == EC_COE_SDOINFO) {
         if (read_buf->sdo_info_hdr.opcode == EC_COE_SDO_INFO_GET_ENTRY_DESC_RESP) {

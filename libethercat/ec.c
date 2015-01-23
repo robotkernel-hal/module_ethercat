@@ -450,6 +450,8 @@ int ec_close(ec_t *pec) {
     return 0;
 }
 
+pthread_mutex_t idx_lock = PTHREAD_MUTEX_INITIALIZER; 
+
 //! get next free index entry
 /*!
  * \param pec pointer to ethercat master
@@ -457,13 +459,19 @@ int ec_close(ec_t *pec) {
  * \return 0 on succes, otherwise error code
  */
 int ec_index_get(ec_t *pec, struct idx_entry **entry) {
+    int ret = -1;
+
+//    pthread_mutex_lock(&idx_lock);
+
     *entry = (idx_entry_t *)TAILQ_FIRST(&pec->idx);
     if (*entry) {
         TAILQ_REMOVE(&pec->idx, *entry, qh);
-        return 0;
+        ret = 0;
     }
+    
+//    pthread_mutex_unlock(&idx_lock);
 
-    return -1;
+    return ret;
 }
 
 //! returns index entry
@@ -476,7 +484,10 @@ int ec_index_put(ec_t *pec, struct idx_entry *entry) {
     if (!pec || !entry)
         return -1;
 
+//    pthread_mutex_lock(&idx_lock);
     TAILQ_INSERT_TAIL(&pec->idx, entry, qh);
+//    pthread_mutex_unlock(&idx_lock);
+
     return 0;
 }
 
@@ -497,7 +508,7 @@ static void cb_block(void *user_arg, struct datagram_entry *p) {
  * \return 0 on succes, otherwise error code
  */
 int ec_transceive(ec_t *pec, uint8_t cmd, uint32_t adr, 
-        uint8_t *data, size_t datalen, uint16_t *wkc) {
+        uint8_t *data, size_t datalen, uint16_t *wkc, int tx) {
     datagram_entry_t *p_de;
     idx_entry_t *p_idx;
 
@@ -524,7 +535,7 @@ int ec_transceive(ec_t *pec, uint8_t cmd, uint32_t adr,
     datagram_pool_put(pec->phw->tx_low, p_de);
 
     // send frame immediately if in sync mode
-    if (pec->tx_sync)
+    if (pec->tx_sync || tx)
         hw_tx(pec->phw);
 
     // wait for completion

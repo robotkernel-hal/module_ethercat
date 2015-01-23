@@ -14,7 +14,7 @@ int ec_mbx_is_empty(ec_t *pec, uint16_t slave, uint8_t mbx_nr) {
     uint16_t wkc = 0;
     uint8_t sm_state = 0;
       
-    ec_fprd(pec, pec->slaves[slave].fixed_address, EC_REG_SM0STAT + (mbx_nr * 8), 
+    ec_fprd_tx(pec, pec->slaves[slave].fixed_address, EC_REG_SM0STAT + (mbx_nr * 8), 
             &sm_state, sizeof(sm_state), &wkc);
 
     if (!wkc)
@@ -55,13 +55,15 @@ int ec_mbx_send(ec_t *pec, uint16_t slave) {
         ec_log(__func__, "write mailbox on slave %d not available\n", slave);
         return 0;
     }
-
-    if (!ec_mbx_is_empty(pec, slave, slv->mbx_write.sm_nr)) {
-        ec_log(__func__, "write mailbox on slave %d not empty\n", slave);
-        return 0;
+    
+    // wait for read mailbox available 
+    while (!ec_mbx_is_empty(pec, slave, slv->mbx_write.sm_nr) != 0) {
+        ec_log(__func__, "waiting for mbx is full\n");
+        struct timespec ts = { 0, 1000000 };
+        nanosleep(&ts, NULL);
     }
 
-    ec_fpwr(pec, slv->fixed_address, slv->sm[slv->mbx_write.sm_nr].adr, 
+    ec_fpwr_tx(pec, slv->fixed_address, slv->sm[slv->mbx_write.sm_nr].adr, 
             slv->mbx_write.buf, slv->sm[slv->mbx_write.sm_nr].len, &wkc);
 
     return wkc;
@@ -82,12 +84,14 @@ int ec_mbx_receive(ec_t *pec, uint16_t slave) {
 
     // wait for read mailbox available 
     while (ec_mbx_is_empty(pec, slave, slv->mbx_read.sm_nr) != 0) {
+        ec_log(__func__, "waiting for mbx is empty\n");
         struct timespec ts = { 0, 1000000 };
         nanosleep(&ts, NULL);
     }
 
-    ec_fprd(pec, slv->fixed_address, slv->sm[slv->mbx_read.sm_nr].adr,
+    ec_fprd_tx(pec, slv->fixed_address, slv->sm[slv->mbx_read.sm_nr].adr,
             slv->mbx_read.buf, slv->sm[slv->mbx_read.sm_nr].len, &wkc);
 
    return wkc;
 }
+

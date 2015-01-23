@@ -325,6 +325,8 @@ int master::request(int reqcode, void* ptr) {
             break;
         }
         case MOD_REQUEST_CANOPEN_OBJECT_DICTIONARY_LIST: {
+            printf("%s:%d\n", __func__, __LINE__);
+
             canopen_object_dictionary_list *list = (canopen_object_dictionary_list *)ptr;
             
             if (_pec->slaves[list->slave_id].eeprom.mbx_supported & EC_EEPROM_MBX_COE) {
@@ -358,10 +360,12 @@ int master::request(int reqcode, void* ptr) {
 
                 list->indices_cnt /= 2;
             }
+            printf("%s:%d\n", __func__, __LINE__);
 
             break;
         }
         case MOD_REQUEST_CANOPEN_READ_OBJECT_DESC: {
+            printf("%s:%d\n", __func__, __LINE__);
             int ret2;
             canopen_object_description *desc = (canopen_object_description *)ptr;
 
@@ -406,6 +410,7 @@ int master::request(int reqcode, void* ptr) {
             break;
         }
         case MOD_REQUEST_CANOPEN_READ_ELEMENT_DESC: {
+            printf("%s:%d\n", __func__, __LINE__);
             int ret2;
             
             canopen_element_description *desc = (canopen_element_description *)ptr;

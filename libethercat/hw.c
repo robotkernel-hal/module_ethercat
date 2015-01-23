@@ -23,6 +23,9 @@
  * If not, see <http://www.gnu.org/licenses/>.
  */
 
+#define _GNU_SOURCE
+#include <sched.h>
+
 #include "hw.h"
 #include "ec.h"
 
@@ -155,7 +158,22 @@ void *hw_rx_thread(void *arg) {
         if (pthread_setschedparam(pthread_self(), policy, &param) != 0)
             ec_log("RX_THREAD", "error on pthread_setschedparam %s\n", strerror(errno));
     }
-    
+
+#ifdef __VXWORKS__
+    taskCpuAffinitySet(taskIdSelf(),  (cpuset_t)phw->rxthreadcpumask);
+#elif defined __QNX__
+    ThreadCtl(_NTO_TCTL_RUNMASK, (void *)phw->rxthreadcpumask);
+#else
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    for (unsigned i = 0; i < (sizeof(phw->rxthreadcpumask)*8); ++i) 
+        if (phw->rxthreadcpumask & (1 << i))
+            CPU_SET(i, &cpuset);
+        
+    if (pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset) != 0)
+        ec_log("RX_THREAD", "error on pthread_setaffinity_np %s\n", strerror(errno));
+#endif
+
     while (phw->rxthreadrunning) {
         ssize_t bytesrx = recv(phw->sockfd, pframe, ETH_FRAME_LEN, 0);
         if (bytesrx <= 0) {
@@ -195,6 +213,8 @@ void *hw_rx_thread(void *arg) {
 static const uint8_t mac_dest[] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
 static const uint8_t mac_src[]  = { 0x00, 0x1B, 0x21, 0xB8, 0x77, 0xCC };
 
+pthread_mutex_t tx_lock = PTHREAD_MUTEX_INITIALIZER;
+
 //! start sending queued ethercat datagrams
 /*!
  * \param phw hardware handle
@@ -211,14 +231,23 @@ int hw_tx(hw_t *phw) {
     pframe->type = 0x01;
     pframe->len = sizeof(ec_frame_t);
 
+    pthread_mutex_lock(&tx_lock);
+
     ec_datagram_t *pdg = ec_datagram_first(pframe), *pdg_prev = NULL;
     size_t len;
 
+    datagram_pool_t *pools[] = {
+        phw->tx_high, phw->tx_low };
+    int pool_idx = 0;
+
     // send high priority cyclic frames
     while (1) {
-        datagram_pool_get_next_len(phw->tx_high, &len);
+        if (pool_idx == 2)
+            break;
 
-        if ((len == 0) || ((pframe->len + len) >= ETH_FRAME_LEN)) {
+        datagram_pool_get_next_len(pools[pool_idx], &len);
+
+        if (((len == 0) && (pool_idx == 1)) || ((pframe->len + len) >= ETH_FRAME_LEN)) {
             if (pframe->len == sizeof(ec_frame_t))
                 break; // nothing to send
                     
@@ -239,8 +268,13 @@ int hw_tx(hw_t *phw) {
             continue;
         }
 
+        if (len == 0) {
+            pool_idx++;
+            continue;
+        }
+
         datagram_entry_t *entry;
-        if (datagram_pool_get(phw->tx_high, &entry, NULL) != 0)
+        if (datagram_pool_get(pools[pool_idx], &entry, NULL) != 0)
             break;  // no more frames
 
         if (pdg_prev)
@@ -254,6 +288,7 @@ int hw_tx(hw_t *phw) {
         phw->tx_send[entry->datagram.idx] = entry;
     }
 
+    /*
     // reset
     pframe->len = sizeof(ec_frame_t);
     pdg = ec_datagram_first(pframe);
@@ -301,6 +336,8 @@ int hw_tx(hw_t *phw) {
         // store as sent
         phw->tx_send[entry->datagram.idx] = entry;
     }
+    */
+    pthread_mutex_unlock(&tx_lock);
 
     return 0;
 }
