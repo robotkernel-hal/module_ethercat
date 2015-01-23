@@ -76,6 +76,7 @@ class master : public robotkernel::trigger_base {
 
             int _index;
             int _divisor;
+            int _divisor_cnt;
             std::list<int> _slaves;
             robotkernel::kernel::interface_id_t _pd_intf;
         } group_t;

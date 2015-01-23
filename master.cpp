@@ -50,8 +50,9 @@ void ethercat_log_func(void *user, const char *format, ...) {
 }
 
 master::group::group(int index, const YAML::Node& node) {
-    _index    = index;
-    _divisor  = node["divisor"].to<int>();
+    _index          = index;
+    _divisor        = node["divisor"].to<int>();
+    _divisor_cnt    = 0;
 
     for (YAML::Iterator it = node["slaves"].begin(); it != node["slaves"].end(); ++it)
         _slaves.push_back(it->to<int>());
@@ -325,10 +326,8 @@ int master::request(int reqcode, void* ptr) {
             break;
         }
         case MOD_REQUEST_CANOPEN_OBJECT_DICTIONARY_LIST: {
-            printf("%s:%d\n", __func__, __LINE__);
-
             canopen_object_dictionary_list *list = (canopen_object_dictionary_list *)ptr;
-            
+
             if (_pec->slaves[list->slave_id].eeprom.mbx_supported & EC_EEPROM_MBX_COE) {
                 uint8_t buf[512];
                 size_t len = sizeof(buf);
@@ -351,7 +350,7 @@ int master::request(int reqcode, void* ptr) {
                         list->indices[list->indices_cnt++] = slv->eeprom.txpdos[i].pdo_index;
                     else list->indices_cnt++;
                 }
-                
+
                 for (unsigned i = 0; i < slv->eeprom.rxpdos_cnt; ++i) {
                     if (list->indices)
                         list->indices[list->indices_cnt++] = slv->eeprom.rxpdos[i].pdo_index;
@@ -360,12 +359,10 @@ int master::request(int reqcode, void* ptr) {
 
                 list->indices_cnt /= 2;
             }
-            printf("%s:%d\n", __func__, __LINE__);
 
             break;
         }
         case MOD_REQUEST_CANOPEN_READ_OBJECT_DESC: {
-            printf("%s:%d\n", __func__, __LINE__);
             int ret2;
             canopen_object_description *desc = (canopen_object_description *)ptr;
 
@@ -395,7 +392,7 @@ int master::request(int reqcode, void* ptr) {
 
                 if (found)
                     break;
-                
+
                 for (unsigned i = 0; i < slv->eeprom.rxpdos_cnt; ++i) {
                     if (slv->eeprom.rxpdos[i].pdo_index == desc->index) {
                         found = true;
@@ -410,9 +407,8 @@ int master::request(int reqcode, void* ptr) {
             break;
         }
         case MOD_REQUEST_CANOPEN_READ_ELEMENT_DESC: {
-            printf("%s:%d\n", __func__, __LINE__);
             int ret2;
-            
+
             canopen_element_description *desc = (canopen_element_description *)ptr;
 
             if (_pec->slaves[desc->slave_id].eeprom.mbx_supported & EC_EEPROM_MBX_COE) {
@@ -483,9 +479,9 @@ int master::request(int reqcode, void* ptr) {
             canopen_element_value *value = (canopen_element_value *)ptr;
             size_t size = value->value_len;
 
-            ethercat_log(module_verbose, "MOD_REQUEST_CANOPEN_READ_ELEMENT_VALUE", "slave %d: index 0x%X, "
-                    "sub_index %d, want to read %d bytes\n", value->slave_id, value->index,
-                    value->sub_index, value->value_len);
+//            ethercat_log(module_verbose, "MOD_REQUEST_CANOPEN_READ_ELEMENT_VALUE", "slave %d: index 0x%X, "
+//                    "sub_index %d, want to read %d bytes\n", value->slave_id, value->index,
+//                    value->sub_index, value->value_len);
 
             if (_pec->slaves[value->slave_id].eeprom.mbx_supported & EC_EEPROM_MBX_COE) {
                 ec_coe_sdo_read(_pec, value->slave_id, value->index, value->sub_index, 
@@ -526,6 +522,14 @@ void master::trigger() {
     if (_state >= module_state_safeop) {
         for (i = 0; i < _pec->pd_group_cnt; ++i) {
             ec_pd_group_t *pd = &_pec->pd_groups[i];
+            group *g = _group_info[i];
+
+            if ((++g->_divisor_cnt % g->_divisor) != 0)
+                continue; 
+
+            // reset divisor cnt 
+            g->_divisor_cnt = 0;
+
             if (ec_index_get(_pec, &pd->p_idx) != 0) 
                 continue;
 
@@ -578,6 +582,10 @@ void master::trigger() {
     if (_state >= module_state_safeop) {
         for (i = 0; i < _pec->pd_group_cnt; ++i) {
             ec_pd_group_t *pd = &_pec->pd_groups[i];
+            group *g = _group_info[i];
+
+            if ((g->_divisor_cnt % g->_divisor) != 0)
+                continue; 
 
             // wait for completion
             sem_wait(&pd->p_idx->waiter);
@@ -597,16 +605,11 @@ void master::trigger() {
             if (wkc)
                 memcpy(&dc_time, ec_datagram_payload(&pd->p_de_dc->datagram), 8);
 
-//            printf("dc_time: %lu\n", dc_time);
-//            
-//                memcpy(pd->pd+pd->pdout_len, ec_datagram_payload(&pd->p_de_dc->datagram)+pd->pdout_len, pd->pdin_len);
-
             datagram_pool_put(_pec->pool, pd->p_de_dc);
             ec_index_put(_pec, pd->p_idx_dc);
 
+            trigger_modules(i);
         }
     }
-
-    trigger_modules();
 }
 

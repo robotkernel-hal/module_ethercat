@@ -227,8 +227,10 @@ int ec_coe_odlist_read(ec_t *pec, uint16_t slave, uint8_t *buf, size_t *len) {
         // wait for answer
         ec_mbx_clear(pec, slave, 1);
         wkc = ec_mbx_receive(pec, slave);
-        if (wkc != 1)
+        if (wkc != 1) {
             ec_log(__func__, "receive mailbox failed\n");
+            continue;
+        }
         
         uint8_t *from = val == 0 ? &read_buf->sdo_info_data.bdata[4] : 
             &read_buf->sdo_info_data.bdata[0];
