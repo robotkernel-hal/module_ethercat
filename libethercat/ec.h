@@ -107,22 +107,22 @@ typedef struct PACKED ec_slave_dc_info {
 } ec_slave_dc_info_t;
 
 typedef struct ec_slave {
-    int16_t auto_inc_address;
-    uint16_t fixed_address;
+    int16_t     auto_inc_address;   //!< physical bus address
+    uint16_t    fixed_address;      //!< virtual bus address, programmed on start
 
-    uint8_t sm_ch;      //!< number of sync manager channels
-    uint8_t fmmu_ch;    //!< number of fmmu channels
-    int ram_size;       //!< ram size in bytes
-    uint16_t features;  //!< fmmu operation, dc available
-    uint16_t pdi_ctrl;
-    uint8_t link_cnt;
-    uint8_t active_ports;
-    uint16_t ptype;
-    int32_t pdelay;
+    uint8_t     sm_ch;              //!< number of sync manager channels
+    uint8_t     fmmu_ch;            //!< number of fmmu channels
+    int         ram_size;           //!< ram size in bytes
+    uint16_t    features;           //!< fmmu operation, dc available
+    uint16_t    pdi_ctrl;           //!< configuration of process data interface
+    uint8_t     link_cnt;           //!< link count
+    uint8_t     active_ports;       //!< active ports with link
+    uint16_t    ptype;              //!< ptype
+    int32_t     pdelay;
     
-    int entryport;
-    int parent;
-    int parentport;
+    int entryport;                  //!< entry port from parent slave
+    int parent;                     //!< parent slave number
+    int parentport;                 //!< port attached on parent slave 
 
     ec_slave_sm_t *sm;
     ec_slave_fmmu_t *fmmu;
