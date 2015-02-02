@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.63])
-AC_INIT([module_ethercat], [3.0.0], [robert.burger@dlr.de])
+AC_INIT([module_ethercat], [3.1.0], [robert.burger@dlr.de])
 AM_INIT_AUTOMAKE([-Wall -Werror foreign subdir-objects])
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_MACRO_DIR([m4])
@@ -53,6 +53,9 @@ PKG_CHECK_MODULES([ROBOTKERNEL], [robotkernel], [], [
                    ])
 PKG_CHECK_MODULES([INTERFACE_MEMORY_INSPECTION], [interface_memory_inspection], [], [
                     RMPM_CHECK_MODULES([INTERFACE_MEMORY_INSPECTION], [robotkernel.interface_memory_inspection])
+                   ])
+PKG_CHECK_MODULES([INTERFACE_CANOPEN_PROTOCOL], [interface_canopen_protocol], [], [
+                    RMPM_CHECK_MODULES([INTERFACE_CANOPEN_PROTOCOL], [robotkernel.interface_canopen_protocol])
                    ])
 
 LN_BASE=$(env -i "$srcdir"/scripts/get_ln_base.py $ROBOTKERNEL_DEPENDS)

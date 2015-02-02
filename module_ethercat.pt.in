@@ -1,7 +1,7 @@
 PTVERSION           = 2
 NAME                = @PACKAGE@
 VERSION             = @PACKAGE_VERSION@
-DESCRIPTION         = robotkernel ethercat master
+DESCRIPTION         = robotkernel @PACKAGE@
 MAINTAINER          = Robert Burger <robert.burger@dlr.de>
 ARCHS               = sled11-x86-gcc4.x, sled11-x86_64-gcc4.x
 

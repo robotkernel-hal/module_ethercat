@@ -23,6 +23,7 @@
  */
 
 #include "master.h"
+#include "interface_canopen_protocol/module_intf.h"
 
 using namespace std;
 using namespace robotkernel;

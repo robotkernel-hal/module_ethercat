@@ -50,6 +50,7 @@ void ec_dc_sync0(ec_t *pec, uint16_t slave, int active, uint32_t cycle_time, uin
     uint8_t dc_cuc = 0;
     ec_fpwr(pec, slv->fixed_address, EC_REG_DCCUC, &dc_cuc, sizeof(dc_cuc), &wkc);
 
+    // get dc system time
     int64_t dc_systime = 0;
     ec_fprd(pec, slv->fixed_address, EC_REG_DCSYSTIME, &dc_systime, sizeof(dc_systime), &wkc);
 
@@ -89,7 +90,7 @@ void ec_dc_sync01(ec_t *pec, uint16_t slave, int active,
 }
 
 /* latched port time of slave */
-int32_t ec_dc_porttime(ec_t *pec, uint16_t slave, uint8_t port) {
+inline int32_t ec_dc_porttime(ec_t *pec, uint16_t slave, uint8_t port) {
     if (port >= 0 && port < 4)
         return pec->slaves[slave].dc.receive_times[port].time;
 
@@ -97,7 +98,7 @@ int32_t ec_dc_porttime(ec_t *pec, uint16_t slave, uint8_t port) {
 }
 
 /* calculate previous active port of a slave */
-uint8_t ec_dc_prevport(ec_t *pec, uint16_t slave, uint8_t port) {
+inline uint8_t ec_dc_prevport(ec_t *pec, uint16_t slave, uint8_t port) {
     switch(port) {
 #define eval_port(...) { \
             int port_idx[] = { __VA_ARGS__ }; \
@@ -122,7 +123,7 @@ uint8_t ec_dc_prevport(ec_t *pec, uint16_t slave, uint8_t port) {
 }
 
 /* search unconsumed ports in parent, consume and return first open port */
-uint8_t ec_dc_parentport(ec_t *pec, uint16_t parent) {
+inline uint8_t ec_dc_parentport(ec_t *pec, uint16_t parent) {
     /* search order is important, here 3 - 1 - 2 - 0 */
     int port_idx[] = { 3, 1, 2, 0 };
     uint8_t parentport = 0;
@@ -152,7 +153,6 @@ int ec_dc_config(ec_t *pec) {
     uint16_t i, parent, child;
     uint16_t parenthold = 0;
     int32_t dt1, dt2, dt3;
-    int64_t hrt;
     uint8_t entryport = 0;
     uint16_t wkc;
 
@@ -186,19 +186,12 @@ int ec_dc_config(ec_t *pec) {
             prev = slave;
             ec_fprd(pec, slv->fixed_address, EC_REG_DCTIME0, 
                     &slv->dc.receive_times[0].time, sizeof(slv->dc.receive_times[0].time), &wkc);
-//            slv->DCrtA = etohl(ht);
-
-            /* 64bit latched DCrecvTimeA of each specific slave */
-//            wc = ec_FPRD(pec, slaveh, ECT_REG_DCSOF, sizeof(hrt), &hrt, EC_TIMEOUTRET);
-            // read out distributed slave offset
-            hrt = 0;
-            ec_fprd(pec, slv->fixed_address, EC_REG_DCSOF, &hrt, sizeof(hrt), &wkc);
-
-            // use it as offset in order to set local time around 0 
-            hrt = -hrt;
-
-            // save as system offset
-            ec_fpwr(pec, slv->fixed_address, EC_REG_DCSYSOFFSET, &hrt, sizeof(hrt), &wkc);
+            
+            // read out distributed clock slave offset and use as offset to set local time to 0
+            int64_t dcsof = 0;
+            ec_fprd(pec, slv->fixed_address, EC_REG_DCSOF, &dcsof, sizeof(dcsof), &wkc);
+            dcsof *= -1;
+            ec_fpwr(pec, slv->fixed_address, EC_REG_DCSYSOFFSET, &dcsof, sizeof(dcsof), &wkc);
 
             // assume port 0 is entry port
             slv->entryport = 0;

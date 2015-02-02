@@ -228,11 +228,15 @@ void slave::memory_request(int code, memory_t *memreq) {
 
             switch (memreq->address & MEM_TYPE_MASK) {
                 case MEM_TYPE_SLAVE_EEPROM:
+                    ethercat_log(module_verbose, master_dev->_name, "slave %d: reading eeprom address 0x%X\n", 
+                            index, address);
                     ec_eepromread_len(master_dev->_pec, index, address, memreq->data, memreq->length);
                     break;
                 case MEM_TYPE_SLAVE_MEM:
                     {
                         uint16_t wkc;
+                        ethercat_log(module_verbose, master_dev->_name, "slave %d: reading esc memory address 0x%X\n", 
+                                index, address);
 
                         for (unsigned offset = 0; offset < memreq->length; offset+=100) {
                             uint32_t act_len = min(100, memreq->length - offset);
