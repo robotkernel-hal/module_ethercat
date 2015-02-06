@@ -183,6 +183,8 @@ int master::set_state(module_state_t state) {
                     int sm_nr = it->first;
 
                     if (sm_nr < _pec->slaves[nr].sm_ch) {
+                        ethercat_log(module_info, _name, "============================================== slave %d programming sm%d\n", nr, sm_nr);
+
                         _pec->slaves[nr].sm[sm_nr].adr = it->second->_address;
                         _pec->slaves[nr].sm[sm_nr].len = it->second->_length;
                         _pec->slaves[nr].sm[sm_nr].flags = it->second->_flags;
@@ -552,7 +554,7 @@ void master::trigger() {
 
             // queue frame and trigger tx
             datagram_pool_put(_pec->phw->tx_high, pd->p_de);
-            
+/*            
             // dc frame
             if (ec_index_get(_pec, &pd->p_idx_dc) != 0) 
                 continue;
@@ -574,6 +576,7 @@ void master::trigger() {
 
             // queue frame and trigger tx
             datagram_pool_put(_pec->phw->tx_high, pd->p_de_dc);
+            */
         }
     }
 
@@ -596,7 +599,7 @@ void master::trigger() {
 
             datagram_pool_put(_pec->pool, pd->p_de);
             ec_index_put(_pec, pd->p_idx);
-
+/*
             // wait for completion
             sem_wait(&pd->p_idx_dc->waiter);
 
@@ -610,6 +613,7 @@ void master::trigger() {
 
             for (std::list<int>::iterator it = g->_slaves.begin(); it != g->_slaves.end(); ++it)
                 trigger_modules(*it);
+                */
         }
     }
 }

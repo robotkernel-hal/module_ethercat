@@ -128,6 +128,8 @@ int ec_destroy_pd_groups(ec_t *pec) {
 int ec_set_state(ec_t *pec, ec_state_t state) {
     int ret = 0, i;
 
+    ec_log("== SETTING MASTER STATE ==", "switch to state %d\n", state);
+
     switch (state) {
         case EC_STATE_INIT: {
             uint16_t fixed = 1000, wkc = 0, val = 0;

@@ -187,13 +187,17 @@ void ec_eeprom_dump(ec_t *pec, uint16_t slave) {
             case EC_EEPROM_CAT_NOP:
                 break;
             case EC_EEPROM_CAT_STRINGS: {
-                ec_log("EEPROM_STRINGS", "slave %d:\n", slave);
-
+                ec_log("EEPROM_STRINGS", "slave %d, cat_len %d\n", 
+                        slave, cat_len);
+                
                 uint8_t *buf = malloc(cat_len*2);
                 ec_eepromread_len(pec, slave, cat_offset+2, buf, cat_len*2);
 
                 int local_offset = 0, i;
                 slv->eeprom.strings_cnt = buf[local_offset++];
+
+                ec_log("EEPROM_STRINGS", "slave %d, stored strings %d\n", 
+                        slave, slv->eeprom.strings_cnt);
 
                 if (!slv->eeprom.strings_cnt) {
                     free(buf);
@@ -204,11 +208,19 @@ void ec_eeprom_dump(ec_t *pec, uint16_t slave) {
 
                 for (i = 0; i < slv->eeprom.strings_cnt; ++i) {
                     uint8_t string_len = buf[local_offset++];
+                    ec_log("EEPROM_STRINGS", "slave %d, string %d, length %d\n", 
+                            slave, i, string_len);
 
                     slv->eeprom.strings[i] = malloc(sizeof(char) * (string_len + 1));
                     strncpy(slv->eeprom.strings[i], (char *)&buf[local_offset], string_len);
                     local_offset+=string_len;
+
                     slv->eeprom.strings[i][string_len] = '\0';
+                    if (local_offset > cat_len*2) {
+                        ec_log("EEPROM_STRINGS", "slave %d, something wrong in eeprom string section\n",
+                                slave);
+                        break;
+                    }
                 }
 
                 free(buf);
@@ -269,9 +281,16 @@ void ec_eeprom_dump(ec_t *pec, uint16_t slave) {
                     eeprom(local_offset, slv->eeprom.sms[j]);
                     local_offset += sizeof(ec_eeprom_cat_sm_t) / 2;
 
-                    slv->sm[j].adr = slv->eeprom.sms[j].adr;
-                    slv->sm[j].len = slv->eeprom.sms[j].len;
-                    slv->sm[j].flags = (slv->eeprom.sms[j].activate << 16) | slv->eeprom.sms[j].ctrl_reg;
+                    if (slv->sm[j].adr == 0) {
+                        slv->sm[j].adr = slv->eeprom.sms[j].adr;
+                        slv->sm[j].len = slv->eeprom.sms[j].len;
+                        slv->sm[j].flags = (slv->eeprom.sms[j].activate << 16) | slv->eeprom.sms[j].ctrl_reg;
+
+                        ec_log("EEPROM_SM", "slave %d, sm%d adr 0x%X, len %d, flags 0x%X\n", 
+                                slave, j, slv->sm[j].adr, slv->sm[j].len, slv->sm[j].flags);
+                    } else
+                        ec_log("EEPROM_SM", "slave %d, sm%d already set by user\n", slave, j);
+
                     j++;
                 }
                 break;
@@ -293,6 +312,9 @@ void ec_eeprom_dump(ec_t *pec, uint16_t slave) {
                 while (local_offset < (cat_offset + cat_len + 2)) {
                     eeprom(local_offset, slv->eeprom.txpdos[j++]);
                     local_offset += sizeof(ec_eeprom_cat_pdo_t) / 2;
+
+                    if (j >= slv->eeprom.txpdos_cnt)
+                        break;
                 }
 
                 break;
@@ -314,6 +336,9 @@ void ec_eeprom_dump(ec_t *pec, uint16_t slave) {
                 while (local_offset < (cat_offset + cat_len + 2)) {
                     eeprom(local_offset, slv->eeprom.rxpdos[j++]);
                     local_offset += sizeof(ec_eeprom_cat_pdo_t) / 2;
+
+                    if (j >= slv->eeprom.rxpdos_cnt)
+                        break;
                 }
 
                 break;

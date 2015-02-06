@@ -212,11 +212,13 @@ int ec_dc_config(ec_t *pec) {
             slv->dc.consumedports &= (uint8_t)~(1 << entryport);
 
             /* finding DC parent of current */
-            int parent = i;
+            int parent = slave;
             do
             {
                 child = parent;
-                parent = slv->parent;
+                parent = pec->slaves[parent].parent;
+                ec_log("DC", "slave %d, checking parent %d, dc 0x%X\n", 
+                        slave, parent, pec->slaves[parent].features);
             } while (!((parent == -1) || (pec->slaves[parent].features & 0x04)));
             
             ec_log("DC", "slave %d, parent %d\n", slave, parent);

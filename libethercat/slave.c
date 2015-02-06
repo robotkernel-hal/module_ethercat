@@ -21,8 +21,8 @@ int ec_slave_set_state(ec_t *pec, uint16_t slave, ec_state_t state) {
     do {
         act_state = 0;
         wkc = ec_slave_state_get(pec, slave, &act_state);
-        ec_log("EC_STATE_SET", "slave %d, state %X, act_state %X, wkc %d\n", 
-                slave, state, act_state, wkc);
+//        ec_log("EC_STATE_SET", "slave %d, state %X, act_state %X, wkc %d\n", 
+//                slave, state, act_state, wkc);
         
         if (act_state & EC_STATE_ERROR) {
             ec_fprd(pec, pec->slaves[slave].fixed_address, 
@@ -120,7 +120,7 @@ int ec_slave_generate_mapping(ec_t *pec, uint16_t slave) {
             ec_log("EC_STATE_SAFEOP", "slave %d: sm%d length bits %d, bytes %d\n", 
                     slave, sm_idx, bit_len, (bit_len + 7) / 8);
 
-            if (slv->sm && slv->sm_ch > sm_idx)
+            if (bit_len && slv->sm && slv->sm_ch > sm_idx)
                 slv->sm[sm_idx].len = (bit_len + 7) / 8;
         }
     } else {

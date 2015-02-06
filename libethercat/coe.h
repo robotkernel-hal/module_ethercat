@@ -39,6 +39,7 @@ enum {
 };
 
 enum {
+    EC_COE_SDO_DOWNLOAD_SEQ_REQ = 0x00,
     EC_COE_SDO_DOWNLOAD_REQ = 0x01,
     EC_COE_SDO_UPLOAD_REQ,
 };

@@ -52,6 +52,8 @@ enum {
     EC_REG_SM2          = EC_REG_SM1 + 0x08,
     EC_REG_SM3          = EC_REG_SM2 + 0x08,
     EC_REG_SM0STAT      = EC_REG_SM0 + 0x05,
+    EC_REG_SM0ACT       = EC_REG_SM0 + 0x06,
+    EC_REG_SM0CONTR     = EC_REG_SM0 + 0x07,
     EC_REG_SM1STAT      = EC_REG_SM1 + 0x05,
     EC_REG_SM1ACT       = EC_REG_SM1 + 0x06,
     EC_REG_SM1CONTR     = EC_REG_SM1 + 0x07,
