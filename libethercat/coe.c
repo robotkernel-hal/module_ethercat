@@ -5,69 +5,134 @@
 #include <stdio.h>
 #include <string.h>
 
-typedef union ec_coeheader {
-    uint16_t       canopen;
-    struct PACKED {
-        unsigned number   : 9;
-        unsigned reserved : 3;
-        unsigned service  : 4;
-    };
-} ec_coeheader_t;
+typedef struct {
+    unsigned number   : 9;
+    unsigned reserved : 3;
+    unsigned service  : 4;
+} PACKED ec_coe_header_t;
 
-typedef struct PACKED ec_sdoheader {
-    union {
-        uint8_t        value;
-        struct PACKED {
-            unsigned size_indicator     : 1;
-            unsigned transfer_type      : 1;
-            unsigned data_set_size      : 2;
-            unsigned complete           : 1;
-            unsigned command            : 3;
-        };
-        struct PACKED {
-            unsigned more_follows       : 1;
-            unsigned seg_data_size      : 3;
-            unsigned toggle             : 1;
-            unsigned command            : 3;
-        };
-    };
-    uint16_t       index;
-    uint8_t        sub_index;
-} PACKED ec_sdoheader_t;
+typedef struct {
+    unsigned size_indicator     : 1;
+    unsigned transfer_type      : 1;
+    unsigned data_set_size      : 2;
+    unsigned complete           : 1;
+    unsigned command            : 3;
+    uint16_t index;
+    uint8_t  sub_index;
+} PACKED ec_sdo_init_download_header_t;
 
-typedef struct PACKED ec_sdo_seg_header {
-    struct PACKED {
-        unsigned more_follows       : 1;
-        unsigned seg_data_size      : 3;
-        unsigned toggle             : 1;
-        unsigned command            : 3;
-    };
-} ec_sdo_seg_header_t;
+typedef struct {
+    unsigned more_follows       : 1;
+    unsigned seg_data_size      : 3;
+    unsigned toggle             : 1;
+    unsigned command            : 3;
+} PACKED ec_sdo_seg_download_req_header_t;
 
-typedef struct PACKED ec_sdo {
-    ec_mbxheader_t mbx_hdr;
-    ec_coeheader_t coe_hdr;
-    ec_sdoheader_t sdo_hdr;
+// ------------------------ EXPEDITED --------------------------
 
-    ec_data_t      sdo_data;
-} PACKED ec_sdo_t;
+//! expedited download request/upload response
+typedef struct {
+    ec_mbx_header_t mbx_hdr;
+    ec_coe_header_t coe_hdr;
+    ec_sdo_init_download_header_t sdo_hdr;
+    ec_data_t sdo_data;
+} PACKED ec_sdo_expedited_download_req_t, ec_sdo_expedited_upload_resp_t;
 
-typedef struct PACKED ec_sdo_seg {
-    ec_mbxheader_t mbx_hdr;
-    ec_coeheader_t coe_hdr;
-    ec_sdo_seg_header_t sdo_hdr;
+//! expedited download response/upload request
+typedef struct {
+    ec_mbx_header_t mbx_hdr;
+    ec_coe_header_t coe_hdr;
+    ec_sdo_init_download_header_t sdo_hdr;
+} PACKED ec_sdo_expedited_download_resp_t, ec_sdo_expedited_upload_req;
 
-    ec_data_t      sdo_data;
-} PACKED ec_sdo_seg_t;
+#define EC_SDO_EXPEDITED_HDR_LEN \
+    ((sizeof(ec_coe_header_t) + sizeof(ec_sdo_header_t)))
 
-typedef struct PACKED ec_sdo_download {
-    ec_mbxheader_t mbx_hdr;
-    ec_coeheader_t coe_hdr;
-    ec_sdoheader_t sdo_hdr;
+// ------------------------ SEGMENTED --------------------------
+
+//! segmented download request/upload response
+typedef struct {
+    ec_mbx_header_t mbx_hdr;
+    ec_coe_header_t coe_hdr;
+    ec_sdo_seg_download_req_header_t sdo_hdr;
+    ec_data_t sdo_data;
+} PACKED ec_sdo_seg_download_req_t, ec_sdo_seg_upload_resp_t;
+
+//! segmented download response/upload request
+typedef struct {
+    ec_mbx_header_t mbx_hdr;
+    ec_coe_header_t coe_hdr;
+    ec_sdo_init_download_header_t sdo_hdr;
+} PACKED ec_sdo_seg_download_resp_t, ec_sdo_seg_upload_req_t;
+
+#define EC_SDO_SEG_HDR_LEN \
+    ((sizeof(ec_coe_header_t) + sizeof(ec_sdo_seg_download_req_header_t)))
+
+// ------------------------ NORMAL --------------------------
+
+//! normal download request/upload response
+typedef struct {
+    ec_mbx_header_t mbx_hdr;
+    ec_coe_header_t coe_hdr;
+    ec_sdo_init_download_header_t sdo_hdr;
     uint32_t complete_size;
+    ec_data_t sdo_data;
+} PACKED ec_sdo_normal_download_req_t, ec_sdo_normal_upload_resp_t;
 
-    ec_data_t      sdo_data;
-} PACKED ec_sdo_download_t;
+//! normal download response/upload request
+typedef struct {
+    ec_mbx_header_t mbx_hdr;
+    ec_coe_header_t coe_hdr;
+    ec_sdo_init_download_header_t sdo_hdr;
+} PACKED ec_sdo_normal_download_resp_t, ec_sdo_normal_upload_req_t;
+
+#define EC_SDO_NORMAL_HDR_LEN \
+    ((sizeof(ec_coe_header_t) + sizeof(ec_sdo_init_download_header_t) + sizeof(uint32_t)))
+
+// ------------------------ ABORT --------------------------
+
+typedef struct {
+    ec_mbx_header_t mbx_hdr;
+    ec_coe_header_t coe_hdr;
+    ec_sdo_init_download_header_t sdo_hdr;
+    uint32_t abort_code;
+} PACKED ec_sdo_abort_request_t;
+
+///** SDO error list definition */
+//const ec_sdoerrorlist_t ec_sdoerrorlist[] = {
+//   {0x00000000, "No error" },
+//   {0x05030000, "Toggle bit not changed" },
+//   {0x05040000, "SDO protocol timeout" },
+//   {0x05040001, "Client/Server command specifier not valid or unknown" },
+//   {0x05040005, "Out of memory" },
+//   {0x06010000, "Unsupported access to an object" },
+//   {0x06010001, "Attempt to read to a write only object" },
+//   {0x06010002, "Attempt to write to a read only object" },
+//   {0x06010003, "Subindex can not be written, SI0 must be 0 for write access" },
+//   {0x06010004, "SDO Complete access not supported for variable length objects" },
+//   {0x06010005, "Object length exceeds mailbox size" },
+//   {0x06010006, "Object mapped to RxPDO, SDO download blocked" },
+//   {0x06020000, "The object does not exist in the object directory" },
+//   {0x06040041, "The object can not be mapped into the PDO" },
+//   {0x06040042, "The number and length of the objects to be mapped would exceed the PDO length" },
+//   {0x06040043, "General parameter incompatibility reason" },
+//   {0x06040047, "General internal incompatibility in the device" },
+//   {0x06060000, "Access failed due to a hardware error" },
+//   {0x06070010, "Data type does not match, length of service parameter does not match" },
+//   {0x06070012, "Data type does not match, length of service parameter too high" },
+//   {0x06070013, "Data type does not match, length of service parameter too low" },
+//   {0x06090011, "Subindex does not exist" },
+//   {0x06090030, "Value range of parameter exceeded (only for write access)" },
+//   {0x06090031, "Value of parameter written too high" },
+//   {0x06090032, "Value of parameter written too low" },
+//   {0x06090036, "Maximum value is less than minimum value" },
+//   {0x08000000, "General error" },
+//   {0x08000020, "Data cannot be transferred or stored to the application" },
+//   {0x08000021, "Data cannot be transferred or stored to the application because of local control" },
+//   {0x08000022, "Data cannot be transferred or stored to the application because of the present device state" },
+//   {0x08000023, "Object dictionary dynamic generation fails or no object dictionary is present" },
+//   {0xffffffff, "Unknown" }
+//};
 
 //! read coe sdo 
 /*!
@@ -84,31 +149,30 @@ int ec_coe_sdo_read(ec_t *pec, uint16_t slave, uint16_t index, uint8_t sub_index
         int complete, uint8_t *buf, size_t *len) {
     int wkc;
 
-    ec_sdo_t *write_buf = (ec_sdo_t *)(pec->slaves[slave].mbx_write.buf);
-    ec_sdo_t *read_buf  = (ec_sdo_t *)(pec->slaves[slave].mbx_read.buf); 
+    ec_sdo_normal_upload_req_t *write_buf = 
+        (ec_sdo_normal_upload_req_t *)(pec->slaves[slave].mbx_write.buf);
+
+    // empty mailbox if anything in
     ec_mbx_clear(pec, slave, 1);
-    ec_mbx_receive(pec, slave, 0); // empty mailbox if anything pending
-
-#define EC_SDO_LENGTH 10
-
-    ec_mbx_clear(pec, slave, 0);
+    ec_mbx_receive(pec, slave, 0);
 
     // mailbox header
     // (mbxhdr (6) - mbxhdr.length (2)) + coehdr (2) + sdohdr (4)
-    write_buf->mbx_hdr.length       = EC_SDO_LENGTH; 
-    write_buf->mbx_hdr.address      = 0x0000;
-    write_buf->mbx_hdr.priority     = 0x00;
-    write_buf->mbx_hdr.mbxtype      = EC_MBX_COE;
+    ec_mbx_clear(pec, slave, 0);
+    write_buf->mbx_hdr.length    = EC_SDO_NORMAL_HDR_LEN; 
+    write_buf->mbx_hdr.address   = 0x0000;
+    write_buf->mbx_hdr.priority  = 0x00;
+    write_buf->mbx_hdr.mbxtype   = EC_MBX_COE;
 
     // coe header
-    write_buf->coe_hdr.service      = EC_COE_SDOREQ;
-    write_buf->coe_hdr.number       = 0x40;
+    write_buf->coe_hdr.service   = EC_COE_SDOREQ;
+    write_buf->coe_hdr.number    = 0x40;
 
     // sdo header
-    write_buf->sdo_hdr.command      = EC_COE_SDO_UPLOAD_REQ;
-    write_buf->sdo_hdr.complete     = complete;
-    write_buf->sdo_hdr.index        = index;
-    write_buf->sdo_hdr.sub_index    = sub_index;
+    write_buf->sdo_hdr.command   = EC_COE_SDO_UPLOAD_REQ;
+    write_buf->sdo_hdr.complete  = complete;
+    write_buf->sdo_hdr.index     = index;
+    write_buf->sdo_hdr.sub_index = sub_index;
 
     // send request
     wkc = ec_mbx_send(pec, slave, EC_DEFAULT_TIMEOUT_MBX);
@@ -125,13 +189,18 @@ int ec_coe_sdo_read(ec_t *pec, uint16_t slave, uint16_t index, uint8_t sub_index
         return wkc;
     }
 
+    ec_sdo_normal_upload_resp_t *read_buf  = 
+        (ec_sdo_normal_upload_resp_t *)(pec->slaves[slave].mbx_read.buf); 
+
     if (*len == 0)
         *len = read_buf->mbx_hdr.length - 6 - read_buf->sdo_hdr.size_indicator;
     else {
         size_t sdo_len = min(*len, read_buf->mbx_hdr.length - 6);
-        if (read_buf->sdo_hdr.size_indicator && !read_buf->sdo_hdr.transfer_type)
-            memcpy(buf, &read_buf->sdo_data.ldata[1], sdo_len);
-        else
+        if (read_buf->sdo_hdr.size_indicator && !read_buf->sdo_hdr.complete) {
+            ec_sdo_expedited_upload_resp_t *exp_read_buf = 
+                (ec_sdo_expedited_upload_resp_t *)(pec->slaves[slave].mbx_read.buf);
+            memcpy(buf, exp_read_buf->sdo_data.bdata, sdo_len);
+        } else
             memcpy(buf, read_buf->sdo_data.bdata, sdo_len);
         *len = sdo_len;
     }
@@ -154,20 +223,21 @@ int ec_coe_sdo_write(ec_t *pec, uint16_t slave, uint16_t index,
         uint8_t sub_index, int complete, uint8_t *buf, size_t *len) {
     int wkc;
 
-    ec_sdo_t *write_buf = (ec_sdo_t *)(pec->slaves[slave].mbx_write.buf);
-    ec_sdo_t *read_buf  = (ec_sdo_t *)(pec->slaves[slave].mbx_read.buf); 
-    ec_mbx_clear(pec, slave, 1);
-    ec_mbx_receive(pec, slave, 0); // empty mailbox if anything pending
+    ec_sdo_normal_download_req_t *write_buf = 
+        (ec_sdo_normal_download_req_t *)(pec->slaves[slave].mbx_write.buf);
 
-    ec_mbx_clear(pec, slave, 0);
-    
-    size_t max_len = pec->slaves[slave].sm[0].len - 0x10 -1 ,
+    // empty mailbox if anything pending
+    ec_mbx_clear(pec, slave, 1);
+    ec_mbx_receive(pec, slave, 0);
+
+    size_t max_len = pec->slaves[slave].sm[0].len - 0x10,
            rest_len = *len,
            seg_len = rest_len > max_len ? max_len : rest_len;
 
     // mailbox header
     // (mbxhdr (6) - mbxhdr.length (2)) + coehdr (2) + sdohdr (4)
-    write_buf->mbx_hdr.length           = EC_SDO_LENGTH + seg_len; 
+    ec_mbx_clear(pec, slave, 0);
+    write_buf->mbx_hdr.length           = EC_SDO_NORMAL_HDR_LEN + seg_len; 
     write_buf->mbx_hdr.address          = 0x0000;
     write_buf->mbx_hdr.priority         = 0x00;
     write_buf->mbx_hdr.mbxtype          = EC_MBX_COE;
@@ -186,10 +256,13 @@ int ec_coe_sdo_write(ec_t *pec, uint16_t slave, uint16_t index,
     write_buf->sdo_hdr.sub_index        = sub_index;
 
     if (*len <= 4 && !complete) {
-        write_buf->mbx_hdr.length        = EC_SDO_LENGTH; 
-        write_buf->sdo_hdr.transfer_type = 1;
-        write_buf->sdo_hdr.data_set_size = 4 - *len;
-        memcpy(&write_buf->sdo_data.ldata[0], buf, *len);
+        ec_sdo_expedited_download_req_t *exp_write_buf = 
+            (ec_sdo_expedited_download_req_t *)(pec->slaves[slave].mbx_write.buf);
+
+        exp_write_buf->mbx_hdr.length        = EC_SDO_NORMAL_HDR_LEN; 
+        exp_write_buf->sdo_hdr.transfer_type = 1;
+        exp_write_buf->sdo_hdr.data_set_size = 4 - *len;
+        memcpy(&exp_write_buf->sdo_data.ldata[0], buf, *len);
 
         // send request
         wkc = ec_mbx_send(pec, slave, EC_DEFAULT_TIMEOUT_MBX);
@@ -206,6 +279,9 @@ int ec_coe_sdo_write(ec_t *pec, uint16_t slave, uint16_t index,
             return wkc;
         }
 
+        ec_sdo_expedited_upload_resp_t *read_buf  = 
+            (ec_sdo_expedited_upload_resp_t *)(pec->slaves[slave].mbx_read.buf); 
+
         if (!(read_buf->mbx_hdr.mbxtype == EC_MBX_COE))
             ec_log("ec_coe_sdo_write", "error on reading receive mailbox: answer is not COE\n");
 
@@ -213,8 +289,8 @@ int ec_coe_sdo_write(ec_t *pec, uint16_t slave, uint16_t index,
     } 
 
     uint8_t *tmp = buf;
-    write_buf->sdo_data.ldata[0] = *len;
-    memcpy(&write_buf->sdo_data.ldata[1], tmp, seg_len);
+    write_buf->complete_size = *len;
+    memcpy(&write_buf->sdo_data.ldata[0], tmp, seg_len);
     rest_len -= seg_len;
     tmp += seg_len;
 
@@ -233,31 +309,37 @@ int ec_coe_sdo_write(ec_t *pec, uint16_t slave, uint16_t index,
         return wkc;
     }
 
+    ec_sdo_normal_upload_resp_t *read_buf  = 
+        (ec_sdo_normal_upload_resp_t *)(pec->slaves[slave].mbx_read.buf); 
+
     if (!(read_buf->mbx_hdr.mbxtype == EC_MBX_COE))
-        ec_log("ec_coe_sdo_write", "error on reading receive mailbox: answer is not"
+        ec_log("ec_coe_sdo_write", "error on reading receive mailbox: answer is not "
                 "COE is 0x%X need 0x%X\n", read_buf->mbx_hdr.mbxtype, EC_MBX_COE);
 
-    write_buf->sdo_hdr.toggle = 1;
-    seg_len += 7;
+    seg_len += (EC_SDO_NORMAL_HDR_LEN - EC_SDO_SEG_HDR_LEN);
     
-    ec_sdo_seg_t *seg_write_buf = (ec_sdo_seg_t *)(pec->slaves[slave].mbx_write.buf);
+    ec_sdo_seg_download_req_t *seg_write_buf = 
+        (ec_sdo_seg_download_req_t *)(pec->slaves[slave].mbx_write.buf);
+    ec_sdo_seg_upload_resp_t *seg_read_buf  = 
+        (ec_sdo_seg_upload_resp_t *)(pec->slaves[slave].mbx_read.buf); 
+    seg_write_buf->sdo_hdr.toggle = 1;
 
     while (rest_len) {
         // need to send more segments
         seg_write_buf->sdo_hdr.command = 0;
         seg_write_buf->sdo_hdr.toggle = !seg_write_buf->sdo_hdr.toggle;
         seg_write_buf->sdo_hdr.seg_data_size = 0;
-        seg_write_buf->mbx_hdr.length = 3 + seg_len;
+        seg_write_buf->mbx_hdr.length = EC_SDO_SEG_HDR_LEN + seg_len;
 
         if (rest_len < seg_len) {
             seg_len = rest_len;
             seg_write_buf->sdo_hdr.command = EC_COE_SDO_DOWNLOAD_SEQ_REQ;
 
             if (rest_len < 7) {
-                seg_write_buf->mbx_hdr.length = EC_SDO_LENGTH;
+                seg_write_buf->mbx_hdr.length = EC_SDO_NORMAL_HDR_LEN;
                 seg_write_buf->sdo_hdr.seg_data_size = 7 - rest_len;
             } else
-                seg_write_buf->mbx_hdr.length = 3 + rest_len;
+                seg_write_buf->mbx_hdr.length = EC_SDO_SEG_HDR_LEN + rest_len;
         }
         
 
@@ -280,7 +362,7 @@ int ec_coe_sdo_write(ec_t *pec, uint16_t slave, uint16_t index,
             return wkc;
         }
     
-        if (!(read_buf->mbx_hdr.mbxtype == EC_MBX_COE))
+        if (!(seg_read_buf->mbx_hdr.mbxtype == EC_MBX_COE))
             ec_log("ec_coe_sdo_write", "error on reading receive mailbox: answer is not COE\n");
 
     }
@@ -296,15 +378,15 @@ typedef struct PACKED ec_sdoinfoheader {
 } PACKED ec_sdoinfoheader_t;
 
 typedef struct PACKED ec_sdo_odlist_req {
-    ec_mbxheader_t      mbx_hdr;
-    ec_coeheader_t      coe_hdr;
+    ec_mbx_header_t      mbx_hdr;
+    ec_coe_header_t      coe_hdr;
     ec_sdoinfoheader_t  sdo_info_hdr;
     uint16_t            list_type;
 } PACKED ec_sdo_odlist_req_t;
 
 typedef struct PACKED ec_sdo_odlist_resp {
-    ec_mbxheader_t      mbx_hdr;
-    ec_coeheader_t      coe_hdr;
+    ec_mbx_header_t      mbx_hdr;
+    ec_coe_header_t      coe_hdr;
     ec_sdoinfoheader_t  sdo_info_hdr;
     ec_data_t           sdo_info_data;
 } PACKED ec_sdo_odlist_resp_t;
@@ -371,15 +453,15 @@ int ec_coe_odlist_read(ec_t *pec, uint16_t slave, uint8_t *buf, size_t *len) {
 }
 
 typedef struct PACKED ec_sdo_desc_req {
-    ec_mbxheader_t      mbx_hdr;
-    ec_coeheader_t      coe_hdr;
+    ec_mbx_header_t      mbx_hdr;
+    ec_coe_header_t      coe_hdr;
     ec_sdoinfoheader_t  sdo_info_hdr;
     uint16_t            index;
 } PACKED ec_sdo_desc_req_t;
 
 typedef struct PACKED ec_sdo_desc_resp {
-    ec_mbxheader_t      mbx_hdr;
-    ec_coeheader_t      coe_hdr;
+    ec_mbx_header_t      mbx_hdr;
+    ec_coe_header_t      coe_hdr;
     ec_sdoinfoheader_t  sdo_info_hdr;
     ec_data_t           sdo_info_data;
 } PACKED ec_sdo_desc_resp_t;
@@ -453,8 +535,8 @@ int ec_coe_sdo_desc_read(ec_t *pec, uint16_t slave, uint16_t index,
 }
 
 typedef struct PACKED ec_sdo_entry_desc_req {
-    ec_mbxheader_t      mbx_hdr;
-    ec_coeheader_t      coe_hdr;
+    ec_mbx_header_t      mbx_hdr;
+    ec_coe_header_t      coe_hdr;
     ec_sdoinfoheader_t  sdo_info_hdr;
     uint16_t            index;
     uint8_t             sub_index;
@@ -462,8 +544,8 @@ typedef struct PACKED ec_sdo_entry_desc_req {
 } PACKED ec_sdo_entry_desc_req_t;
 
 typedef struct PACKED ec_sdo_entry_desc_resp {
-    ec_mbxheader_t      mbx_hdr;
-    ec_coeheader_t      coe_hdr;
+    ec_mbx_header_t      mbx_hdr;
+    ec_coe_header_t      coe_hdr;
     ec_sdoinfoheader_t  sdo_info_hdr;
     uint16_t            index;
     uint8_t             sub_index;

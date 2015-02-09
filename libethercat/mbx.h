@@ -16,17 +16,17 @@ enum {
 };
 
 //! ethercat mailbox header
-typedef struct PACKED ec_mbxheader {
+typedef struct PACKED ec_mbx_header {
    uint16_t  length;
    uint16_t  address;
    uint8_t   priority;
    unsigned  mbxtype : 4;
    unsigned  counter : 4;
-} PACKED ec_mbxheader_t;
+} PACKED ec_mbx_header_t;
 
 //! ethercat mailbox data
 typedef struct PACKED ec_mbx {
-    ec_mbxheader_t mbx_hdr;
+    ec_mbx_header_t mbx_hdr;
     ec_data_t      mbx_data;
 } PACKED ec_mbx_t;
 
