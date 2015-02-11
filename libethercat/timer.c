@@ -1,0 +1,67 @@
+#include "timer.h"
+
+#define timer_cmp(a, b, CMP)          \
+    (((a)->sec == (b)->sec) ?         \
+     ((a)->nsec CMP (b)->nsec) :      \
+     ((a)->sec CMP (b)->sec))
+
+#define timer_add(a, b, result)                 \
+  do {                                          \
+    (result)->sec  = (a)->sec  + (b)->sec;      \
+    (result)->nsec = (a)->nsec + (b)->nsec;     \
+    if ((result)->nsec >= NSEC_PER_SEC)         \
+      {                                         \
+        ++(result)->sec;                        \
+        (result)->nsec -= NSEC_PER_SEC;         \
+      }                                         \
+  } while (0)
+
+//! sleep in nanoseconds
+/*!
+ * \param nsec time to sleep in nanoseconds
+ */
+void ec_sleep(uint64_t nsec) {
+    struct timespec ts = { 
+        (nsec / NSEC_PER_SEC), (nsec % NSEC_PER_SEC) }, rest;
+    
+    while (1) {
+        int ret = nanosleep(&ts, &rest);
+        if (ret == 0)
+            break;
+
+        ts = rest;
+    }
+}
+
+//! initialize timer with timeout 
+/*!
+ * \parma timer pointer to timer to initialize
+ * \param timeout in nanoseconds
+ */
+void ec_timer_init(ec_timer_t *timer, uint64_t timeout) {
+    struct timespec ts;
+    if (clock_gettime(CLOCK_REALTIME, &ts) == -1)
+        perror("clock_gettime");
+
+    ec_timer_t a, b;
+    a.sec = ts.tv_sec;
+    a.nsec = ts.tv_nsec;
+
+    b.sec = (timeout / NSEC_PER_SEC);
+    b.nsec = (timeout % NSEC_PER_SEC);
+
+    timer_add(&a, &b, timer);
+}
+
+//! checks if timer is expired
+/*!
+ * \param timer timer to check 
+ * \return 1 if expired, 0 if not
+ */
+int ec_timer_expired(ec_timer_t *timer) {
+    ec_timer_t act;
+    ec_timer_init(&act, 0);    
+
+    return timer_cmp(&act, timer, <);
+}
+
