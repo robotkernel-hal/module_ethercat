@@ -43,7 +43,7 @@ typedef struct {
     ec_mbx_header_t mbx_hdr;
     ec_coe_header_t coe_hdr;
     ec_sdo_init_download_header_t sdo_hdr;
-} PACKED ec_sdo_expedited_download_resp_t, ec_sdo_expedited_upload_req;
+} PACKED ec_sdo_expedited_download_resp_t, ec_sdo_expedited_upload_req_t;
 
 #define EC_SDO_EXPEDITED_HDR_LEN \
     ((sizeof(ec_coe_header_t) + sizeof(ec_sdo_header_t)))
@@ -166,7 +166,7 @@ int ec_coe_sdo_read(ec_t *pec, uint16_t slave, uint16_t index, uint8_t sub_index
 
     // coe header
     write_buf->coe_hdr.service   = EC_COE_SDOREQ;
-    write_buf->coe_hdr.number    = 0x40;
+    write_buf->coe_hdr.number    = 0x00;
 
     // sdo header
     write_buf->sdo_hdr.command   = EC_COE_SDO_UPLOAD_REQ;
@@ -192,11 +192,16 @@ int ec_coe_sdo_read(ec_t *pec, uint16_t slave, uint16_t index, uint8_t sub_index
     ec_sdo_normal_upload_resp_t *read_buf  = 
         (ec_sdo_normal_upload_resp_t *)(pec->slaves[slave].mbx_read.buf); 
 
-    if (*len == 0)
-        *len = read_buf->mbx_hdr.length - 6 - read_buf->sdo_hdr.size_indicator;
-    else {
-        size_t sdo_len = min(*len, read_buf->mbx_hdr.length - 6);
-        if (read_buf->sdo_hdr.size_indicator && !read_buf->sdo_hdr.complete) {
+    if (*len == 0) {
+        if (read_buf->sdo_hdr.transfer_type)
+            *len = 4 - read_buf->sdo_hdr.data_set_size;
+        else 
+            *len = read_buf->complete_size;
+    } else {
+        size_t sdo_len = min(*len, read_buf->complete_size);
+        if (read_buf->sdo_hdr.transfer_type) {
+            sdo_len = min(*len, 4 - read_buf->sdo_hdr.data_set_size);
+
             ec_sdo_expedited_upload_resp_t *exp_read_buf = 
                 (ec_sdo_expedited_upload_resp_t *)(pec->slaves[slave].mbx_read.buf);
             memcpy(buf, exp_read_buf->sdo_data.bdata, sdo_len);
@@ -489,7 +494,7 @@ int ec_coe_sdo_desc_read(ec_t *pec, uint16_t slave, uint16_t index,
     // mailbox header
     write_buf->mbx_hdr.length       = 12; // (mbxhdr - length) + coehdr + sdohdr
     write_buf->mbx_hdr.address      = 0x0000;
-    write_buf->mbx_hdr.priority     = 0x02;
+    write_buf->mbx_hdr.priority     = 0x00;
     write_buf->mbx_hdr.mbxtype      = EC_MBX_COE;
 
     // coe header
@@ -577,9 +582,9 @@ int ec_coe_sdo_entry_desc_read(ec_t *pec, uint16_t slave, uint16_t index, uint8_
     ec_mbx_clear(pec, slave, 0);
 
     // mailbox header
-    write_buf->mbx_hdr.length       = 12; // (mbxhdr - length) + coehdr + sdohdr
+    write_buf->mbx_hdr.length       = 10; // (mbxhdr - length) + coehdr + sdohdr
     write_buf->mbx_hdr.address      = 0x0000;
-    write_buf->mbx_hdr.priority     = 0x02;
+    write_buf->mbx_hdr.priority     = 0x00;
     write_buf->mbx_hdr.mbxtype      = EC_MBX_COE;
 
     // coe header
