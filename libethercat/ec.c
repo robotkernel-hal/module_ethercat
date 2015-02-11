@@ -35,9 +35,9 @@
 #include "coe.h"
 
 void *ec_log_func_user = NULL;
-void (*ec_log_func)(void *user, const char *format, ...) = NULL;
+void (*ec_log_func)(int lvl, void *user, const char *format, ...) = NULL;
 
-void ec_log(const char *pre, const char *format, ...) {
+void ec_log(int lvl, const char *pre, const char *format, ...) {
     if (ec_log_func == NULL) {
         va_list ap;
         va_start(ap, format);
@@ -51,10 +51,10 @@ void ec_log(const char *pre, const char *format, ...) {
         // format argument list
         va_list args;
         va_start(args, format);
-        int ret = snprintf(tmp, 512, "%s: ", pre);
+        int ret = snprintf(tmp, 512, "%-20.20s: ", pre);
         vsnprintf(tmp+ret, 512-ret, format, args);
 
-        ec_log_func(ec_log_func_user, buf);
+        ec_log_func(lvl, ec_log_func_user, buf);
     }
 }
 
@@ -119,6 +119,25 @@ int ec_destroy_pd_groups(ec_t *pec) {
     return 0;
 }
 
+const char state_string_init[]    = "EC_STATE_INIT";
+const char state_string_preop[]   = "EC_STATE_PREOP";
+const char state_string_safeop[]  = "EC_STATE_SAFEOP";
+const char state_string_op[]      = "EC_STATE_OP";
+const char state_string_unknown[] = "EC_STATE_UNKNOWN";
+
+const char *get_state_string(ec_state_t state) {
+    if (state == EC_STATE_INIT)
+        return state_string_init;
+    if (state == EC_STATE_PREOP)
+        return state_string_preop;
+    if (state == EC_STATE_SAFEOP)
+        return state_string_safeop;
+    if (state == EC_STATE_OP)
+        return state_string_op;
+
+    return state_string_unknown;
+}
+
 //! set state on ethercat bus
 /*! 
  * \param pec ethercat master pointer
@@ -128,7 +147,7 @@ int ec_destroy_pd_groups(ec_t *pec) {
 int ec_set_state(ec_t *pec, ec_state_t state) {
     int ret = 0, i;
 
-    ec_log("== SETTING MASTER STATE ==", "switch to state %d\n", state);
+    ec_log(10, "SET MASTER STATE", "switch to state %s\n", get_state_string(state));
 
     switch (state) {
         case EC_STATE_INIT: {
@@ -159,20 +178,23 @@ int ec_set_state(ec_t *pec, ec_state_t state) {
                 if (wkc == 0)
                     break;  // break here, cause there seems to be no more slave
 
-                ec_log("INITIAL SCAN", "found slave with auto inc address %d, "
+                ec_log(100, get_state_string(state), "found slave with auto inc address %d, "
                         "wkc %d\n", auto_inc, wkc);
 
                 pec->slaves[i].assigned_pd_group = -1;
                 pec->slaves[i].auto_inc_address = auto_inc;
                 pec->slaves[i].fixed_address = fixed;
+                pec->slaves[i].dc.use_dc = 1;
 
                 ec_apwr(pec, auto_inc, EC_REG_STADR, (uint8_t *)&fixed, sizeof(fixed), &wkc); 
                 if (wkc == 1)
-                    ec_log("INITIAL SCAN", "fixed address %d successfully "
+                    ec_log(100, get_state_string(state), "fixed address %d successfully "
                             "written to slave %d\n", fixed, auto_inc);
 
                 fixed++;
             }
+
+            ec_log(10, get_state_string(state), "found %d ethercat slaves\n", i);
 
             for (int slave = 0; slave < pec->slave_cnt; ++slave) {
                 ec_slave_t *slv = &pec->slaves[slave]; 
@@ -231,46 +253,46 @@ int ec_set_state(ec_t *pec, ec_state_t state) {
                     while (tmp_slave >= 0);
                 }
 
-                ec_log("TOPOLOGY", "slave %d has parent %d\n", slave, slv->parent);
+                ec_log(100, get_state_string(state), "slave %2d has parent %d\n", slave, slv->parent);
 
             }
+
+            break;
+        }        
+        case EC_STATE_PREOP:
+            for (i = 0; i < pec->slave_cnt; ++i)
+                ec_slave_state_transition(pec, i, state);
 
             ec_dc_config(pec);
 
             break;
-        }
         case EC_STATE_SAFEOP: {
-            int i, j;
+            int i, j, k;
             for (int slave = 0; slave < pec->slave_cnt; ++slave)
                 ec_slave_generate_mapping(pec, slave);
 
             for (j = 0; j < pec->pd_group_cnt; ++j) {
                 ec_pd_group_t *pd = &pec->pd_groups[j];
-                pd->pdout_len = 0,
-                pd->pdin_len = 0;
-
+                pd->pdout_len = pd->pdin_len = 0;
+        
                 for (i = 0; i < pec->slave_cnt; ++i) {
                     ec_slave_t *slv = &pec->slaves[i];
+                    int start_sm = slv->eeprom.mbx_supported ? 2 : 0;
 
                     if (slv->assigned_pd_group != j)
                         continue;
-                    int k;
-                    for (k = 0; k < slv->sm_ch; ++k) {
-                        if (slv->sm[k].flags & 0x00000002)
-                            continue; // mailbox sm
 
+                    for (k = start_sm; k < slv->sm_ch; ++k) {
                         if (slv->sm[k].flags & 0x00000004)
-                            // outputs 
-                            pd->pdout_len += slv->sm[k].len;
+                            pd->pdout_len += slv->sm[k].len; // outputs
                         else 
-                            // outputs 
-                            pd->pdin_len += slv->sm[k].len;
+                            pd->pdin_len += slv->sm[k].len;  // inputs
 
                     }
                 }
                 
-                ec_log("EC_STATE_SAFEOP", "group %d: got pd length out %d, in %d\n", 
-                        j, pd->pdout_len, pd->pdin_len);
+                ec_log(10, get_state_string(state), "group %2d: pd out 0x%08X %3d bytes, in 0x%08X %3d bytes\n", 
+                        j, pd->log, pd->pdout_len, pd->log + pd->pdout_len, pd->pdin_len);
 
                 pd->log_len = pd->pdout_len + pd->pdin_len;
                 pd->pd = (uint8_t *)malloc(pd->log_len);
@@ -284,14 +306,15 @@ int ec_set_state(ec_t *pec, ec_state_t state) {
 
                 for (i = 0; i < pec->slave_cnt; ++i) {
                     ec_slave_t *slv = &pec->slaves[i];
+                    int start_sm = slv->eeprom.mbx_supported ? 2 : 0;
 
                     if (slv->assigned_pd_group != j)
                         continue;
                     
-                    int k, fmmu_next = 0;
-                    for (k = 0; k < slv->sm_ch; ++k) {
-                        if ((!slv->sm[k].len) || (slv->sm[k].flags & 0x00000002))
-                            continue; // empty or mailbox sm
+                    int fmmu_next = 0;
+                    for (k = start_sm; k < slv->sm_ch; ++k) {
+                        if ((!slv->sm[k].len))
+                            continue; // empty 
                     
                         if (slv->sm[k].flags & 0x00000004) {
                             slv->fmmu[fmmu_next].log = log_base_out;

@@ -99,7 +99,7 @@ typedef struct PACKED ec_slave_dc_info {
         int32_t time;
     } receive_times[4];
 
-    int have_dc;
+    int use_dc;
     int next;
     int prev;
 
@@ -141,6 +141,7 @@ typedef struct ec_slave {
 } ec_slave_t;
 
 typedef struct ec_dc_info {
+    uint16_t master_address;
     int have_dc;
     int next;
     int prev;
@@ -167,9 +168,9 @@ extern "C" {
 #endif
 
 extern void *ec_log_func_user;
-extern void (*ec_log_func)(void *user, const char *format, ...);
+extern void (*ec_log_func)(int lvl, void *user, const char *format, ...);
 
-void ec_log(const char *pre, const char *format, ...);
+void ec_log(int lvl, const char *pre, const char *format, ...);
 
 //! open ethercat master
 /*!

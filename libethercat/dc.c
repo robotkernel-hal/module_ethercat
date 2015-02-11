@@ -41,6 +41,8 @@
 void ec_dc_sync0(ec_t *pec, uint16_t slave, int active, uint32_t cycle_time, uint32_t cycle_shift) {
     uint16_t wkc;
     ec_slave_t *slv = &pec->slaves[slave];
+    if (!(slv->features & 0x04)) // dc not available
+        return;
 
     // stop cyclic operation, ready for next trigger
     uint8_t dc_active = 0;
@@ -72,8 +74,8 @@ void ec_dc_sync0(ec_t *pec, uint16_t slave, int active, uint32_t cycle_time, uin
         ec_fpwr(pec, slv->fixed_address, EC_REG_DCSYNCACT, &dc_active, sizeof(dc_active), &wkc);
     }
     
-    ec_log("DC", "dc_systime %ld, dc_start %ld, cycletime %d, dc_active %X\n", 
-            dc_systime, dc_start, cycle_time, dc_active);
+    ec_log(10, "DISTRIBUTED_CLOCK", "slave %2d: dc_systime %lld, dc_start %lld, cycletime %d, dc_active %X\n", 
+            slave, dc_systime, dc_start, cycle_time, dc_active);
 }
 
 //! configure slave for distributed clock sync 0 and sync 1 pulse
@@ -87,6 +89,9 @@ void ec_dc_sync0(ec_t *pec, uint16_t slave, int active, uint32_t cycle_time, uin
  */
 void ec_dc_sync01(ec_t *pec, uint16_t slave, int active, 
         uint32_t cycle_time_0, uint32_t cycle_time_1, uint32_t cycle_shift) {
+    ec_slave_t *slv = &pec->slaves[slave];
+    if (!(slv->features & 0x04)) // dc not available
+        return;
 }
 
 /* latched port time of slave */
@@ -128,7 +133,7 @@ inline uint8_t ec_dc_parentport(ec_t *pec, uint16_t parent) {
     int port_idx[] = { 3, 1, 2, 0 };
     uint8_t parentport = 0;
 
-    ec_log("DC", "parent %d, consumedports 0x%X\n", parent, pec->slaves[parent].dc.consumedports);
+    ec_log(10, "DISTRIBUTED_CLOCK", "parent %d, consumedports 0x%X\n", parent, pec->slaves[parent].dc.consumedports);
 
     for (int i = 0; i < 4; ++i) {
         int port = port_idx[i];
@@ -150,14 +155,14 @@ inline uint8_t ec_dc_parentport(ec_t *pec, uint16_t parent) {
  * return boolean if slaves are found with DC
  */
 int ec_dc_config(ec_t *pec) {
-    uint16_t i, parent, child;
-    uint16_t parenthold = 0;
+    int i, parent, child;
+    int parenthold = 0;
     int32_t dt1, dt2, dt3;
     uint8_t entryport = 0;
     uint16_t wkc;
 
     pec->dc.have_dc = 0;
-//    pec->ec_group[0].hasdc = FALSE;
+    pec->dc.master_address = 0;
 
     // latch DC receive time of all slaves
     int32_t dc_time0 = 0;
@@ -169,19 +174,18 @@ int ec_dc_config(ec_t *pec) {
         ec_slave_t *slv = &pec->slaves[slave];
         slv->dc.consumedports = slv->active_ports;
 
-        if (slv->features & 0x04) { // dc available
+        if (slv->dc.use_dc && (slv->features & 0x04)) { // dc available
             if (!pec->dc.have_dc) {
+                pec->dc.master_address = slv->fixed_address;
                 pec->dc.have_dc = 1;
                 pec->dc.next = slave;
                 slv->dc.prev = -1;
-//                pec->ec_group[0].hasdc = TRUE;
-//                pec->ec_group[0].DCnext = slave;
             } else {
                 pec->slaves[prev].dc.next = slave;
                 slv->dc.prev = prev;
             }
 
-            /* this branch has DC slave so remove parenthold */
+            // this branch has DC slave so remove parenthold 
             parenthold = 0;
             prev = slave;
             ec_fprd(pec, slv->fixed_address, EC_REG_DCTIME0, 
@@ -206,7 +210,7 @@ int ec_dc_config(ec_t *pec) {
                     slv->entryport = i; // port with smallest value is entry port
             }
 
-            ec_log("DC", "slave %d, entryport %d, consumedports 0x%X\n", slave, 
+            ec_log(10, "DISTRIBUTED_CLOCK", "slave %d, entryport %d, consumedports 0x%X\n", slave, 
                     entryport, slv->dc.consumedports);
             /* consume entryport from activeports */
             slv->dc.consumedports &= (uint8_t)~(1 << entryport);
@@ -217,11 +221,11 @@ int ec_dc_config(ec_t *pec) {
             {
                 child = parent;
                 parent = pec->slaves[parent].parent;
-                ec_log("DC", "slave %d, checking parent %d, dc 0x%X\n", 
+                ec_log(10, "DISTRIBUTED_CLOCK", "slave %d, checking parent %d, dc 0x%X\n", 
                         slave, parent, pec->slaves[parent].features);
-            } while (!((parent == -1) || (pec->slaves[parent].features & 0x04)));
+            } while (!((parent == -1) || (pec->slaves[parent].dc.use_dc && (pec->slaves[parent].features & 0x04))));
             
-            ec_log("DC", "slave %d, parent %d\n", slave, parent);
+            ec_log(10, "DISTRIBUTED_CLOCK", "slave %d, parent %d\n", slave, parent);
 
 
             /* only calculate propagation delay if slave is not the first */
@@ -231,7 +235,7 @@ int ec_dc_config(ec_t *pec) {
                 if (pec->slaves[parent].link_cnt == 1)
                     slv->parentport = pec->slaves[parent].entryport;
 
-                ec_log("DC", "slave %d, port on parentport %d\n", slave, slv->parentport);
+                ec_log(10, "DISTRIBUTED_CLOCK", "slave %d, port on parentport %d\n", slave, slv->parentport);
                 dt1 = 0;
                 dt2 = 0;
                 /* delta time of (parent - 1) - parent */
@@ -260,7 +264,7 @@ int ec_dc_config(ec_t *pec) {
                 /* assumption : forward delay equals return delay */
                 slv->pdelay = ((dt3 - dt1) / 2) + dt2 + pec->slaves[parent].pdelay;
 
-                ec_log("DC", "slave %d, sysdelay %d\n", slave, slv->pdelay);
+                ec_log(10, "DISTRIBUTED_CLOCK", "slave %d, sysdelay %d\n", slave, slv->pdelay);
                 /* write propagation delay*/
                 ec_fpwr(pec, slv->fixed_address, EC_REG_DCSYSDELAY, &slv->pdelay, sizeof(slv->pdelay), &wkc);
             }

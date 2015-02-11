@@ -58,6 +58,11 @@ slave::coe_init_cmd::~coe_init_cmd() {
 //! default construction
 slave::slave_dc::slave_dc() {
     has_dc = false;
+
+    type = 0;
+    cycle_time_0 = 0;
+    cycle_time_1 = 0;
+    cycle_shift  = 0;
 }
 
 //! construction
@@ -167,13 +172,13 @@ bool slave::prepare_state_transition(transition_t transition) {
         // configure distributed clocks if needed 
         if (dc.has_dc) {
             if (dc.type == 1) {
-                ethercat_log(module_info, master_dev->_name, "slave %2d configuring dc sync 01, "
+                ethercat_log(module_verbose, master_dev->_name, "slave %2d configuring dc sync 01, "
                         "cycle_times %d/%d, cycle_shift %d\n",
                         index, dc.cycle_time_0, dc.cycle_time_1, dc.cycle_shift);
 
                 ec_dc_sync01(master_dev->_pec, index, 1, dc.cycle_time_0, dc.cycle_time_1, dc.cycle_shift);
             } else {
-                ethercat_log(module_info, master_dev->_name, "slave %2d configuring dc sync 0, "
+                ethercat_log(module_verbose, master_dev->_name, "slave %2d configuring dc sync 0, "
                         "cycle_time %d, cycle_shift %d\n",
                         index, dc.cycle_time_0, dc.cycle_shift);
 
@@ -183,7 +188,7 @@ bool slave::prepare_state_transition(transition_t transition) {
             ec_dc_sync0(master_dev->_pec, index, 0, 0, 0);
     }
 
-    ethercat_log(module_info, master_dev->_name, 
+    ethercat_log(module_verbose, master_dev->_name, 
             "slave %2d prepare state transition from 0x%x/%s to 0x%x/%s\n",
             index, state_from, state_strings[state_from].c_str(),
             state_to, state_strings[state_to].c_str());

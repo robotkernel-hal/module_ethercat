@@ -151,12 +151,12 @@ void *hw_rx_thread(void *arg) {
 
     // thread settings
     if (pthread_getschedparam(pthread_self(), &policy, &param) != 0)
-        ec_log("RX_THREAD", "error on pthread_getschedparam %s\n", strerror(errno));
+        ec_log(10, "RX_THREAD", "error on pthread_getschedparam %s\n", strerror(errno));
     else {
         policy = SCHED_FIFO;
         param.sched_priority = phw->rxthreadprio;
         if (pthread_setschedparam(pthread_self(), policy, &param) != 0)
-            ec_log("RX_THREAD", "error on pthread_setschedparam %s\n", strerror(errno));
+            ec_log(10, "RX_THREAD", "error on pthread_setschedparam %s\n", strerror(errno));
     }
 
 #ifdef __VXWORKS__
@@ -171,7 +171,7 @@ void *hw_rx_thread(void *arg) {
             CPU_SET(i, &cpuset);
         
     if (pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset) != 0)
-        ec_log("RX_THREAD", "error on pthread_setaffinity_np %s\n", strerror(errno));
+        ec_log(10, "RX_THREAD", "error on pthread_setaffinity_np %s\n", strerror(errno));
 #endif
 
     while (phw->rxthreadrunning) {
@@ -180,13 +180,13 @@ void *hw_rx_thread(void *arg) {
             if ((errno == EAGAIN) || (errno == EWOULDBLOCK))
                 continue;
 
-            ec_log("RX_THREAD", "recv: %s\n", strerror(errno));
+            ec_log(10, "RX_THREAD", "recv: %s\n", strerror(errno));
             sleep(1);
         }
         
         /* check if it is an EtherCAT frame */
         if (pframe->ethertype != htons(ETH_P_ECAT)) {
-            ec_log("RX_THREAD", "received non-ethercat frame! (bytes %d, type 0x%X)\n", 
+            ec_log(10, "RX_THREAD", "received non-ethercat frame! (bytes %d, type 0x%X)\n", 
                     bytesrx, pframe->type);
             continue;
         }
@@ -197,7 +197,7 @@ void *hw_rx_thread(void *arg) {
             datagram_entry_t *entry = phw->tx_send[d->idx];
 
             if (!entry) {
-                ec_log("RX_THREAD", "received idx %d, but we did not send one?\n", d->idx);
+                ec_log(10, "RX_THREAD", "received idx %d, but we did not send one?\n", d->idx);
                 continue;
             }
 
@@ -251,11 +251,11 @@ int hw_tx(hw_t *phw) {
             size_t bytesrx = send(phw->sockfd, pframe, pframe->len, 0);
 
             if (pframe->len != bytesrx) {
-                ec_log("TX", "got only %d bytes out of %d bytes through.\n", 
+                ec_log(10, "TX", "got only %d bytes out of %d bytes through.\n", 
                         bytesrx, pframe->len);
 
                 if (bytesrx == -1)
-                    ec_log("TX", "error: %s\n", strerror(errno));
+                    ec_log(10, "TX", "error: %s\n", strerror(errno));
             }
 
             // reset length to send new frame

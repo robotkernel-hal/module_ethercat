@@ -42,11 +42,20 @@ const string module_ethercat::state_strings[] = {
     "EtherCAT OP"
 };
 
-void ethercat_log_func(void *user, const char *format, ...) {
+void ethercat_log_func(int lvl, void *user, const char *format, ...) {
     master *e = (master *)user;
     va_list ap;
     va_start(ap, format);
-    ethercat_log(module_verbose, e->_name, format, ap);
+
+    robotkernel::loglevel loglvl = module_verbose;
+    if (lvl < 100)
+        loglvl = module_info;
+    if (lvl < 10)
+        loglvl = module_warning;
+    if (lvl < 1)
+        loglvl = module_error;
+    
+    ethercat_log(loglvl, e->_name, format, ap);
     va_end(ap);
 }
 
@@ -162,13 +171,17 @@ int master::set_state(module_state_t state) {
             ec_set_state(_pec, EC_STATE_INIT);
 
             for (nr = 0; nr < _pec->slave_cnt; ++nr) {
-                if (_slave_info.find(nr) != _slave_info.end())
-                    continue;
+                if (_slave_info.find(nr) == _slave_info.end()) {
+                    ethercat_log(module_verbose, _name, "slave %d creating empty one\n", nr);
 
-                ethercat_log(module_info, _name, "slave %d creating empty one\n", nr);
+                    slave *slv = new slave(nr, this);
+                    _slave_info[nr] = slv;
+                }
 
-                slave *slv = new slave(nr, this);
-                _slave_info[nr] = slv;
+                if (_slave_info[nr]->dc.has_dc)
+                    _pec->slaves[nr].dc.use_dc = 1;
+                else 
+                    _pec->slaves[nr].dc.use_dc = 0;
             }
         
             break;
@@ -183,8 +196,6 @@ int master::set_state(module_state_t state) {
                     int sm_nr = it->first;
 
                     if (sm_nr < _pec->slaves[nr].sm_ch) {
-                        ethercat_log(module_info, _name, "============================================== slave %d programming sm%d\n", nr, sm_nr);
-
                         _pec->slaves[nr].sm[sm_nr].adr = it->second->_address;
                         _pec->slaves[nr].sm[sm_nr].len = it->second->_length;
                         _pec->slaves[nr].sm[sm_nr].flags = it->second->_flags;
@@ -521,6 +532,10 @@ static void cb_block(void *user_arg, struct datagram_entry *p) {
 //! module trigger callback
 void master::trigger() {
     int i = 0;
+    uint16_t wkc;
+    
+    datagram_entry_t *p_de_dc;
+    idx_entry_t *p_idx_dc;
 
     if (_state >= module_state_safeop) {
         for (i = 0; i < _pec->pd_group_cnt; ++i) {
@@ -554,29 +569,30 @@ void master::trigger() {
 
             // queue frame and trigger tx
             datagram_pool_put(_pec->phw->tx_high, pd->p_de);
-/*            
-            // dc frame
-            if (ec_index_get(_pec, &pd->p_idx_dc) != 0) 
-                continue;
+        }
 
-            if (datagram_pool_get(_pec->pool, &pd->p_de_dc, NULL) != 0) {
-                ec_index_put(_pec, pd->p_idx_dc);
-                continue;
+        if (_pec->dc.have_dc) {          
+            // dc frame
+            if (ec_index_get(_pec, &p_idx_dc) != 0) 
+                ; //continue;
+
+            if (datagram_pool_get(_pec->pool, &p_de_dc, NULL) != 0) {
+                ec_index_put(_pec, p_idx_dc);
+                ; //continue;
             }
 
-            memset(&pd->p_de_dc->datagram, 0, sizeof(ec_datagram_t) + 8 + 2);
-            pd->p_de_dc->datagram.cmd = EC_CMD_FRMW;
-            pd->p_de_dc->datagram.idx = pd->p_idx_dc->idx;
-            pd->p_de_dc->datagram.adr = (EC_REG_DCSYSTIME << 16) | 1000;
-            pd->p_de_dc->datagram.len = 8;
-            pd->p_de_dc->datagram.irq = 0;
+            memset(&p_de_dc->datagram, 0, sizeof(ec_datagram_t) + 8 + 2);
+            p_de_dc->datagram.cmd = EC_CMD_FRMW;
+            p_de_dc->datagram.idx = p_idx_dc->idx;
+            p_de_dc->datagram.adr = (EC_REG_DCSYSTIME << 16) | _pec->dc.master_address;
+            p_de_dc->datagram.len = 8;
+            p_de_dc->datagram.irq = 0;
 
-            pd->p_de_dc->user_cb = cb_block;
-            pd->p_de_dc->user_arg = pd->p_idx_dc;
+            p_de_dc->user_cb = cb_block;
+            p_de_dc->user_arg = p_idx_dc;
 
             // queue frame and trigger tx
-            datagram_pool_put(_pec->phw->tx_high, pd->p_de_dc);
-            */
+            datagram_pool_put(_pec->phw->tx_high, p_de_dc);
         }
     }
 
@@ -593,27 +609,28 @@ void master::trigger() {
             // wait for completion
             sem_wait(&pd->p_idx->waiter);
 
-            uint16_t wkc = ec_datagram_wkc(&pd->p_de->datagram);
+            wkc = ec_datagram_wkc(&pd->p_de->datagram);
             if (wkc)
                 memcpy(pd->pd+pd->pdout_len, ec_datagram_payload(&pd->p_de->datagram)+pd->pdout_len, pd->pdin_len);
 
             datagram_pool_put(_pec->pool, pd->p_de);
             ec_index_put(_pec, pd->p_idx);
-/*
-            // wait for completion
-            sem_wait(&pd->p_idx_dc->waiter);
-
-            wkc = ec_datagram_wkc(&pd->p_de_dc->datagram);
-            uint64_t dc_time = 0;
-            if (wkc)
-                memcpy(&dc_time, ec_datagram_payload(&pd->p_de_dc->datagram), 8);
-
-            datagram_pool_put(_pec->pool, pd->p_de_dc);
-            ec_index_put(_pec, pd->p_idx_dc);
 
             for (std::list<int>::iterator it = g->_slaves.begin(); it != g->_slaves.end(); ++it)
                 trigger_modules(*it);
-                */
+        }
+        
+        if (_pec->dc.have_dc) {          
+            // wait for completion
+            sem_wait(&p_idx_dc->waiter);
+
+            wkc = ec_datagram_wkc(&p_de_dc->datagram);
+            uint64_t dc_time = 0;
+            if (wkc)
+                memcpy(&dc_time, ec_datagram_payload(&p_de_dc->datagram), 8);
+
+            datagram_pool_put(_pec->pool, p_de_dc);
+            ec_index_put(_pec, p_idx_dc);
         }
     }
 }

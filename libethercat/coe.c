@@ -177,7 +177,7 @@ int ec_coe_sdo_read(ec_t *pec, uint16_t slave, uint16_t index, uint8_t sub_index
     // send request
     wkc = ec_mbx_send(pec, slave, EC_DEFAULT_TIMEOUT_MBX);
     if (!wkc) {
-        ec_log("ec_coe_sdo_write", "error on writing send mailbox\n");
+        ec_log(10, "ec_coe_sdo_write", "error on writing send mailbox\n");
         return wkc;
     }
 
@@ -185,7 +185,7 @@ int ec_coe_sdo_read(ec_t *pec, uint16_t slave, uint16_t index, uint8_t sub_index
     ec_mbx_clear(pec, slave, 1);
     wkc = ec_mbx_receive(pec, slave, EC_DEFAULT_TIMEOUT_MBX);
     if (!wkc) {
-        ec_log("ec_coe_sdo_write", "error on reading receive mailbox\n");
+        ec_log(10, "ec_coe_sdo_write", "error on reading receive mailbox\n");
         return wkc;
     }
 
@@ -267,7 +267,7 @@ int ec_coe_sdo_write(ec_t *pec, uint16_t slave, uint16_t index,
         // send request
         wkc = ec_mbx_send(pec, slave, EC_DEFAULT_TIMEOUT_MBX);
         if (!wkc) {
-            ec_log("ec_coe_sdo_write", "error on writing send mailbox\n");
+            ec_log(10, "ec_coe_sdo_write", "error on writing send mailbox\n");
             return wkc;
         }
 
@@ -275,7 +275,7 @@ int ec_coe_sdo_write(ec_t *pec, uint16_t slave, uint16_t index,
         ec_mbx_clear(pec, slave, 1);
         wkc = ec_mbx_receive(pec, slave, EC_DEFAULT_TIMEOUT_MBX);
         if (!wkc) {
-            ec_log("ec_coe_sdo_write", "error on reading receive mailbox\n");
+            ec_log(10, "ec_coe_sdo_write", "error on reading receive mailbox\n");
             return wkc;
         }
 
@@ -283,7 +283,7 @@ int ec_coe_sdo_write(ec_t *pec, uint16_t slave, uint16_t index,
             (ec_sdo_expedited_upload_resp_t *)(pec->slaves[slave].mbx_read.buf); 
 
         if (!(read_buf->mbx_hdr.mbxtype == EC_MBX_COE))
-            ec_log("ec_coe_sdo_write", "error on reading receive mailbox: answer is not COE\n");
+            ec_log(10, "ec_coe_sdo_write", "error on reading receive mailbox: answer is not COE\n");
 
         return wkc;
     } 
@@ -297,7 +297,7 @@ int ec_coe_sdo_write(ec_t *pec, uint16_t slave, uint16_t index,
     // send request
     wkc = ec_mbx_send(pec, slave, EC_DEFAULT_TIMEOUT_MBX);
     if (!wkc) {
-        ec_log("ec_coe_sdo_write", "error on writing send mailbox\n");
+        ec_log(10, "ec_coe_sdo_write", "error on writing send mailbox\n");
         return wkc;
     }
 
@@ -305,7 +305,7 @@ int ec_coe_sdo_write(ec_t *pec, uint16_t slave, uint16_t index,
     ec_mbx_clear(pec, slave, 1);
     wkc = ec_mbx_receive(pec, slave, EC_DEFAULT_TIMEOUT_MBX);
     if (!wkc) {
-        ec_log("ec_coe_sdo_write", "error on reading receive mailbox\n");
+        ec_log(10, "ec_coe_sdo_write", "error on reading receive mailbox\n");
         return wkc;
     }
 
@@ -313,7 +313,7 @@ int ec_coe_sdo_write(ec_t *pec, uint16_t slave, uint16_t index,
         (ec_sdo_normal_upload_resp_t *)(pec->slaves[slave].mbx_read.buf); 
 
     if (!(read_buf->mbx_hdr.mbxtype == EC_MBX_COE))
-        ec_log("ec_coe_sdo_write", "error on reading receive mailbox: answer is not "
+        ec_log(10, "ec_coe_sdo_write", "error on reading receive mailbox: answer is not "
                 "COE is 0x%X need 0x%X\n", read_buf->mbx_hdr.mbxtype, EC_MBX_COE);
 
     seg_len += (EC_SDO_NORMAL_HDR_LEN - EC_SDO_SEG_HDR_LEN);
@@ -350,7 +350,7 @@ int ec_coe_sdo_write(ec_t *pec, uint16_t slave, uint16_t index,
         // send request
         wkc = ec_mbx_send(pec, slave, EC_DEFAULT_TIMEOUT_MBX);
         if (!wkc) {
-            ec_log("ec_coe_sdo_write", "error on writing send mailbox\n");
+            ec_log(10, "ec_coe_sdo_write", "error on writing send mailbox\n");
             return wkc;
         }
 
@@ -358,12 +358,12 @@ int ec_coe_sdo_write(ec_t *pec, uint16_t slave, uint16_t index,
         ec_mbx_clear(pec, slave, 1);
         wkc = ec_mbx_receive(pec, slave, EC_DEFAULT_TIMEOUT_MBX);
         if (!wkc) {
-            ec_log("ec_coe_sdo_write", "error on reading receive mailbox\n");
+            ec_log(10, "ec_coe_sdo_write", "error on reading receive mailbox\n");
             return wkc;
         }
     
         if (!(seg_read_buf->mbx_hdr.mbxtype == EC_MBX_COE))
-            ec_log("ec_coe_sdo_write", "error on reading receive mailbox: answer is not COE\n");
+            ec_log(10, "ec_coe_sdo_write", "error on reading receive mailbox: answer is not COE\n");
 
     }
 
@@ -424,18 +424,18 @@ int ec_coe_odlist_read(ec_t *pec, uint16_t slave, uint8_t *buf, size_t *len) {
     write_buf->list_type            = 0x01;
 
     // send request
-    wkc = ec_mbx_send(pec, slave, EC_DEFAULT_TIMEOUT_MBX);
+    wkc = ec_mbx_send(pec, slave, 10 * EC_DEFAULT_TIMEOUT_MBX);
     if (wkc != 1)
-        ec_log(__func__, "send mailbox failed\n");
+        ec_log(10, __func__, "send mailbox failed\n");
 
     int val = 0;
 
     do {
         // wait for answer
         ec_mbx_clear(pec, slave, 1);
-        wkc = ec_mbx_receive(pec, slave, EC_DEFAULT_TIMEOUT_MBX);
+        wkc = ec_mbx_receive(pec, slave, 10 * EC_DEFAULT_TIMEOUT_MBX);
         if (wkc != 1) {
-            ec_log(__func__, "receive mailbox failed\n");
+            ec_log(10, __func__, "receive mailbox failed\n");
             continue;
         }
         
@@ -503,13 +503,13 @@ int ec_coe_sdo_desc_read(ec_t *pec, uint16_t slave, uint16_t index,
     // send request
     wkc = ec_mbx_send(pec, slave, EC_DEFAULT_TIMEOUT_MBX);
     if (wkc != 1)
-        ec_log(__func__, "send mailbox failed\n");
+        ec_log(10, __func__, "send mailbox failed\n");
 
     // wait for answer
     ec_mbx_clear(pec, slave, 1);
     wkc = ec_mbx_receive(pec, slave, EC_DEFAULT_TIMEOUT_MBX);
     if (wkc != 1)
-        ec_log(__func__, "receive mailbox failed\n");
+        ec_log(10, __func__, "receive mailbox failed\n");
     
     if (read_buf->coe_hdr.service == EC_COE_SDOINFO) {
         if (read_buf->sdo_info_hdr.opcode == EC_COE_SDO_INFO_GET_OBJECT_DESC_RESP) {
@@ -595,13 +595,13 @@ int ec_coe_sdo_entry_desc_read(ec_t *pec, uint16_t slave, uint16_t index, uint8_
     // send request
     wkc = ec_mbx_send(pec, slave, EC_DEFAULT_TIMEOUT_MBX);
     if (wkc != 1)
-        ec_log(__func__, "send mailbox failed\n");
+        ec_log(10, __func__, "send mailbox failed\n");
 
     // wait for answer
     ec_mbx_clear(pec, slave, 1);
     wkc = ec_mbx_receive(pec, slave, EC_DEFAULT_TIMEOUT_MBX);
     if (wkc != 1)
-        ec_log(__func__, "receive mailbox failed\n");
+        ec_log(10, __func__, "receive mailbox failed\n");
     
     if (read_buf->coe_hdr.service == EC_COE_SDOINFO) {
         if (read_buf->sdo_info_hdr.opcode == EC_COE_SDO_INFO_GET_ENTRY_DESC_RESP) {
