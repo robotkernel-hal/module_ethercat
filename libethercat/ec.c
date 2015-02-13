@@ -402,6 +402,7 @@ int ec_open(ec_t **ppec, const char *ifname, int prio, int cpumask) {
     for (i = 0; i < 255; ++i) {
         idx_entry_t *entry = (idx_entry_t *)malloc(sizeof(idx_entry_t));
         entry->idx = i;
+        memset(&entry->waiter, 0, sizeof(sem_t));
         sem_init(&entry->waiter, 0, 0);
         ec_index_put(*ppec, entry);
     }
