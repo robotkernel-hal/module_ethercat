@@ -274,6 +274,7 @@ int ec_set_state(ec_t *pec, ec_state_t state) {
             for (j = 0; j < pec->pd_group_cnt; ++j) {
                 ec_pd_group_t *pd = &pec->pd_groups[j];
                 pd->pdout_len = pd->pdin_len = 0;
+                pd->wkc_expected = 0;
         
                 for (i = 0; i < pec->slave_cnt; ++i) {
                     ec_slave_t *slv = &pec->slaves[i];
@@ -283,10 +284,11 @@ int ec_set_state(ec_t *pec, ec_state_t state) {
                         continue;
 
                     for (k = start_sm; k < slv->sm_ch; ++k) {
-                        if (slv->sm[k].flags & 0x00000004)
+                        if (slv->sm[k].flags & 0x00000004) {
                             pd->pdout_len += slv->sm[k].len; // outputs
-                        else 
+                        } else  {
                             pd->pdin_len += slv->sm[k].len;  // inputs
+                        }
 
                     }
                 }
@@ -332,6 +334,7 @@ int ec_set_state(ec_t *pec, ec_state_t state) {
 
                             pdout += slv->sm[k].len;
                             log_base_out += slv->sm[k].len;
+                            pd->wkc_expected += 2;
                         } else {
                             slv->fmmu[fmmu_next].log = log_base_in;
                             slv->fmmu[fmmu_next].log_len = slv->sm[k].len;
@@ -348,6 +351,7 @@ int ec_set_state(ec_t *pec, ec_state_t state) {
 
                             pdin += slv->sm[k].len;
                             log_base_in += slv->sm[k].len;
+                            pd->wkc_expected += 1;
                         }
 
                         fmmu_next++;

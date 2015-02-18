@@ -23,8 +23,8 @@
  */
 
 
-#ifndef __SLAVE_H__
-#define __SLAVE_H__
+#ifndef __MODULE_ETHERCAT_SLAVE_H__
+#define __MODULE_ETHERCAT_SLAVE_H__
 
 #include <list>
 #include <string>
@@ -196,5 +196,5 @@ class slave {
 //! module_ethercat::
 };
 
-#endif // __SLAVE_H__ 
+#endif // __ETHERCAT_MODULE_SLAVE_H__ 
 

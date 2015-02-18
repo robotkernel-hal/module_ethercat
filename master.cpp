@@ -631,8 +631,35 @@ void master::trigger() {
             }
 
             wkc = ec_datagram_wkc(&pd->p_de->datagram);
-            if (wkc)
+            if (wkc == pd->wkc_expected)
                 memcpy(pd->pd+pd->pdout_len, ec_datagram_payload(&pd->p_de->datagram)+pd->pdout_len, pd->pdin_len);
+            else {
+                ethercat_log(module_warning, _name, "group %2d: working counter mismatch got %u, expected %u, slave_cnt %d\n",
+                        i, wkc, pd->wkc_expected, _pec->slave_cnt);
+                
+                // do something
+                int slave;
+                for (slave = 0; slave < _pec->slave_cnt; ++slave) {
+                    if (_pec->slaves[slave].assigned_pd_group != i) {
+                        ethercat_log(module_warning, _name, "group %2d, slave %2d: other group %2d\n",
+                            i, slave, _pec->slaves[slave].assigned_pd_group);
+                        continue;
+                    }
+
+                    ec_state_t state;
+                    wkc = ec_slave_state_get(_pec, slave, &state);
+
+                    if (!wkc)
+                        ethercat_log(module_warning, _name, "group %2d, slave %2d: wkc error on getting slave state\n",
+                            i, slave);
+                    else {
+                        ethercat_log(module_warning, _name, "group %2d, slave %2d: is in state 0x%04X\n",
+                            i, slave, state);
+
+                        // if state != expected_state -> repair
+                    }
+                }
+            }
 
             datagram_pool_put(_pec->pool, pd->p_de);
             ec_index_put(_pec, pd->p_idx);

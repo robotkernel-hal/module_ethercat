@@ -86,6 +86,8 @@ typedef struct PACKED ec_pd_group {
     uint8_t *pd;
     size_t   pdout_len;
     size_t   pdin_len;
+
+    uint16_t wkc_expected;
     
     datagram_entry_t *p_de;
     idx_entry_t *p_idx;

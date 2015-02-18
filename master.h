@@ -41,6 +41,7 @@
 extern "C" {
 #endif
 #include "libethercat/ec.h"
+#include "libethercat/slave.h"
 #include "libethercat/coe.h"
 #include "libethercat/mbx.h"
 #include "libethercat/dc.h"
