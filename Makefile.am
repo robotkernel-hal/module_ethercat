@@ -10,6 +10,7 @@ libmodule_ethercat_la_SOURCES  = module_ethercat.cpp \
 								 libethercat/slave.c \
 								 libethercat/datagram.c \
 								 libethercat/datagram_pool.c \
+								 libethercat/message_pool.c \
 								 libethercat/ec.c \
 								 libethercat/hw.c \
 								 libethercat/mbx.c \
@@ -20,7 +21,7 @@ libmodule_ethercat_la_SOURCES  = module_ethercat.cpp \
 libmodule_ethercat_la_CXXFLAGS = -Wall \
 								 -I$(top_srcdir)/kernel/source \
 								 -I$(top_srcdir)/src \
-								 -I$(top_srcdir)/libethercat \
+								 -I$(top_srcdir)/libethercat/include \
 								 -I$(top_builddir)\
 								 @ROBOTKERNEL_CFLAGS@ \
 								 @INTERFACE_MEMORY_INSPECTION_CFLAGS@ \
@@ -30,7 +31,7 @@ libmodule_ethercat_la_CFLAGS   = -std=gnu99 \
 								 -Wall \
 								 -I$(top_srcdir)/kernel/source \
 								 -I$(top_srcdir)/src \
-								 -I$(top_srcdir)/libethercat \
+								 -I$(top_srcdir)/libethercat/include \
 								 -I$(top_builddir) \
 								 @ROBOTKERNEL_CFLAGS@ \
 								 @INTERFACE_MEMORY_INSPECTION_CFLAGS@ \

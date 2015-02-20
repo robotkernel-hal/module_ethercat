@@ -22,7 +22,6 @@
  * along with robotkernel.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-
 #ifndef __MODULE_ETHERCAT_SLAVE_H__
 #define __MODULE_ETHERCAT_SLAVE_H__
 
