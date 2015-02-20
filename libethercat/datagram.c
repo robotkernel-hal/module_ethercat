@@ -25,8 +25,8 @@
 
 #include <string.h>
 
-#include "datagram.h"
-#include "datagram_pool.h"
+#include "libethercat/datagram.h"
+#include "libethercat/datagram_pool.h"
 
 //! initialize empty frame
 /*/

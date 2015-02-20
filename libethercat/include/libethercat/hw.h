@@ -23,13 +23,13 @@
  * If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __HW_H__
-#define __HW_H__
+#ifndef __LIBETHERCAT_HW_H__
+#define __LIBETHERCAT_HW_H__
 
 #include <pthread.h>
 
-#include "datagram_pool.h"
-#include "datagram.h"
+#include "libethercat/datagram_pool.h"
+#include "libethercat/datagram.h"
 
 typedef struct hw {
     int sockfd;     //!< raw socket file descriptor
@@ -70,5 +70,5 @@ int hw_close(hw_t *phw);
  */
 int hw_tx(hw_t *phw);
 
-#endif // __HW_H__
+#endif // __LIBETHERCAT_HW_H__
 

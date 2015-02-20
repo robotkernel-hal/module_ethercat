@@ -23,8 +23,8 @@
  * If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "eeprom.h"
-#include "ec.h"
+#include "libethercat/eeprom.h"
+#include "libethercat/ec.h"
 
 #include <string.h>
 

@@ -23,9 +23,9 @@
  * If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "dc.h"
-#include "hw.h"
-#include "ec.h"
+#include "libethercat/dc.h"
+#include "libethercat/hw.h"
+#include "libethercat/ec.h"
 
 /** 1st sync pulse delay in ns here 100ms */
 #define SYNC_DELAY       ((int32_t)100000000)

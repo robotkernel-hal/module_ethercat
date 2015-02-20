@@ -23,8 +23,8 @@
  * If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __DATAGRAM_H__
-#define __DATAGRAM_H__
+#ifndef __LIBETHERCAT_DATAGRAM_H__
+#define __LIBETHERCAT_DATAGRAM_H__
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -113,5 +113,5 @@ int ec_frame_add_datagram_log(ec_frame_t *frame, uint8_t cmd, uint8_t idx,
 #define ec_datagram_payload(p)    ((uint8_t *)(p) + sizeof(ec_datagram_t))
 #define ec_datagram_wkc(p)        (*(uint16_t *)((uint8_t *)(p) + ec_datagram_length(p) - 2))
 
-#endif /* __DATAGRAM_H__ */
+#endif /* __LIBETHERCAT_DATAGRAM_H__ */
 

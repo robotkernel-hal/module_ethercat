@@ -29,10 +29,11 @@
 #include <math.h>
 #include <stdarg.h>
 
-#include "ec.h"
-#include "slave.h"
-#include "mbx.h"
-#include "coe.h"
+#include "libethercat/ec.h"
+#include "libethercat/slave.h"
+#include "libethercat/mbx.h"
+#include "libethercat/coe.h"
+#include "libethercat/dc.h"
 
 void *ec_log_func_user = NULL;
 void (*ec_log_func)(int lvl, void *user, const char *format, ...) = NULL;
@@ -59,7 +60,7 @@ void ec_log(int lvl, const char *pre, const char *format, ...) {
 }
 
 
-int ec_slave_state_get(ec_t *pec, uint16_t slave, ec_state_t *state);
+int ec_state_get_state(ec_t *pec, uint16_t slave, ec_state_t *state);
 
 int ec_master_state_set(ec_t *pec, ec_state_t state) {
     uint16_t wkc = 0;
@@ -385,6 +386,29 @@ void *ec_tx_thread(void *arg) {
 
     return 0;
 }
+
+//! execute async request
+//void ec_exec_async(ec_t *pec, ec_async_message_id_t id, void *payload) {
+//    message_entry_t *msg;
+//    pthread_mutex_lock(&pec->msgs->_pool_lock);
+//
+//    TAILQ_FOREACH(msg, &pec->msgs->avail, qh)
+//        if ((msg->message.id == id) &&
+//                (msg->message.payload.ptr == payload)) {
+//            pthread_mutex_unlock(&pec->msgs->_pool_lock);
+//            return;
+//        }
+//
+//    pthread_mutex_unlock(&pec->msgs->_pool_lock);
+//    ret = message_pool_get(pec->msg_pool, &msg, NULL);
+//
+//    if (ret == 0) {
+//        msg->message.id = id;
+//        msg->message.payload.ptr = payload;
+//
+//        message_pool_put(pec->msgs, msg);
+//    }
+//}
     
 //! open ethercat master
 /*!
@@ -421,7 +445,9 @@ int ec_open(ec_t **ppec, const char *ifname, int prio, int cpumask) {
     (*ppec)->dc.have_dc = 0;
 
     datagram_pool_open(&(*ppec)->pool, 1000);
+        
     hw_open(&(*ppec)->phw, ifname, prio, cpumask);
+    ec_async_message_loop_create(&(*ppec)->async_loop, (*ppec));
 
     return 0;
 }
@@ -432,6 +458,7 @@ int ec_open(ec_t **ppec, const char *ifname, int prio, int cpumask) {
  * \return 0 on success 
  */
 int ec_close(ec_t *pec) {
+    ec_async_message_pool_destroy(pec->async_loop);
     hw_close(pec->phw);
     datagram_pool_close(pec->pool);
 

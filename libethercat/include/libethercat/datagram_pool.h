@@ -23,15 +23,15 @@
  * If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __DATAGRAM_POOL_H__
-#define __DATAGRAM_POOL_H__
+#ifndef __LIBETHERCAT_DATAGRAM_POOL_H__
+#define __LIBETHERCAT_DATAGRAM_POOL_H__
 
 #include <sys/queue.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <semaphore.h>
 
-#include "datagram.h"
+#include "libethercat/datagram.h"
 
 typedef struct __attribute__((__packed__)) datagram_entry {
     void (*user_cb)(void *user_arg, struct datagram_entry *p);
@@ -98,5 +98,5 @@ int datagram_pool_put(datagram_pool_t *pp, datagram_entry_t *datagram);
 }
 #endif
 
-#endif // __DATAGRAM_POOL_H__
+#endif // __LIBETHERCAT_DATAGRAM_POOL_H__
 

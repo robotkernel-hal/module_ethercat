@@ -23,14 +23,14 @@
  * If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __SLAVE_H__
-#define __SLAVE_H__
+#ifndef __LIBETHERCAT_SLAVE_H__
+#define __LIBETHERCAT_SLAVE_H__
 
 #include <stdint.h>
 
-#include "common.h"
-#include "slave.h"
-#include "ec.h"
+#include "libethercat/common.h"
+#include "libethercat/slave.h"
+#include "libethercat/ec.h"
 
 typedef enum ec_state_transition {
     INIT_2_INIT      = 0x0101,
@@ -67,7 +67,7 @@ int ec_slave_set_state(struct ec *pec, uint16_t slave, ec_state_t state);
  * \param state return ethercat state
  * \return wkc
  */
-int ec_slave_state_get(struct ec *pec, uint16_t slave, ec_state_t *state);
+int ec_state_get_state(struct ec *pec, uint16_t slave, ec_state_t *state);
 
 //! generate pd mapping
 /*!
@@ -86,5 +86,5 @@ int ec_slave_generate_mapping(struct ec *pec, uint16_t slave);
  */
 int ec_slave_state_transition(struct ec *pec, uint16_t slave, ec_state_t state);
 
-#endif // __SLAVE_H__
+#endif // __LIBETHERCAT_SLAVE_H__
 

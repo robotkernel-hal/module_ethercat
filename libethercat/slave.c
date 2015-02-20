@@ -1,6 +1,31 @@
-#include "slave.h"
-#include "ec.h"
-#include "coe.h"
+//! robotkernel module ethercat slave
+/*!
+ * author: Robert Burger
+ *
+ * $Id$
+ */
+
+/*
+ * This file is part of robotkernel.
+ *
+ * robotkernel is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * robotkernel is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with robotkernel.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+#include "libethercat/slave.h"
+#include "libethercat/ec.h"
+#include "libethercat/coe.h"
+
 #include <string.h>
 
 const char transition_string_init_to_init[]     = "INIT_2_INIT";
@@ -77,9 +102,11 @@ int ec_slave_set_state(ec_t *pec, uint16_t slave, ec_state_t state) {
     if (state & EC_STATE_RESET)
         return wkc; // just return here, we did an error reset
 
+    pec->slaves[slave].expected_state = state;
+
     do {
         act_state = 0;
-        wkc = ec_slave_state_get(pec, slave, &act_state);
+        wkc = ec_state_get_state(pec, slave, &act_state);
 
         ec_log(100, "EC_STATE_SET", "slave %d, state %X, act_state %X, wkc %d\n", 
                 slave, state, act_state, wkc);
@@ -108,7 +135,7 @@ int ec_slave_set_state(ec_t *pec, uint16_t slave, ec_state_t state) {
  * \param state return ethercat state
  * \return wkc
  */
-int ec_slave_state_get(ec_t *pec, uint16_t slave, ec_state_t *state) {
+int ec_state_get_state(ec_t *pec, uint16_t slave, ec_state_t *state) {
     uint16_t wkc = 0, value = 0;
     ec_fprd(pec, pec->slaves[slave].fixed_address, 
             EC_REG_ALSTAT, &value, sizeof(value), &wkc);
@@ -249,7 +276,7 @@ int ec_slave_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
 
 
     // check error state
-    wkc = ec_slave_state_get(pec, slave, &act_state);
+    wkc = ec_state_get_state(pec, slave, &act_state);
     if (act_state & EC_STATE_ERROR) // reset error state first
         ec_slave_set_state(pec, slave, (act_state & EC_STATE_MASK) | EC_STATE_RESET);
             

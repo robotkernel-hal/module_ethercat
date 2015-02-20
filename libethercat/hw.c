@@ -26,8 +26,8 @@
 #define _GNU_SOURCE
 #include <sched.h>
 
-#include "hw.h"
-#include "ec.h"
+#include "libethercat/hw.h"
+#include "libethercat/ec.h"
 
 #include <pthread.h>
 #include <stdlib.h>

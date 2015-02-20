@@ -23,7 +23,8 @@
  * If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "datagram_pool.h"
+#include "libethercat/datagram_pool.h"
+
 #include <errno.h>
 #include <time.h>
 #include <string.h>

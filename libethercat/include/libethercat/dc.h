@@ -23,10 +23,17 @@
  * If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __DC_H__
-#define __DC_H__
+#ifndef __LIBETHERCAT_DC_H__
+#define __LIBETHERCAT_DC_H__
 
-#include "ec.h"
+#include "libethercat/ec.h"
+
+//! check all slaves if they support dc and measure delays
+/*!
+ * \param pec ethercat master pointer
+ * return supported dc
+ */
+int ec_dc_config(ec_t *pec);
 
 //! configure slave for distributed clock sync 0 pulse
 /*/
@@ -51,5 +58,5 @@ void ec_dc_sync0(ec_t *pec, uint16_t slave, int active,
 void ec_dc_sync01(ec_t *pec, uint16_t slave, int active, 
         uint32_t cycle_time_0, uint32_t cycle_time_1, uint32_t cycle_shift);
 
-#endif // __DC_H__
+#endif // __LIBETHERCAT_DC_H__
 

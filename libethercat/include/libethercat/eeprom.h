@@ -23,10 +23,10 @@
  * If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __EEPROM_H__
-#define __EEPROM_H__
+#ifndef __LIBETHERCAT_EEPROM_H__
+#define __LIBETHERCAT_EEPROM_H__
 
-#include "common.h"
+#include "libethercat/common.h"
 #include <stdlib.h>
 
 typedef struct PACKED ec_eeprom_cat_general {
@@ -180,5 +180,5 @@ void ec_eeprom_dump(struct ec *pec, uint16_t slave);
 }
 #endif
 
-#endif // __EEPROM_H__
+#endif // __LIBETHERCAT_EEPROM_H__
 

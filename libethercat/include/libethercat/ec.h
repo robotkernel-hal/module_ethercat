@@ -23,18 +23,19 @@
  * If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __EC_H__
-#define __EC_H__
+#ifndef __LIBETHERCAT_EC_H__
+#define __LIBETHERCAT_EC_H__
 
 #include <pthread.h>
 #include <stdint.h>
 
-#include "common.h"
-#include "hw.h"
-#include "regs.h"
-#include "datagram.h"
-#include "datagram_pool.h"
-#include "eeprom.h"
+#include "libethercat/common.h"
+#include "libethercat/hw.h"
+#include "libethercat/regs.h"
+#include "libethercat/datagram.h"
+#include "libethercat/datagram_pool.h"
+#include "libethercat/message_pool.h"
+#include "libethercat/eeprom.h"
 
 typedef uint16_t ec_state_t;
 #define EC_STATE_INIT        0x01
@@ -122,9 +123,9 @@ typedef struct ec_slave {
     uint16_t    ptype;              //!< ptype
     int32_t     pdelay;
     
-    int entryport;                  //!< entry port from parent slave
-    int parent;                     //!< parent slave number
-    int parentport;                 //!< port attached on parent slave 
+    int         entryport;          //!< entry port from parent slave
+    int         parent;             //!< parent slave number
+    int         parentport;         //!< port attached on parent slave 
 
     ec_slave_sm_t *sm;
     ec_slave_fmmu_t *fmmu;
@@ -140,6 +141,8 @@ typedef struct ec_slave {
 
     eeprom_info_t eeprom;
     ec_slave_dc_info_t dc;
+    
+    ec_state_t expected_state;
 } ec_slave_t;
 
 typedef struct ec_dc_info {
@@ -148,6 +151,7 @@ typedef struct ec_dc_info {
     int next;
     int prev;
 } ec_dc_info_t;
+
 
 typedef struct ec {
     hw_t *phw;
@@ -163,6 +167,8 @@ typedef struct ec {
     ec_pd_group_t *pd_groups;
 
     ec_dc_info_t dc;
+
+    ec_async_message_loop_t *async_loop;
 } ec_t;
 
 #ifdef __cplusplus
@@ -294,5 +300,5 @@ int ec_state_transition(ec_t *pec, uint16_t slave, ec_state_t state);
 #define ec_frmw(pec, ado, data, datalen, wkc) \
     ec_transceive((pec), EC_CMD_FRMW, ((uint32_t)(ado) << 16), (uint8_t *)(data), (datalen), (wkc))
 
-#endif // __EC_H__
+#endif // __LIBETHERCAT_EC_H__
 
