@@ -42,20 +42,14 @@
  * \return 0 or error code
  */
 int ec_async_message_loop_get(ec_message_pool_t *ppool,
-        ec_message_entry_t **msg, struct timespec *ts) {
+        ec_message_entry_t **msg, ec_timer_t *timeout) {
     int ret = ENOPKG;
     if (!ppool || !msg)
         return (ret = EINVAL);
 
-    if (ts) {
-        struct timespec act, end;
-        ret = clock_gettime(CLOCK_REALTIME, &act);
-        if (ret != 0)
-            perror("clock_gettime");
-
-        timespecadd(&act, ts, &end);
-
-        ret = sem_timedwait(&ppool->avail_cnt, &end);
+    if (timeout) {
+        struct timespec ts = { timeout->sec, timeout->nsec };
+        ret = sem_timedwait(&ppool->avail_cnt, &ts);
         if (ret != 0) {
             if (errno != ETIMEDOUT)
                 perror("sem_timedwait");
@@ -127,10 +121,11 @@ void *ec_async_message_loop_thread(void *arg) {
     ec_async_message_loop_t *paml = (ec_async_message_loop_t *)arg;
 
     while (paml->loop_running) {
-        struct timespec ts = { 0, 100000000 };
+        ec_timer_t timeout;
+        ec_timer_init(&timeout, 100000000 );
         ec_message_entry_t *me;
 
-        int ret = ec_async_message_loop_get(&paml->exec, &me, &ts);
+        int ret = ec_async_message_loop_get(&paml->exec, &me, &timeout);
         if (ret != 0)
             continue; // e.g. timeout
 
@@ -177,9 +172,10 @@ void ec_async_check_group(ec_async_message_loop_t *paml, uint16_t gid) {
     ec_timer_t interval = { 5, 0 }; // 5 sec min check interval
     ec_timer_add(&act, &interval, &paml->next_check_group);
 
-    struct timespec ts = { 0, 1000 };
+    ec_timer_t timeout;
+    ec_timer_init(&timeout, 1000);
     ec_message_entry_t *me;
-    int ret = ec_async_message_loop_get(&paml->avail, &me, &ts);
+    int ret = ec_async_message_loop_get(&paml->avail, &me, &timeout);
     if (ret == -1)
         return; // got no message buffer
 

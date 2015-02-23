@@ -32,6 +32,7 @@
 #include <semaphore.h>
 
 #include "libethercat/datagram.h"
+#include "libethercat/timer.h"
 
 typedef struct __attribute__((__packed__)) datagram_entry {
     void (*user_cb)(void *user_arg, struct datagram_entry *p);
@@ -73,10 +74,11 @@ int datagram_pool_close(datagram_pool_t *pp);
 /*!
  * \param pp datagram_pool handle
  * \param datagram ec datagram pointer
- * \param to timeout waiting for packet
+ * \param timeout timeout waiting for packet
  * \return 0 or negative error code
  */
-int datagram_pool_get(datagram_pool_t *pp, datagram_entry_t **datagram, struct timespec *ts);
+int datagram_pool_get(datagram_pool_t *pp, 
+        datagram_entry_t **datagram, ec_timer_t *timeout);
 
 //! get next datagram length from datagram_pool
 /*!

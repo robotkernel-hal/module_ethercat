@@ -380,8 +380,7 @@ void *ec_tx_thread(void *arg) {
 
     while (1) {
         hw_tx(pec->phw);
-        struct timespec ts = { 0, 1000000 };
-        nanosleep(&ts, NULL);
+        ec_sleep(1000000);
     }
 
     return 0;

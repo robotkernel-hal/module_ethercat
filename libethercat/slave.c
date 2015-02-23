@@ -121,8 +121,7 @@ int ec_slave_set_state(ec_t *pec, uint16_t slave, ec_state_t state) {
             break;
         }
 
-        struct timespec ts = { 0, 1000000 };
-        nanosleep(&ts, NULL);
+        ec_sleep(1000000);
     } while (act_state != state);
 
     return wkc;

@@ -529,27 +529,12 @@ static void cb_block(void *user_arg, struct datagram_entry *p) {
     sem_post(&entry->waiter);
 }
 
-#define NSEC_PER_SEC                1000000000
-#define timespec_add(a, b, result)                      \
-  do {                                                  \
-    (result)->tv_sec  = (a)->tv_sec  + (b)->tv_sec;     \
-    (result)->tv_nsec = (a)->tv_nsec + (b)->tv_nsec;    \
-    if ((result)->tv_nsec >= NSEC_PER_SEC)              \
-      {                                                 \
-        ++(result)->tv_sec;                             \
-        (result)->tv_nsec -= NSEC_PER_SEC;              \
-      }                                                 \
-  } while (0)
-
 //! module trigger callback
 void master::trigger() {
     int i = 0;
     uint16_t wkc;
-    struct timespec ts_0, ts_1, timeout;
-    clock_gettime(CLOCK_REALTIME, &ts_0);
-    ts_1.tv_sec = 0;
-    ts_1.tv_nsec = 10000000;
-    timespec_add(&ts_0, &ts_1, &timeout);
+    ec_timer_t timeout;
+    ec_timer_init(&timeout, 10000000);
     
     datagram_entry_t *p_de_dc;
     idx_entry_t *p_idx_dc;
@@ -624,7 +609,8 @@ void master::trigger() {
                 continue; 
 
             // wait for completion
-            int ret = sem_timedwait(&pd->p_idx->waiter, &timeout);
+            struct timespec ts = { timeout.sec, timeout.nsec };
+            int ret = sem_timedwait(&pd->p_idx->waiter, &ts);
             if (ret == -1) {
                 ethercat_log(module_error, _name, "sem_timedwait group id %d: %s\n", 
                         i, strerror(errno));
@@ -648,7 +634,8 @@ void master::trigger() {
         
         if (_pec->dc.have_dc) {          
             // wait for completion
-            int ret = sem_timedwait(&p_idx_dc->waiter, &timeout);
+            struct timespec ts = { timeout.sec, timeout.nsec };
+            int ret = sem_timedwait(&p_idx_dc->waiter, &ts);
             if (ret == -1) {
                 ethercat_log(module_error, _name, "sem_timedwait distributed clocks: %s\n", 
                         strerror(errno));

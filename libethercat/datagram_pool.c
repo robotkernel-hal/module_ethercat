@@ -93,23 +93,18 @@ int datagram_pool_close(datagram_pool_t *pp) {
 /*!
  * \param pp datagram_pool handle
  * \param datagram ec datagram pointer
- * \param ts timeout waiting for packet
+ * \param timeout timeout waiting for packet
  * \return 0 or negative error code
  */
-int datagram_pool_get(datagram_pool_t *pp, datagram_entry_t **datagram, struct timespec *ts) {
+int datagram_pool_get(datagram_pool_t *pp, 
+        datagram_entry_t **datagram, ec_timer_t *timeout) {
     int ret = ENOPKG;
     if (!pp || !datagram)
         return (ret = EINVAL);
 
-    if (ts) {
-        struct timespec act, end;
-        ret = clock_gettime(CLOCK_REALTIME, &act);
-        if (ret != 0)
-            perror("clock_gettime");
-
-        timespecadd(&act, ts, &end);
-
-        ret = sem_timedwait(&pp->avail_cnt, &end);
+    if (timeout) {
+        struct timespec ts = { timeout->sec, timeout->nsec };
+        ret = sem_timedwait(&pp->avail_cnt, &ts);
         if (ret != 0) {
             if (errno != ETIMEDOUT)
                 perror("sem_timedwait");

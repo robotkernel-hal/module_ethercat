@@ -31,17 +31,6 @@
 #define PACKED __attribute__((__packed__))
 #define min(a, b)  ((a) < (b) ? (a) : (b))
 
-#define timespecadd(a, b, result)                                             \
-    do {                                                                      \
-        (result)->tv_sec = (a)->tv_sec + (b)->tv_sec;                         \
-        (result)->tv_nsec = (a)->tv_nsec + (b)->tv_nsec;                      \
-        if ((result)->tv_nsec >= 1E9)                                         \
-        {                                                                     \
-            ++(result)->tv_sec;                                               \
-            (result)->tv_nsec -= 1E9;                                         \
-        }                                                                     \
-    } while (0)
-
 typedef union ec_data {
     uint8_t     bdata[1]; /* variants for easy data access */
     uint16_t    wdata[1];
