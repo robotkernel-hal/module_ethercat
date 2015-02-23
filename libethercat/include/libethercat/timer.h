@@ -40,11 +40,34 @@ typedef struct ec_timer {
     uint64_t nsec;
 } ec_timer_t;
 
+# define ec_timer_add(a, b, result)                                 \
+    do {                                                            \
+        (result)->sec = (a)->sec + (b)->sec;                        \
+        (result)->nsec = (a)->nsec + (b)->nsec;                     \
+        if ((result)->nsec >= 1E9)                                  \
+        {                                                           \
+            ++(result)->sec;                                        \
+            (result)->nsec -= 1E9;                                  \
+        }                                                           \
+    } while (0)
+
+#define ec_timer_cmp(a, b, CMP)                                     \
+    (((a)->sec == (b)->sec) ?                                       \
+     ((a)->nsec CMP (b)->nsec) :                                    \
+     ((a)->sec CMP (b)->sec))
+
 //! sleep in nanoseconds
 /*!
  * \param nsec time to sleep in nanoseconds
  */
 void ec_sleep(uint64_t nsec);
+
+//! gets timer 
+/*!
+ * \param timer pointer to timer struct
+ * \return 0 on success, -1 on error and errno set
+ */
+int ec_timer_gettime(ec_timer_t *timer);
 
 //! initialize timer with timeout 
 /*!

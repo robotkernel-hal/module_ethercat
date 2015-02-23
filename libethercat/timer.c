@@ -58,6 +58,24 @@ void ec_sleep(uint64_t nsec) {
     }
 }
 
+//! gets timer 
+/*!
+ * \param timer pointer to timer struct
+ * \return 0 on success, -1 on error and errno set
+ */
+int ec_timer_gettime(ec_timer_t *timer) {
+    struct timespec ts;
+    if (clock_gettime(CLOCK_MONOTONIC, &ts) == -1) {
+        perror("clock_gettime");
+        return -1;
+    }
+
+    timer->sec = ts.tv_sec;
+    timer->nsec = ts.tv_nsec;
+
+    return 0;
+}
+
 //! initialize timer with timeout 
 /*!
  * \parma timer pointer to timer to initialize
