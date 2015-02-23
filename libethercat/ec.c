@@ -387,29 +387,6 @@ void *ec_tx_thread(void *arg) {
     return 0;
 }
 
-//! execute async request
-//void ec_exec_async(ec_t *pec, ec_async_message_id_t id, void *payload) {
-//    message_entry_t *msg;
-//    pthread_mutex_lock(&pec->msgs->_pool_lock);
-//
-//    TAILQ_FOREACH(msg, &pec->msgs->avail, qh)
-//        if ((msg->message.id == id) &&
-//                (msg->message.payload.ptr == payload)) {
-//            pthread_mutex_unlock(&pec->msgs->_pool_lock);
-//            return;
-//        }
-//
-//    pthread_mutex_unlock(&pec->msgs->_pool_lock);
-//    ret = message_pool_get(pec->msg_pool, &msg, NULL);
-//
-//    if (ret == 0) {
-//        msg->message.id = id;
-//        msg->message.payload.ptr = payload;
-//
-//        message_pool_put(pec->msgs, msg);
-//    }
-//}
-    
 //! open ethercat master
 /*!
  * \param ppec return value for ethercat master pointer

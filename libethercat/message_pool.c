@@ -24,6 +24,7 @@
  */
 
 #include "libethercat/ec.h"
+#include "libethercat/slave.h"
 #include "libethercat/message_pool.h"
 
 #include <errno.h>
@@ -32,17 +33,6 @@
 #include <stdio.h>
 #include <pthread.h>
 
-
-# define timespecadd(a, b, result)                                            \
-  do {                                                                        \
-    (result)->tv_sec = (a)->tv_sec + (b)->tv_sec;                             \
-    (result)->tv_nsec = (a)->tv_nsec + (b)->tv_nsec;                          \
-    if ((result)->tv_nsec >= 1E9)                                             \
-      {                                                                       \
-        ++(result)->tv_sec;                                                   \
-        (result)->tv_nsec -= 1E9;                                             \
-      }                                                                       \
-  } while (0)
 
 //! get a message from a message pool
 /*!
@@ -110,6 +100,29 @@ int ec_async_message_loop_put(ec_message_pool_t *ppool,
     return 0;
 }
 
+//! check slave expected state 
+/*/
+ * \param paml pointer to async message loop struct
+ * \param slave slave number to check
+ */
+void ec_async_checK_slave(ec_async_message_loop_t *paml, uint16_t slave) {
+    ec_state_t state;
+    int wkc = ec_state_get_state(paml->pec, slave, &state);
+
+    if (!wkc)
+        ec_log(100, "ec_async_thread", "slave %2d: wkc error on "
+                "getting slave state\n", slave);
+    else {
+        ec_log(100, "ec_async_thread", "slave %2d: is "
+                "in state 0x%04X\n", slave, state);
+
+        // if state != expected_state -> repair
+        if (state != paml->pec->slaves[slave].expected_state) {
+            wkc = ec_slave_state_transition(paml->pec, slave, paml->pec->slaves[slave].expected_state);
+        }
+    }
+}
+
 void *ec_async_message_loop_thread(void *arg) {
     ec_async_message_loop_t *paml = (ec_async_message_loop_t *)arg;
 
@@ -128,31 +141,18 @@ void *ec_async_message_loop_thread(void *arg) {
                 // do something
                 int slave;
                 for (slave = 0; slave < paml->pec->slave_cnt; ++slave) {
-                    if (paml->pec->slaves[slave].assigned_pd_group != me->msg.payload.g_s_id) {
+                    if (paml->pec->slaves[slave].assigned_pd_group != me->msg.payload.group_id) {
                         ec_log(100, "ec_async_thread", "group %2d, slave %2d: other group %2d\n",
-                            me->msg.payload.g_s_id, slave, paml->pec->slaves[slave].assigned_pd_group);
+                            me->msg.payload.group_id, slave, paml->pec->slaves[slave].assigned_pd_group);
                         continue;
                     }
 
-                    ec_state_t state;
-                    int wkc = ec_state_get_state(paml->pec, slave, &state);
-
-                    if (!wkc)
-                        ec_log(100, "ec_async_thread", "group %2d, slave %2d: wkc error on getting slave state\n",
-                            me->msg.payload.g_s_id, slave);
-                    else {
-                        ec_log(100, "ec_async_thread", "group %2d, slave %2d: is in state 0x%04X\n",
-                            me->msg.payload.g_s_id, slave, state);
-
-                        // if state != expected_state -> repair
-                        if (state != paml->pec->slaves[slave].expected_state) {
-                            wkc = ec_slave_state_transition(paml->pec, slave, paml->pec->slaves[slave].expected_state);
-                        }
-                    }
+                    ec_async_checK_slave(paml, slave);
                 }
                 break;
             }
             case EC_MSG_CHECK_SLAVE:
+                ec_async_checK_slave(paml, me->msg.payload.slave_id);
                 break;
         };
 
@@ -161,6 +161,31 @@ void *ec_async_message_loop_thread(void *arg) {
     }
 
     return NULL;
+}
+
+//! execute asynchronous check group
+/*!
+ * \param paml handle to async message loop
+ * \param gid group id to check
+ */
+void ec_async_check_group(ec_async_message_loop_t *paml, uint16_t gid) {
+    ec_timer_t act;
+    ec_timer_gettime(&act);
+    if (ec_timer_cmp(&act, &paml->next_check_group, <))
+        return; // no need to check now
+
+    ec_timer_t interval = { 5, 0 }; // 5 sec min check interval
+    ec_timer_add(&act, &interval, &paml->next_check_group);
+
+    struct timespec ts = { 0, 1000 };
+    ec_message_entry_t *me;
+    int ret = ec_async_message_loop_get(&paml->avail, &me, &ts);
+    if (ret == -1)
+        return; // got no message buffer
+
+    me->msg.id = EC_MSG_CHECK_GROUP;
+    me->msg.payload.group_id = gid;
+    ec_async_message_loop_put(&paml->exec, me);
 }
 
 //! creates a new async message loop

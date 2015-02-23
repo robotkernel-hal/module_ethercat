@@ -636,7 +636,7 @@ void master::trigger() {
             else {
                 ethercat_log(module_warning, _name, "group %2d: working counter mismatch got %u, expected %u, slave_cnt %d\n",
                         i, wkc, pd->wkc_expected, _pec->slave_cnt);
-//                ec_exec_async(_pec, EC_MSG_CHECK_GROUP, (void *)i);
+                ec_async_check_group(_pec->async_loop, i);
             }
 
             datagram_pool_put(_pec->pool, pd->p_de);

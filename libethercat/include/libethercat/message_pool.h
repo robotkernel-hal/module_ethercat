@@ -31,6 +31,8 @@
 #include <stdint.h>
 #include <semaphore.h>
 
+#include "libethercat/timer.h"
+
 struct ec;
 
 typedef enum {
@@ -40,7 +42,8 @@ typedef enum {
     
 typedef union ec_async_message_payload {
     void *ptr;
-    uint32_t g_s_id;
+    uint32_t group_id;
+    uint32_t slave_id;
 } ec_async_message_payload_t;
 
 typedef struct ec_message {
@@ -70,6 +73,8 @@ typedef struct ec_async_message_loop {
     int loop_running;               //! loop thread run flag
     pthread_t loop_tid;             //! loop thread id
     struct ec *pec;                 //! ethercat master pointer
+
+    ec_timer_t next_check_group;
 } ec_async_message_loop_t;
 
 #ifdef __cplusplus
@@ -92,6 +97,13 @@ int ec_async_message_loop_create(ec_async_message_loop_t **ppaml, struct ec *pec
  * \return 0 or error code
  */
 int ec_async_message_pool_destroy(ec_async_message_loop_t *paml);
+
+//! execute asynchronous check group
+/*!
+ * \param paml handle to async message loop
+ * \param gid group id to check
+ */
+void ec_async_check_group(ec_async_message_loop_t *paml, uint16_t gid);
 
 #ifdef __cplusplus
 }

@@ -24,6 +24,7 @@
  */
 
 #include "libethercat/datagram_pool.h"
+#include "libethercat/common.h"
 
 #include <errno.h>
 #include <time.h>
@@ -87,17 +88,6 @@ int datagram_pool_close(datagram_pool_t *pp) {
     
     return 0;
 }
-
-# define timespecadd(a, b, result)                                            \
-  do {                                                                        \
-    (result)->tv_sec = (a)->tv_sec + (b)->tv_sec;                             \
-    (result)->tv_nsec = (a)->tv_nsec + (b)->tv_nsec;                          \
-    if ((result)->tv_nsec >= 1E9)                                             \
-      {                                                                       \
-        ++(result)->tv_sec;                                                   \
-        (result)->tv_nsec -= 1E9;                                             \
-      }                                                                       \
-  } while (0)
 
 //! get a datagram from datagram_pool
 /*!
