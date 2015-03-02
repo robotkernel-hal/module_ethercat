@@ -33,6 +33,7 @@
 
 typedef struct hw {
     int sockfd;     //!< raw socket file descriptor
+    int mtu_size;
 
     //! receiver thread settings
     pthread_t    rxthread;

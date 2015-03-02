@@ -99,6 +99,12 @@ int hw_open(hw_t **pphw, const char *devname, int prio, int cpumask) {
     ioctl((*pphw)->sockfd, SIOCGIFFLAGS, &ifr);
     ifr.ifr_flags = ifr.ifr_flags | IFF_PROMISC | IFF_BROADCAST;
     ioctl((*pphw)->sockfd, SIOCSIFFLAGS, &ifr);
+    
+    memset(&ifr, 0, sizeof(ifr));
+    strncpy(ifr.ifr_name, devname, sizeof(ifr.ifr_name));
+    ioctl((*pphw)->sockfd, SIOCGIFMTU, &ifr);
+    (*pphw)->mtu_size = ifr.ifr_mtu;
+    ec_log(5, "hw_open", "got mtu size %d\n", (*pphw)->mtu_size);
 
     // bind socket to protocol, in this case RAW EtherCAT */
     sll.sll_family = AF_PACKET;
@@ -243,7 +249,7 @@ int hw_tx(hw_t *phw) {
 
         datagram_pool_get_next_len(pools[pool_idx], &len);
 
-        if (((len == 0) && (pool_idx == 1)) || ((pframe->len + len) >= ETH_FRAME_LEN)) {
+        if (((len == 0) && (pool_idx == 1)) || ((pframe->len + len) > phw->mtu_size)) { //ETH_FRAME_LEN)) {
             if (pframe->len == sizeof(ec_frame_t))
                 break; // nothing to send
 

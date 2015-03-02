@@ -166,10 +166,11 @@ void *ec_async_message_loop_thread(void *arg) {
 void ec_async_check_group(ec_async_message_loop_t *paml, uint16_t gid) {
     ec_timer_t act;
     ec_timer_gettime(&act);
-    if (ec_timer_cmp(&act, &paml->next_check_group, <))
+    if (ec_timer_cmp(&act, &paml->next_check_group, <)) {
         return; // no need to check now
+    }
 
-    ec_timer_t interval = { 5, 0 }; // 5 sec min check interval
+    ec_timer_t interval = { 5, 0 };
     ec_timer_add(&act, &interval, &paml->next_check_group);
 
     ec_timer_t timeout;
@@ -182,6 +183,8 @@ void ec_async_check_group(ec_async_message_loop_t *paml, uint16_t gid) {
     me->msg.id = EC_MSG_CHECK_GROUP;
     me->msg.payload.group_id = gid;
     ec_async_message_loop_put(&paml->exec, me);
+    
+    ec_log(5, "ec_async_check_group", "scheduled for group %d\n", gid);
 }
 
 //! creates a new async message loop
@@ -223,6 +226,7 @@ int ec_async_message_loop_create(ec_async_message_loop_t **ppaml, ec_t *pec) {
 
     (*ppaml)->pec = pec;
     (*ppaml)->loop_running = 1;
+    ec_timer_gettime(&(*ppaml)->next_check_group);
     pthread_create(&(*ppaml)->loop_tid, NULL, ec_async_message_loop_thread, (*ppaml));
 
     return 0;

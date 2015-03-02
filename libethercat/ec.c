@@ -494,15 +494,19 @@ pthread_mutex_t idx_lock = PTHREAD_MUTEX_INITIALIZER;
 int ec_index_get(ec_t *pec, struct idx_entry **entry) {
     int ret = -1;
 
-//    pthread_mutex_lock(&idx_lock);
+    pthread_mutex_lock(&idx_lock);
 
     *entry = (idx_entry_t *)TAILQ_FIRST(&pec->idx);
     if (*entry) {
         TAILQ_REMOVE(&pec->idx, *entry, qh);
         ret = 0;
-    }
     
-//    pthread_mutex_unlock(&idx_lock);
+        while (sem_trywait(&(*entry)->waiter) == 0)
+            ;
+    }
+
+    
+    pthread_mutex_unlock(&idx_lock);
 
     return ret;
 }
@@ -517,9 +521,9 @@ int ec_index_put(ec_t *pec, struct idx_entry *entry) {
     if (!pec || !entry)
         return -1;
 
-//    pthread_mutex_lock(&idx_lock);
+    pthread_mutex_lock(&idx_lock);
     TAILQ_INSERT_TAIL(&pec->idx, entry, qh);
-//    pthread_mutex_unlock(&idx_lock);
+    pthread_mutex_unlock(&idx_lock);
 
     return 0;
 }
@@ -572,7 +576,9 @@ int ec_transceive(ec_t *pec, uint8_t cmd, uint32_t adr,
         hw_tx(pec->phw);
 
     // wait for completion
-    sem_wait(&p_idx->waiter);
+    int ret = sem_wait(&p_idx->waiter);
+    if (ret == -1)
+        ec_log(1, "ec_transceive", "sem_wait returned: %s\n", strerror(errno));
 
     *wkc = ec_datagram_wkc(&p_de->datagram);
     if (*wkc)

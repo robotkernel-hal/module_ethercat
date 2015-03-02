@@ -614,15 +614,15 @@ void master::trigger() {
             if (ret == -1) {
                 ethercat_log(module_error, _name, "sem_timedwait group id %d: %s\n", 
                         i, strerror(errno));
-            }
-
-            wkc = ec_datagram_wkc(&pd->p_de->datagram);
-            if (wkc == pd->wkc_expected)
-                memcpy(pd->pd+pd->pdout_len, ec_datagram_payload(&pd->p_de->datagram)+pd->pdout_len, pd->pdin_len);
-            else {
-                ethercat_log(module_warning, _name, "group %2d: working counter mismatch got %u, expected %u, slave_cnt %d\n",
-                        i, wkc, pd->wkc_expected, _pec->slave_cnt);
-                ec_async_check_group(_pec->async_loop, i);
+            } else {
+                wkc = ec_datagram_wkc(&pd->p_de->datagram);
+                if (wkc == pd->wkc_expected)
+                    memcpy(pd->pd+pd->pdout_len, ec_datagram_payload(&pd->p_de->datagram)+pd->pdout_len, pd->pdin_len);
+                else {
+                    ethercat_log(module_warning, _name, "group %2d: working counter mismatch got %u, expected %u, slave_cnt %d\n",
+                            i, wkc, pd->wkc_expected, _pec->slave_cnt);
+                    ec_async_check_group(_pec->async_loop, i);
+                }
             }
 
             datagram_pool_put(_pec->pool, pd->p_de);
@@ -639,12 +639,12 @@ void master::trigger() {
             if (ret == -1) {
                 ethercat_log(module_error, _name, "sem_timedwait distributed clocks: %s\n", 
                         strerror(errno));
+            } else {
+                wkc = ec_datagram_wkc(&p_de_dc->datagram);
+                uint64_t dc_time = 0;
+                if (wkc)
+                    memcpy(&dc_time, ec_datagram_payload(&p_de_dc->datagram), 8);
             }
-
-            wkc = ec_datagram_wkc(&p_de_dc->datagram);
-            uint64_t dc_time = 0;
-            if (wkc)
-                memcpy(&dc_time, ec_datagram_payload(&p_de_dc->datagram), 8);
 
             datagram_pool_put(_pec->pool, p_de_dc);
             ec_index_put(_pec, p_idx_dc);
