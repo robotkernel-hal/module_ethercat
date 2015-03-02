@@ -106,7 +106,7 @@ int ec_slave_set_state(ec_t *pec, uint16_t slave, ec_state_t state) {
 
     do {
         act_state = 0;
-        wkc = ec_state_get_state(pec, slave, &act_state);
+        wkc = ec_slave_get_state(pec, slave, &act_state);
 
         ec_log(100, "EC_STATE_SET", "slave %d, state %X, act_state %X, wkc %d\n", 
                 slave, state, act_state, wkc);
@@ -134,7 +134,7 @@ int ec_slave_set_state(ec_t *pec, uint16_t slave, ec_state_t state) {
  * \param state return ethercat state
  * \return wkc
  */
-int ec_state_get_state(ec_t *pec, uint16_t slave, ec_state_t *state) {
+int ec_slave_get_state(ec_t *pec, uint16_t slave, ec_state_t *state) {
     uint16_t wkc = 0, value = 0;
     ec_fprd(pec, pec->slaves[slave].fixed_address, 
             EC_REG_ALSTAT, &value, sizeof(value), &wkc);
@@ -267,15 +267,8 @@ int ec_slave_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
     ec_fprd(pec, pec->slaves[slave].fixed_address, (reg), (buf), (buflen), &wkc); \
     if (!wkc) ec_log(10, __func__, "reading reg 0x%X : no answer from slave %d\n", slave); }
 
-#define free_resource(a) \
-            if ((a)) { \
-                free((a)); \
-                (a) = NULL; \
-            }
-
-
     // check error state
-    wkc = ec_state_get_state(pec, slave, &act_state);
+    wkc = ec_slave_get_state(pec, slave, &act_state);
     if (act_state & EC_STATE_ERROR) // reset error state first
         ec_slave_set_state(pec, slave, (act_state & EC_STATE_MASK) | EC_STATE_RESET);
             
@@ -299,18 +292,16 @@ int ec_slave_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
                 slv->sm[1].len = slv->eeprom.mbx_send_size;
                 slv->sm[1].flags = 0x00010022;
                 slv->mbx_read.sm_nr = 1;
-                if (slv->mbx_read.buf) free(slv->mbx_read.buf);
-                slv->mbx_read.buf = malloc(slv->sm[1].len);
-                memset(slv->mbx_read.buf, 0, slv->sm[1].len);
+                free_resource(slv->mbx_read.buf);
+                alloc_resource(slv->mbx_read.buf, uint8_t, slv->sm[1].len);
 
                 // write mailbox
                 slv->sm[0].adr = slv->eeprom.mbx_receive_offset;
                 slv->sm[0].len = slv->eeprom.mbx_receive_size;
                 slv->sm[0].flags = 0x00010026;
                 slv->mbx_write.sm_nr = 0;
-                if (slv->mbx_write.buf) free(slv->mbx_write.buf);
-                slv->mbx_write.buf = malloc(slv->sm[0].len);
-                memset(slv->mbx_write.buf, 0, slv->sm[0].len);
+                free_resource(slv->mbx_write.buf);
+                alloc_resource(slv->mbx_write.buf, uint8_t, slv->sm[0].len);
 
                 for (int sm_idx = 0; sm_idx < 2; ++sm_idx) {
                     ec_log(10, get_transition_string(transition), "slave %2d: sm%d, adr 0x%04X, len %3d, flags 0x%08X\n",
@@ -324,9 +315,6 @@ int ec_slave_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
             
             // write state to slave
             wkc = ec_slave_set_state(pec, slave, EC_STATE_PREOP);
-
-            // check sm settings
-//            ec_slave_generate_mapping(pec, slave);
 
             if (transition == INIT_2_PREOP)
                 break;
@@ -404,9 +392,7 @@ int ec_slave_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
             ec_reg_read(EC_REG_ESCSUP, &slv->features, sizeof(slv->features));
 
             if (slv->sm_ch) {
-                slv->sm = (ec_slave_sm_t *)malloc(
-                        slv->sm_ch * sizeof(ec_slave_sm_t));
-                memset(slv->sm, 0, slv->sm_ch * sizeof(ec_slave_sm_t));
+                alloc_resource(slv->sm, ec_slave_sm_t, slv->sm_ch * sizeof(ec_slave_sm_t));
 
                 for (int i = 0; i < slv->sm_ch; ++i) 
                     ec_transmit_no_reply(pec, EC_CMD_FPWR, 
@@ -415,9 +401,7 @@ int ec_slave_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
             }
                         
             if (slv->fmmu_ch) {
-                slv->fmmu = (ec_slave_fmmu_t *)malloc(
-                        slv->fmmu_ch * sizeof(ec_slave_fmmu_t));
-                memset(slv->fmmu, 0, slv->fmmu_ch * sizeof(ec_slave_fmmu_t));
+                alloc_resource(slv->fmmu, ec_slave_fmmu_t, slv->fmmu_ch * sizeof(ec_slave_fmmu_t));
 
                 for (int i = 0; i < slv->fmmu_ch; ++i) 
                     ec_transmit_no_reply(pec, EC_CMD_FPWR, 

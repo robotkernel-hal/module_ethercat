@@ -59,9 +59,6 @@ void ec_log(int lvl, const char *pre, const char *format, ...) {
     }
 }
 
-
-int ec_state_get_state(ec_t *pec, uint16_t slave, ec_state_t *state);
-
 int ec_master_state_set(ec_t *pec, ec_state_t state) {
     uint16_t wkc = 0;
     uint16_t value = (uint16_t)state;
@@ -86,8 +83,7 @@ int ec_create_pd_groups(ec_t *pec, int pd_group_cnt) {
     int i;
     ec_destroy_pd_groups(pec);
 
-    pec->pd_group_cnt = pd_group_cnt;
-    pec->pd_groups = (ec_pd_group_t *)malloc(sizeof(ec_pd_group_t) * pd_group_cnt);
+    alloc_resource(pec->pd_groups, ec_pd_group_t, sizeof(ec_pd_group_t) * pd_group_cnt);
     for (i = 0; i < pec->pd_group_cnt; ++i) {
         pec->pd_groups[i].log = 0x10000 * (i+1);
         pec->pd_groups[i].log_len = 0;
@@ -109,8 +105,7 @@ int ec_destroy_pd_groups(ec_t *pec) {
 
     if (pec->pd_groups) {
         for (i = 0; i < pec->pd_group_cnt; ++i)
-            if (pec->pd_groups[i].pd)
-                free(pec->pd_groups[i].pd);
+            free_resource(pec->pd_groups[i].pd);
         free(pec->pd_groups);
     }
 
@@ -162,14 +157,12 @@ int ec_set_state(ec_t *pec, ec_state_t state) {
                 ec_slave_state_transition(pec, i, state);
 
             pec->slave_cnt = 0;
-            if (pec->slaves)
-                free(pec->slaves);
+            free_resource(pec->slaves);
 
             // allocating slave structures
             ret = ec_brd(pec, EC_REG_TYPE, (uint8_t *)&val, sizeof(val), &wkc); 
             pec->slave_cnt = wkc;
-            pec->slaves = (ec_slave_t *)malloc(pec->slave_cnt * sizeof(ec_slave_t));
-            memset(pec->slaves, 0, pec->slave_cnt * sizeof(ec_slave_t));    
+            alloc_resource(pec->slaves, ec_slave_t, pec->slave_cnt * sizeof(ec_slave_t));
 
             for (i = 0; i < 65536; ++i) {
                 int auto_inc = -1 * i;
@@ -410,6 +403,8 @@ int ec_open(ec_t **ppec, const char *ifname, int prio, int cpumask) {
         sem_init(&entry->waiter, 0, 0);
         ec_index_put(*ppec, entry);
     }
+
+    pthread_mutex_init(&(*ppec)->idx_lock, NULL);
     
     (*ppec)->phw = NULL;
     (*ppec)->slave_cnt = 0;
@@ -459,12 +454,6 @@ int ec_close(ec_t *pec) {
                 free(slv->eeprom.strings);
             }
 
-#define free_resource(a) \
-            if ((a)) { \
-                free((a)); \
-                (a) = NULL; \
-            }
-
             free_resource(slv->eeprom.sms);
             free_resource(slv->eeprom.fmmus);
             free_resource(slv->eeprom.txpdos);
@@ -478,12 +467,12 @@ int ec_close(ec_t *pec) {
         free(pec->slaves);
     }
 
+    pthread_mutex_destroy(&pec->idx_lock);
+
     free(pec);
 
     return 0;
 }
-
-pthread_mutex_t idx_lock = PTHREAD_MUTEX_INITIALIZER; 
 
 //! get next free index entry
 /*!
@@ -494,7 +483,7 @@ pthread_mutex_t idx_lock = PTHREAD_MUTEX_INITIALIZER;
 int ec_index_get(ec_t *pec, struct idx_entry **entry) {
     int ret = -1;
 
-    pthread_mutex_lock(&idx_lock);
+    pthread_mutex_lock(&pec->idx_lock);
 
     *entry = (idx_entry_t *)TAILQ_FIRST(&pec->idx);
     if (*entry) {
@@ -506,7 +495,7 @@ int ec_index_get(ec_t *pec, struct idx_entry **entry) {
     }
 
     
-    pthread_mutex_unlock(&idx_lock);
+    pthread_mutex_unlock(&pec->idx_lock);
 
     return ret;
 }
@@ -521,9 +510,9 @@ int ec_index_put(ec_t *pec, struct idx_entry *entry) {
     if (!pec || !entry)
         return -1;
 
-    pthread_mutex_lock(&idx_lock);
+    pthread_mutex_lock(&pec->idx_lock);
     TAILQ_INSERT_TAIL(&pec->idx, entry, qh);
-    pthread_mutex_unlock(&idx_lock);
+    pthread_mutex_unlock(&pec->idx_lock);
 
     return 0;
 }
@@ -638,6 +627,75 @@ int ec_transmit_no_reply(ec_t *pec, uint8_t cmd, uint32_t adr,
     // send frame immediately if in sync mode
     if (pec->tx_sync)
         hw_tx(pec->phw);
+
+    return 0;
+}
+
+//! send process data for specific group with logical commands
+/*!
+ * \param pec ethercat master pointer
+ * \param group group number
+ * \return 0 on success
+ */
+int ec_send_process_data_group(ec_t *pec, int group) {
+    ec_pd_group_t *pd = &pec->pd_groups[group];
+
+    if (ec_index_get(pec, &pd->p_idx) != 0) 
+        return -1;
+
+    if (datagram_pool_get(pec->pool, &pd->p_de, NULL) != 0) {
+        ec_index_put(pec, pd->p_idx);
+        return -1;
+    }
+
+    memset(&pd->p_de->datagram, 0, sizeof(ec_datagram_t) + pd->log_len + 2);
+    pd->p_de->datagram.cmd = EC_CMD_LRW;
+    pd->p_de->datagram.idx = pd->p_idx->idx;
+    pd->p_de->datagram.adr = pd->log;
+    pd->p_de->datagram.len = pd->log_len;
+    pd->p_de->datagram.irq = 0;
+    memcpy(ec_datagram_payload(&pd->p_de->datagram), pd->pd, pd->pdout_len);
+
+    pd->p_de->user_cb = cb_block;
+    pd->p_de->user_arg = pd->p_idx;
+
+    // queue frame and trigger tx
+    datagram_pool_put(pec->phw->tx_high, pd->p_de);
+
+    return 0;
+}
+
+//! receive process data for specific group with logical commands
+/*!
+ * \param pec ethercat master pointer
+ * \param group group number
+ * \param timeout for waiting for packet
+ * \return 0 on success
+ */
+int ec_receive_process_data_group(ec_t *pec, int group, ec_timer_t *timeout) {
+    uint16_t wkc = 0;
+    ec_pd_group_t *pd = &pec->pd_groups[group];
+    
+    // wait for completion
+    struct timespec ts = { timeout->sec, timeout->nsec };
+    int ret = sem_timedwait(&pd->p_idx->waiter, &ts);
+    if (ret == -1) {
+        ec_log(5, __func__, "sem_timedwait group id %d: %s\n", 
+                group, strerror(errno));
+    } else {
+        wkc = ec_datagram_wkc(&pd->p_de->datagram);
+        if (wkc == pd->wkc_expected)
+            memcpy(pd->pd + pd->pdout_len, ec_datagram_payload(&pd->p_de->datagram) + 
+                    pd->pdout_len, pd->pdin_len);
+        else {
+            ec_log(10, __func__, "group %2d: working counter mismatch got %u, expected %u, "
+                    "slave_cnt %d\n", group, wkc, pd->wkc_expected, pec->slave_cnt);
+            ec_async_check_group(pec->async_loop, group);
+        }
+    }
+
+    datagram_pool_put(pec->pool, pd->p_de);
+    ec_index_put(pec, pd->p_idx);
 
     return 0;
 }

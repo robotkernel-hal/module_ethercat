@@ -31,6 +31,17 @@
 #define PACKED __attribute__((__packed__))
 #define min(a, b)  ((a) < (b) ? (a) : (b))
 
+#define free_resource(a) {  \
+    if ((a)) {              \
+        free((a));          \
+        (a) = NULL;         \
+    } }
+
+#define alloc_resource(a, type, len) {      \
+    (a) = (type *)malloc((len));            \
+    memset((a), 0, (len)); }
+
+
 typedef union ec_data {
     uint8_t     bdata[1]; /* variants for easy data access */
     uint16_t    wdata[1];

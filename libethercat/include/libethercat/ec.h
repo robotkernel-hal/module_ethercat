@@ -158,6 +158,7 @@ typedef struct ec {
     int tx_sync;
     datagram_pool_t *pool;
 
+    pthread_mutex_t idx_lock;
     struct idx_queue idx;
 
     int slave_cnt;
@@ -262,6 +263,23 @@ int ec_transmit_no_reply(ec_t *pec, uint8_t cmd, uint32_t adr,
 int ec_set_state(ec_t *pec, ec_state_t state);
 
 int ec_state_transition(ec_t *pec, uint16_t slave, ec_state_t state);
+
+//! send process data for specific group with logical commands
+/*!
+ * \param pec ethercat master pointer
+ * \param group group number
+ * \return 0 on success
+ */
+int ec_send_process_data_group(ec_t *pec, int group);
+
+//! receive process data for specific group with logical commands
+/*!
+ * \param pec ethercat master pointer
+ * \param group group number
+ * \param timeout for waiting for packet
+ * \return 0 on success
+ */
+int ec_receive_process_data_group(ec_t *pec, int group, ec_timer_t *timeout);
 
 #ifdef __cplusplus
 };

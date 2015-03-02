@@ -536,44 +536,48 @@ void master::trigger() {
     ec_timer_t timeout;
     ec_timer_init(&timeout, 10000000);
     
+    datagram_entry_t *p_de_dc_sto;
+    idx_entry_t *p_idx_dc_sto;
     datagram_entry_t *p_de_dc;
     idx_entry_t *p_idx_dc;
 
     if (_state >= module_state_safeop) {
         for (i = 0; i < _pec->pd_group_cnt; ++i) {
-            ec_pd_group_t *pd = &_pec->pd_groups[i];
             group *g = _group_info[i];
-
             if ((++g->_divisor_cnt % g->_divisor) != 0)
                 continue; 
 
-            // reset divisor cnt 
+            // reset divisor cnt and queue datagram
             g->_divisor_cnt = 0;
-
-            if (ec_index_get(_pec, &pd->p_idx) != 0) 
-                continue;
-
-            if (datagram_pool_get(_pec->pool, &pd->p_de, NULL) != 0) {
-                ec_index_put(_pec, pd->p_idx);
-                continue;
-            }
-
-            memset(&pd->p_de->datagram, 0, sizeof(ec_datagram_t) + pd->log_len + 2);
-            pd->p_de->datagram.cmd = EC_CMD_LRW;
-            pd->p_de->datagram.idx = pd->p_idx->idx;
-            pd->p_de->datagram.adr = pd->log;
-            pd->p_de->datagram.len = pd->log_len;
-            pd->p_de->datagram.irq = 0;
-            memcpy(ec_datagram_payload(&pd->p_de->datagram), pd->pd, pd->pdout_len);
-
-            pd->p_de->user_cb = cb_block;
-            pd->p_de->user_arg = pd->p_idx;
-
-            // queue frame and trigger tx
-            datagram_pool_put(_pec->phw->tx_high, pd->p_de);
+            ec_send_process_data_group(_pec, i);
         }
 
-        if (_pec->dc.have_dc) {          
+        if (_pec->dc.have_dc) { 
+            // dc system time offset frame
+            if (ec_index_get(_pec, &p_idx_dc_sto) != 0) 
+                ; //continue;
+
+            if (datagram_pool_get(_pec->pool, &p_de_dc_sto, NULL) != 0) {
+                ec_index_put(_pec, p_idx_dc_sto);
+                ; //continue;
+            }
+
+            static int64_t sto = 0;
+            sto += 1000000;
+            memset(&p_de_dc_sto->datagram, 0, sizeof(ec_datagram_t) + 8 + 2);
+            p_de_dc_sto->datagram.cmd = EC_CMD_FPWR;
+            p_de_dc_sto->datagram.idx = p_idx_dc_sto->idx;
+            p_de_dc_sto->datagram.adr = (EC_REG_DCSYSOFFSET << 16) | _pec->dc.master_address;
+            p_de_dc_sto->datagram.len = sizeof(sto);
+            p_de_dc_sto->datagram.irq = 0;
+            memcpy(ec_datagram_payload(&p_de_dc_sto->datagram), &sto, sizeof(sto));
+
+            p_de_dc_sto->user_cb = cb_block;
+            p_de_dc_sto->user_arg = p_idx_dc_sto;
+
+            // queue frame and trigger tx
+            datagram_pool_put(_pec->phw->tx_high, p_de_dc_sto);
+
             // dc frame
             if (ec_index_get(_pec, &p_idx_dc) != 0) 
                 ; //continue;
@@ -602,31 +606,12 @@ void master::trigger() {
 
     if (_state >= module_state_safeop) {
         for (i = 0; i < _pec->pd_group_cnt; ++i) {
-            ec_pd_group_t *pd = &_pec->pd_groups[i];
             group *g = _group_info[i];
 
-            if ((g->_divisor_cnt % g->_divisor) != 0)
+            if (g->_divisor_cnt != 0)
                 continue; 
 
-            // wait for completion
-            struct timespec ts = { timeout.sec, timeout.nsec };
-            int ret = sem_timedwait(&pd->p_idx->waiter, &ts);
-            if (ret == -1) {
-                ethercat_log(module_error, _name, "sem_timedwait group id %d: %s\n", 
-                        i, strerror(errno));
-            } else {
-                wkc = ec_datagram_wkc(&pd->p_de->datagram);
-                if (wkc == pd->wkc_expected)
-                    memcpy(pd->pd+pd->pdout_len, ec_datagram_payload(&pd->p_de->datagram)+pd->pdout_len, pd->pdin_len);
-                else {
-                    ethercat_log(module_warning, _name, "group %2d: working counter mismatch got %u, expected %u, slave_cnt %d\n",
-                            i, wkc, pd->wkc_expected, _pec->slave_cnt);
-                    ec_async_check_group(_pec->async_loop, i);
-                }
-            }
-
-            datagram_pool_put(_pec->pool, pd->p_de);
-            ec_index_put(_pec, pd->p_idx);
+            ec_receive_process_data_group(_pec, i, &timeout);
 
             for (std::list<int>::iterator it = g->_slaves.begin(); it != g->_slaves.end(); ++it)
                 trigger_modules(*it);
