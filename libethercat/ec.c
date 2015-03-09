@@ -419,6 +419,11 @@ int ec_open(ec_t **ppec, const char *ifname, int prio, int cpumask) {
     (*ppec)->dc.dc_cycle_sum = 0;
     (*ppec)->dc.dc_cycle_cnt = 0;
 
+    (*ppec)->dc.rtc_time = 0;
+    (*ppec)->dc.rtc_cycle_sum = 0;
+    (*ppec)->dc.rtc_cycle = 0;
+    (*ppec)->dc.rtc_count = 0;
+
     datagram_pool_open(&(*ppec)->pool, 1000);
         
     hw_open(&(*ppec)->phw, ifname, prio, cpumask);
@@ -542,11 +547,14 @@ int ec_transceive(ec_t *pec, uint8_t cmd, uint32_t adr,
     datagram_entry_t *p_de;
     idx_entry_t *p_idx;
 
-    if (ec_index_get(pec, &p_idx) != 0) 
+    if (ec_index_get(pec, &p_idx) != 0) {
+        ec_log(5, __func__, "error getting ethercat index\n");
         return -1;
+    }
 
     if (datagram_pool_get(pec->pool, &p_de, NULL) != 0) {
         ec_index_put(pec, p_idx);
+        ec_log(5, __func__, "error getting datagram from pool\n");
         return -1;
     }
 
@@ -604,13 +612,14 @@ int ec_transmit_no_reply(ec_t *pec, uint8_t cmd, uint32_t adr,
     datagram_entry_t *p_de;
     idx_entry_t *p_idx;
 
-    if (ec_index_get(pec, &p_idx) != 0) 
+    if (ec_index_get(pec, &p_idx) != 0) {
+        ec_log(5, __func__, "error getting ethercat index\n");
         return -1;
-
-    p_idx->pec = pec;
+    }
 
     if (datagram_pool_get(pec->pool, &p_de, NULL) != 0) {
         ec_index_put(pec, p_idx);
+        ec_log(5, __func__, "error getting datagram from pool\n");
         return -1;
     }
 
@@ -622,6 +631,8 @@ int ec_transmit_no_reply(ec_t *pec, uint8_t cmd, uint32_t adr,
     p_de->datagram.irq = 0;
     memcpy(ec_datagram_payload(&p_de->datagram), data, datalen);
 
+    // don't care about answer
+    p_idx->pec = pec;
     p_de->user_cb = cb_no_reply;
     p_de->user_arg = p_idx;
 
@@ -644,11 +655,14 @@ int ec_transmit_no_reply(ec_t *pec, uint8_t cmd, uint32_t adr,
 int ec_send_process_data_group(ec_t *pec, int group) {
     ec_pd_group_t *pd = &pec->pd_groups[group];
 
-    if (ec_index_get(pec, &pd->p_idx) != 0) 
+    if (ec_index_get(pec, &pd->p_idx) != 0) {
+        ec_log(5, __func__, "error getting ethercat index\n");
         return -1;
+    }
 
     if (datagram_pool_get(pec->pool, &pd->p_de, NULL) != 0) {
         ec_index_put(pec, pd->p_idx);
+        ec_log(5, __func__, "error getting datagram from pool\n");
         return -1;
     }
 
@@ -704,6 +718,8 @@ int ec_receive_process_data_group(ec_t *pec, int group, ec_timer_t *timeout) {
     return 0;
 }
 
+#define DC_DCSOFF_SAMPLES 100
+
 //! send distributed clock sync datagram
 /*!
  * \param pec ethercat master pointer
@@ -711,13 +727,33 @@ int ec_receive_process_data_group(ec_t *pec, int group, ec_timer_t *timeout) {
  */
 int ec_send_distributed_clocks_sync(ec_t *pec) {
     if (!pec->dc.have_dc)
-        return -1;
+        return 0;
 
-    if (ec_index_get(pec, &pec->dc.p_idx_dc) != 0) 
+    ec_timer_t timer;
+    ec_timer_gettime(&timer);
+    uint64_t act_rtc_time = (timer.sec * 1000000000) + timer.nsec;
+
+    if (pec->dc.rtc_time != 0) {
+        pec->dc.rtc_cycle_sum += (act_rtc_time - pec->dc.rtc_time);
+        pec->dc.rtc_count++;
+
+        if (pec->dc.rtc_count == DC_DCSOFF_SAMPLES) {
+            pec->dc.rtc_cycle = pec->dc.rtc_cycle_sum / DC_DCSOFF_SAMPLES;
+            pec->dc.rtc_cycle_sum = 0;
+            pec->dc.rtc_count = 0;
+        }
+    }
+
+    pec->dc.rtc_time = act_rtc_time;
+
+    if (ec_index_get(pec, &pec->dc.p_idx_dc) != 0) {
+        ec_log(5, __func__, "error getting ethercat index\n");
         return -1;
+    }
 
     if (datagram_pool_get(pec->pool, &pec->dc.p_de_dc, NULL) != 0) {
         ec_index_put(pec, pec->dc.p_idx_dc);
+        ec_log(5, __func__, "error getting datagram from pool\n");
         return -1;
     }
 
@@ -746,7 +782,7 @@ int ec_receive_distributed_clocks_sync(ec_t *pec, ec_timer_t *timeout) {
     uint16_t wkc; 
 
     if (!pec->dc.have_dc)
-        return -1;
+        return 0;
             
     // wait for completion
     struct timespec ts = { timeout->sec, timeout->nsec };
@@ -757,7 +793,6 @@ int ec_receive_distributed_clocks_sync(ec_t *pec, ec_timer_t *timeout) {
     } else {
         wkc = ec_datagram_wkc(&pec->dc.p_de_dc->datagram);
 
-        static int ec_dc_log_cnt = 0;
         if (wkc) {
             uint64_t act_dc_time; 
             memcpy(&act_dc_time, ec_datagram_payload(&pec->dc.p_de_dc->datagram), 8);
@@ -766,24 +801,27 @@ int ec_receive_distributed_clocks_sync(ec_t *pec, ec_timer_t *timeout) {
                 pec->dc.dc_cycle_sum += (act_dc_time - pec->dc.dc_time);
                 pec->dc.dc_cycle_cnt++;
 
-#define DC_DCSOFF_SAMPLES 100
-
-                if (pec->dc.dc_cycle_cnt == DC_DCSOFF_SAMPLES) {
+                if (pec->dc.dc_cycle_cnt == DC_DCSOFF_SAMPLES) {                    
                     pec->dc.dc_cycle_cnt = 0;
-                    uint64_t dc_cycle = pec->dc.dc_cycle_sum / DC_DCSOFF_SAMPLES;
-                    pec->dc.dc_sto += (1000000 - dc_cycle) * DC_DCSOFF_SAMPLES;
 
-                    ec_log(100, __func__, "dc_time %lld, dc_cycle %lld, sto %lld\n", pec->dc.dc_time, dc_cycle, pec->dc.dc_sto);
+                    uint64_t dc_cycle = pec->dc.dc_cycle_sum / DC_DCSOFF_SAMPLES;
+                    pec->dc.dc_sto += (pec->dc.rtc_cycle - dc_cycle) * DC_DCSOFF_SAMPLES;
+
+                    ec_log(100, __func__, "rtc_cycle %10lld, dc_time %16lld, dc_cycle %10lld, sto %lld\n", 
+                            pec->dc.rtc_cycle, pec->dc.dc_time, dc_cycle, pec->dc.dc_sto);
 
                     datagram_entry_t *p_de_dc_sto;
                     idx_entry_t *p_idx_dc_sto;
 
                     // dc system time offset frame
-                    if (ec_index_get(pec, &p_idx_dc_sto) != 0) 
+                    if (ec_index_get(pec, &p_idx_dc_sto) != 0) {
+                        ec_log(5, __func__, "error getting ethercat index\n");
                         goto sto_exit;
+                    }
 
                     if (datagram_pool_get(pec->pool, &p_de_dc_sto, NULL) != 0) {
                         ec_index_put(pec, p_idx_dc_sto);
+                        ec_log(5, __func__, "error getting datagram from pool\n");
                         goto sto_exit;
                     }
 
@@ -795,6 +833,7 @@ int ec_receive_distributed_clocks_sync(ec_t *pec, ec_timer_t *timeout) {
                     p_de_dc_sto->datagram.irq = 0;
                     memcpy(ec_datagram_payload(&p_de_dc_sto->datagram), &pec->dc.dc_sto, sizeof(pec->dc.dc_sto));
 
+                    // we don't care about the answer, cb_no_reply frees datagram and index
                     p_idx_dc_sto->pec = pec;
                     p_de_dc_sto->user_cb = cb_no_reply;
                     p_de_dc_sto->user_arg = p_idx_dc_sto;

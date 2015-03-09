@@ -55,9 +55,6 @@ namespace module_ethercat {
 extern const std::string state_strings[];
 
 class master : public robotkernel::trigger_base {
-    private: 
-        robotkernel::kernel::interface_id_t _pd_interface_id;
-
     public:
         typedef struct group {
             group(int index, const YAML::Node& node);

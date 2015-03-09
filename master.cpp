@@ -275,7 +275,7 @@ int master::request(int reqcode, void* ptr) {
                     pd->len = _pec->pd_groups[g_nr].pdin_len;
                 }
             } else {
-                if ((pd->slave_id >= 0) && (pd->slave_id < (unsigned)_pec->slave_cnt)) {
+                if (pd->slave_id < (unsigned)_pec->slave_cnt) {
                     pd->pd = _pec->slaves[pd->slave_id].pdin;
                     pd->len = _pec->slaves[pd->slave_id].pdin_len;
                 }
@@ -297,7 +297,7 @@ int master::request(int reqcode, void* ptr) {
                     pd->len = _pec->pd_groups[g_nr].pdout_len;
                 }
             } else {
-                if ((pd->slave_id >= 0) && (pd->slave_id < (unsigned)_pec->slave_cnt)) {
+                if (pd->slave_id < (unsigned)_pec->slave_cnt) {
                     pd->pd = _pec->slaves[pd->slave_id].pdout;
                     pd->len = _pec->slaves[pd->slave_id].pdout_len;
                 }
@@ -521,12 +521,6 @@ int master::request(int reqcode, void* ptr) {
     }
 
     return ret;
-}
-
-//! local callack for syncronous read/write
-static void cb_block(void *user_arg, struct datagram_entry *p) {
-    idx_entry_t *entry = (idx_entry_t *)user_arg;
-    sem_post(&entry->waiter);
 }
 
 //! module trigger callback

@@ -160,7 +160,7 @@ int ec_mbx_send(ec_t *pec, uint16_t slave, uint32_t nsec) {
  * \return working counter
  */
 int ec_mbx_receive(ec_t *pec, uint16_t slave, uint32_t nsec) {
-    uint16_t wkc = 0, tries = 1000;
+    uint16_t wkc = 0;
     ec_slave_t *slv = &pec->slaves[slave];
 
     if (!slv->sm[slv->mbx_read.sm_nr].len)

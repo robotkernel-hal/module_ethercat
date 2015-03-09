@@ -24,6 +24,7 @@
  */
 
 #include "libethercat/timer.h"
+#include <stdio.h>
 
 #define timer_cmp(a, b, CMP)          \
     (((a)->sec == (b)->sec) ?         \
