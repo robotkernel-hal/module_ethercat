@@ -1,6 +1,6 @@
 PTVERSION           = 2
 NAME                = module_ethercat
-VERSION             = 3.1.2
+VERSION             = 3.1.3
 DESCRIPTION         = robotkernel module_ethercat
 MAINTAINER          = Robert Burger <robert.burger@dlr.de>
 ARCHS               = sled11-x86-gcc4.x, sled11-x86_64-gcc4.x
