@@ -151,6 +151,7 @@ typedef struct ec_dc_info {
     uint64_t dc_time;
     uint64_t dc_cycle_sum;
     int dc_cycle_cnt;
+    int64_t dc_sto;
     
     datagram_entry_t *p_de_dc;
     idx_entry_t *p_idx_dc;

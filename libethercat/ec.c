@@ -763,51 +763,51 @@ int ec_receive_distributed_clocks_sync(ec_t *pec, ec_timer_t *timeout) {
             memcpy(&act_dc_time, ec_datagram_payload(&pec->dc.p_de_dc->datagram), 8);
 
             if (pec->dc.dc_time > 0) {
-               pec->dc.dc_cycle_sum += (act_dc_time - pec->dc.dc_time);
-               pec->dc.dc_cycle_cnt++;
-               
-               if (pec->dc.dc_cycle_cnt == 1000) {
-                   pec->dc.dc_cycle_cnt = 0;
-                   uint64_t dc_cycle = pec->dc.dc_cycle_sum / 1000;
-                   uint64_t sto = 1000 - dc_cycle;
-            
-                   ec_log(5, __func__, "sto %lld\n", sto);
-    
-                   datagram_entry_t *p_de_dc_sto;
-                   idx_entry_t *p_idx_dc_sto;
-            
-                   // dc system time offset frame
-                   if (ec_index_get(pec, &p_idx_dc_sto) != 0) 
-                       goto sto_exit;
+                pec->dc.dc_cycle_sum += (act_dc_time - pec->dc.dc_time);
+                pec->dc.dc_cycle_cnt++;
 
-                   if (datagram_pool_get(pec->pool, &p_de_dc_sto, NULL) != 0) {
-                       ec_index_put(pec, p_idx_dc_sto);
-                       goto sto_exit;
-                   }
-                   
-                   memset(&p_de_dc_sto->datagram, 0, sizeof(ec_datagram_t) + 8 + 2);
-                   p_de_dc_sto->datagram.cmd = EC_CMD_FPWR;
-                   p_de_dc_sto->datagram.idx = p_idx_dc_sto->idx;
-                   p_de_dc_sto->datagram.adr = (EC_REG_DCSYSOFFSET << 16) | pec->dc.master_address;
-                   p_de_dc_sto->datagram.len = sizeof(sto);
-                   p_de_dc_sto->datagram.irq = 0;
-                   memcpy(ec_datagram_payload(&p_de_dc_sto->datagram), &sto, sizeof(sto));
+#define DC_DCSOFF_SAMPLES 100
 
-                   p_de_dc_sto->user_cb = cb_no_reply;
-                   p_de_dc_sto->user_arg = p_idx_dc_sto;
+                if (pec->dc.dc_cycle_cnt == DC_DCSOFF_SAMPLES) {
+                    pec->dc.dc_cycle_cnt = 0;
+                    uint64_t dc_cycle = pec->dc.dc_cycle_sum / DC_DCSOFF_SAMPLES;
+                    pec->dc.dc_sto += (1000000 - dc_cycle) * DC_DCSOFF_SAMPLES;
 
-                   // queue frame and trigger tx
-                   datagram_pool_put(pec->phw->tx_high, p_de_dc_sto);
+                    ec_log(100, __func__, "dc_time %lld, dc_cycle %lld, sto %lld\n", pec->dc.dc_time, dc_cycle, pec->dc.dc_sto);
+
+                    datagram_entry_t *p_de_dc_sto;
+                    idx_entry_t *p_idx_dc_sto;
+
+                    // dc system time offset frame
+                    if (ec_index_get(pec, &p_idx_dc_sto) != 0) 
+                        goto sto_exit;
+
+                    if (datagram_pool_get(pec->pool, &p_de_dc_sto, NULL) != 0) {
+                        ec_index_put(pec, p_idx_dc_sto);
+                        goto sto_exit;
+                    }
+
+                    memset(&p_de_dc_sto->datagram, 0, sizeof(ec_datagram_t) + 8 + 2);
+                    p_de_dc_sto->datagram.cmd = EC_CMD_FPWR;
+                    p_de_dc_sto->datagram.idx = p_idx_dc_sto->idx;
+                    p_de_dc_sto->datagram.adr = (EC_REG_DCSYSOFFSET << 16) | pec->dc.master_address;
+                    p_de_dc_sto->datagram.len = sizeof(pec->dc.dc_sto);
+                    p_de_dc_sto->datagram.irq = 0;
+                    memcpy(ec_datagram_payload(&p_de_dc_sto->datagram), &pec->dc.dc_sto, sizeof(pec->dc.dc_sto));
+
+                    p_idx_dc_sto->pec = pec;
+                    p_de_dc_sto->user_cb = cb_no_reply;
+                    p_de_dc_sto->user_arg = p_idx_dc_sto;
+
+                    // queue frame and trigger tx
+                    datagram_pool_put(pec->phw->tx_high, p_de_dc_sto);
 
 sto_exit:
-                   pec->dc.dc_cycle_sum = 0;
-               }
+                    pec->dc.dc_cycle_sum = 0;
+                }
             }
 
             pec->dc.dc_time = act_dc_time;
-
-            if (++ec_dc_log_cnt%1000 == 0)
-                ec_log(10, __func__, "dc: %lld\n", pec->dc.dc_time);
         }
     }
 

@@ -197,6 +197,9 @@ int ec_dc_config(ec_t *pec) {
             dcsof *= -1;
             ec_fpwr(pec, slv->fixed_address, EC_REG_DCSYSOFFSET, &dcsof, sizeof(dcsof), &wkc);
 
+            if (pec->dc.master_address == slv->fixed_address)
+                pec->dc.dc_sto = dcsof;
+
             // assume port 0 is entry port
             slv->entryport = 0;
 
