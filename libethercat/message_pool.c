@@ -101,7 +101,7 @@ int ec_async_message_loop_put(ec_message_pool_t *ppool,
  */
 void ec_async_checK_slave(ec_async_message_loop_t *paml, uint16_t slave) {
     ec_state_t state;
-    int wkc = ec_state_get_state(paml->pec, slave, &state);
+    int wkc = ec_slave_get_state(paml->pec, slave, &state);
 
     if (!wkc)
         ec_log(100, "ec_async_thread", "slave %2d: wkc error on "

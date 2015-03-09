@@ -83,6 +83,7 @@ int ec_create_pd_groups(ec_t *pec, int pd_group_cnt) {
     int i;
     ec_destroy_pd_groups(pec);
 
+    pec->pd_group_cnt = pd_group_cnt;
     alloc_resource(pec->pd_groups, ec_pd_group_t, sizeof(ec_pd_group_t) * pd_group_cnt);
     for (i = 0; i < pec->pd_group_cnt; ++i) {
         pec->pd_groups[i].log = 0x10000 * (i+1);
@@ -414,6 +415,9 @@ int ec_open(ec_t **ppec, const char *ifname, int prio, int cpumask) {
     (*ppec)->tx_sync = 1;
 
     (*ppec)->dc.have_dc = 0;
+    (*ppec)->dc.dc_time = 0;
+    (*ppec)->dc.dc_cycle_sum = 0;
+    (*ppec)->dc.dc_cycle_cnt = 0;
 
     datagram_pool_open(&(*ppec)->pool, 1000);
         
@@ -699,4 +703,118 @@ int ec_receive_process_data_group(ec_t *pec, int group, ec_timer_t *timeout) {
 
     return 0;
 }
+
+//! send distributed clock sync datagram
+/*!
+ * \param pec ethercat master pointer
+ * \return 0 on success
+ */
+int ec_send_distributed_clocks_sync(ec_t *pec) {
+    if (!pec->dc.have_dc)
+        return -1;
+
+    if (ec_index_get(pec, &pec->dc.p_idx_dc) != 0) 
+        return -1;
+
+    if (datagram_pool_get(pec->pool, &pec->dc.p_de_dc, NULL) != 0) {
+        ec_index_put(pec, pec->dc.p_idx_dc);
+        return -1;
+    }
+
+    memset(&pec->dc.p_de_dc->datagram, 0, sizeof(ec_datagram_t) + 8 + 2);
+    pec->dc.p_de_dc->datagram.cmd = EC_CMD_FRMW;
+    pec->dc.p_de_dc->datagram.idx = pec->dc.p_idx_dc->idx;
+    pec->dc.p_de_dc->datagram.adr = (EC_REG_DCSYSTIME << 16) | pec->dc.master_address;
+    pec->dc.p_de_dc->datagram.len = 8;
+    pec->dc.p_de_dc->datagram.irq = 0;
+
+    pec->dc.p_de_dc->user_cb = cb_block;
+    pec->dc.p_de_dc->user_arg = pec->dc.p_idx_dc;
+
+    // queue frame and trigger tx
+    datagram_pool_put(pec->phw->tx_high, pec->dc.p_de_dc);
+    return 0;
+}
+
+//! receive distributed clocks sync datagram
+/*!
+ * \param pec ethercat master pointer
+ * \param timeout absolute timeout
+ * \return 0 on success
+ */
+int ec_receive_distributed_clocks_sync(ec_t *pec, ec_timer_t *timeout) {
+    uint16_t wkc; 
+
+    if (!pec->dc.have_dc)
+        return -1;
+            
+    // wait for completion
+    struct timespec ts = { timeout->sec, timeout->nsec };
+    int ret = sem_timedwait(&pec->dc.p_idx_dc->waiter, &ts);
+    if (ret == -1) {
+        ec_log(5, __func__, "sem_timedwait distributed clocks: %s\n", 
+                strerror(errno));
+    } else {
+        wkc = ec_datagram_wkc(&pec->dc.p_de_dc->datagram);
+
+        static int ec_dc_log_cnt = 0;
+        if (wkc) {
+            uint64_t act_dc_time; 
+            memcpy(&act_dc_time, ec_datagram_payload(&pec->dc.p_de_dc->datagram), 8);
+
+            if (pec->dc.dc_time > 0) {
+               pec->dc.dc_cycle_sum += (act_dc_time - pec->dc.dc_time);
+               pec->dc.dc_cycle_cnt++;
+               
+               if (pec->dc.dc_cycle_cnt == 1000) {
+                   pec->dc.dc_cycle_cnt = 0;
+                   uint64_t dc_cycle = pec->dc.dc_cycle_sum / 1000;
+                   uint64_t sto = 1000 - dc_cycle;
+            
+                   ec_log(5, __func__, "sto %lld\n", sto);
+    
+                   datagram_entry_t *p_de_dc_sto;
+                   idx_entry_t *p_idx_dc_sto;
+            
+                   // dc system time offset frame
+                   if (ec_index_get(pec, &p_idx_dc_sto) != 0) 
+                       goto sto_exit;
+
+                   if (datagram_pool_get(pec->pool, &p_de_dc_sto, NULL) != 0) {
+                       ec_index_put(pec, p_idx_dc_sto);
+                       goto sto_exit;
+                   }
+                   
+                   memset(&p_de_dc_sto->datagram, 0, sizeof(ec_datagram_t) + 8 + 2);
+                   p_de_dc_sto->datagram.cmd = EC_CMD_FPWR;
+                   p_de_dc_sto->datagram.idx = p_idx_dc_sto->idx;
+                   p_de_dc_sto->datagram.adr = (EC_REG_DCSYSOFFSET << 16) | pec->dc.master_address;
+                   p_de_dc_sto->datagram.len = sizeof(sto);
+                   p_de_dc_sto->datagram.irq = 0;
+                   memcpy(ec_datagram_payload(&p_de_dc_sto->datagram), &sto, sizeof(sto));
+
+                   p_de_dc_sto->user_cb = cb_no_reply;
+                   p_de_dc_sto->user_arg = p_idx_dc_sto;
+
+                   // queue frame and trigger tx
+                   datagram_pool_put(pec->phw->tx_high, p_de_dc_sto);
+
+sto_exit:
+                   pec->dc.dc_cycle_sum = 0;
+               }
+            }
+
+            pec->dc.dc_time = act_dc_time;
+
+            if (++ec_dc_log_cnt%1000 == 0)
+                ec_log(10, __func__, "dc: %lld\n", pec->dc.dc_time);
+        }
+    }
+
+    datagram_pool_put(pec->pool, pec->dc.p_de_dc);
+    ec_index_put(pec, pec->dc.p_idx_dc);
+
+    return 0;
+}
+
 

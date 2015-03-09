@@ -532,15 +532,9 @@ static void cb_block(void *user_arg, struct datagram_entry *p) {
 //! module trigger callback
 void master::trigger() {
     int i = 0;
-    uint16_t wkc;
     ec_timer_t timeout;
     ec_timer_init(&timeout, 10000000);
     
-    datagram_entry_t *p_de_dc_sto;
-    idx_entry_t *p_idx_dc_sto;
-    datagram_entry_t *p_de_dc;
-    idx_entry_t *p_idx_dc;
-
     if (_state >= module_state_safeop) {
         for (i = 0; i < _pec->pd_group_cnt; ++i) {
             group *g = _group_info[i];
@@ -552,54 +546,8 @@ void master::trigger() {
             ec_send_process_data_group(_pec, i);
         }
 
-        if (_pec->dc.have_dc) { 
-            // dc system time offset frame
-            if (ec_index_get(_pec, &p_idx_dc_sto) != 0) 
-                ; //continue;
-
-            if (datagram_pool_get(_pec->pool, &p_de_dc_sto, NULL) != 0) {
-                ec_index_put(_pec, p_idx_dc_sto);
-                ; //continue;
-            }
-
-            static int64_t sto = 0;
-            sto += 1000000;
-            memset(&p_de_dc_sto->datagram, 0, sizeof(ec_datagram_t) + 8 + 2);
-            p_de_dc_sto->datagram.cmd = EC_CMD_FPWR;
-            p_de_dc_sto->datagram.idx = p_idx_dc_sto->idx;
-            p_de_dc_sto->datagram.adr = (EC_REG_DCSYSOFFSET << 16) | _pec->dc.master_address;
-            p_de_dc_sto->datagram.len = sizeof(sto);
-            p_de_dc_sto->datagram.irq = 0;
-            memcpy(ec_datagram_payload(&p_de_dc_sto->datagram), &sto, sizeof(sto));
-
-            p_de_dc_sto->user_cb = cb_block;
-            p_de_dc_sto->user_arg = p_idx_dc_sto;
-
-            // queue frame and trigger tx
-            datagram_pool_put(_pec->phw->tx_high, p_de_dc_sto);
-
-            // dc frame
-            if (ec_index_get(_pec, &p_idx_dc) != 0) 
-                ; //continue;
-
-            if (datagram_pool_get(_pec->pool, &p_de_dc, NULL) != 0) {
-                ec_index_put(_pec, p_idx_dc);
-                ; //continue;
-            }
-
-            memset(&p_de_dc->datagram, 0, sizeof(ec_datagram_t) + 8 + 2);
-            p_de_dc->datagram.cmd = EC_CMD_FRMW;
-            p_de_dc->datagram.idx = p_idx_dc->idx;
-            p_de_dc->datagram.adr = (EC_REG_DCSYSTIME << 16) | _pec->dc.master_address;
-            p_de_dc->datagram.len = 8;
-            p_de_dc->datagram.irq = 0;
-
-            p_de_dc->user_cb = cb_block;
-            p_de_dc->user_arg = p_idx_dc;
-
-            // queue frame and trigger tx
-            datagram_pool_put(_pec->phw->tx_high, p_de_dc);
-        }
+        if (_pec->dc.have_dc) 
+            ec_send_distributed_clocks_sync(_pec);
     }
 
     hw_tx(_pec->phw);
@@ -617,23 +565,8 @@ void master::trigger() {
                 trigger_modules(*it);
         }
         
-        if (_pec->dc.have_dc) {          
-            // wait for completion
-            struct timespec ts = { timeout.sec, timeout.nsec };
-            int ret = sem_timedwait(&p_idx_dc->waiter, &ts);
-            if (ret == -1) {
-                ethercat_log(module_error, _name, "sem_timedwait distributed clocks: %s\n", 
-                        strerror(errno));
-            } else {
-                wkc = ec_datagram_wkc(&p_de_dc->datagram);
-                uint64_t dc_time = 0;
-                if (wkc)
-                    memcpy(&dc_time, ec_datagram_payload(&p_de_dc->datagram), 8);
-            }
-
-            datagram_pool_put(_pec->pool, p_de_dc);
-            ec_index_put(_pec, p_idx_dc);
-        }
+        if (_pec->dc.have_dc)
+            ec_receive_distributed_clocks_sync(_pec, &timeout);
     }
 }
 

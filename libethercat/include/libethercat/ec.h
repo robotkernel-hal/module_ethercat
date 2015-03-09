@@ -92,9 +92,6 @@ typedef struct PACKED ec_pd_group {
     
     datagram_entry_t *p_de;
     idx_entry_t *p_idx;
-    
-    datagram_entry_t *p_de_dc;
-    idx_entry_t *p_idx_dc;
 } PACKED ec_pd_group_t;
 
 typedef struct PACKED ec_slave_dc_info {
@@ -150,8 +147,14 @@ typedef struct ec_dc_info {
     int have_dc;
     int next;
     int prev;
-} ec_dc_info_t;
 
+    uint64_t dc_time;
+    uint64_t dc_cycle_sum;
+    int dc_cycle_cnt;
+    
+    datagram_entry_t *p_de_dc;
+    idx_entry_t *p_idx_dc;
+} ec_dc_info_t;
 
 typedef struct ec {
     hw_t *phw;
@@ -280,6 +283,21 @@ int ec_send_process_data_group(ec_t *pec, int group);
  * \return 0 on success
  */
 int ec_receive_process_data_group(ec_t *pec, int group, ec_timer_t *timeout);
+
+//! send distributed clocks sync datagram
+/*!
+ * \param pec ethercat master pointer
+ * \return 0 on success
+ */
+int ec_send_distributed_clocks_sync(ec_t *pec);
+
+//! receive distributed clocks sync datagram
+/*!
+ * \param pec ethercat master pointer
+ * \param timeout absolute timeout
+ * \return 0 on success
+ */
+int ec_receive_distributed_clocks_sync(ec_t *pec, ec_timer_t *timeout);
 
 #ifdef __cplusplus
 };
