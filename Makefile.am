@@ -24,6 +24,7 @@ libmodule_ethercat_la_CXXFLAGS = -Wall \
 								 -I$(top_srcdir)/libethercat/include \
 								 -I$(top_builddir)\
 								 @ROBOTKERNEL_CFLAGS@ \
+								 @LN_CFLAGS@ \
 								 @INTERFACE_MEMORY_INSPECTION_CFLAGS@ \
 								 @INTERFACE_CANOPEN_PROTOCOL_CFLAGS@
 
@@ -34,6 +35,7 @@ libmodule_ethercat_la_CFLAGS   = -std=gnu99 \
 								 -I$(top_srcdir)/libethercat/include \
 								 -I$(top_builddir) \
 								 @ROBOTKERNEL_CFLAGS@ \
+								 @LN_CFLAGS@ \
 								 @INTERFACE_MEMORY_INSPECTION_CFLAGS@ \
 								 @INTERFACE_CANOPEN_PROTOCOL_CFLAGS@
 
