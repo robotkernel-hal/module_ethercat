@@ -395,6 +395,8 @@ int ec_open(ec_t **ppec, const char *ifname, int prio, int cpumask) {
     if (!(*ppec))
         return ENOMEM;
 
+    pthread_mutex_init(&(*ppec)->idx_lock, NULL);
+    
     // fill index queue
     TAILQ_INIT(&(*ppec)->idx);
     for (i = 0; i < 255; ++i) {
@@ -405,8 +407,6 @@ int ec_open(ec_t **ppec, const char *ifname, int prio, int cpumask) {
         ec_index_put(*ppec, entry);
     }
 
-    pthread_mutex_init(&(*ppec)->idx_lock, NULL);
-    
     (*ppec)->phw = NULL;
     (*ppec)->slave_cnt = 0;
     (*ppec)->pd_group_cnt = 0;
