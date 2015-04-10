@@ -9,6 +9,8 @@ requires_version 0.2.43
 #   module_ethercat_mds
 #     (optional) add custom message definition paths
 
+# rk_depends: interface_memory_inspection, interface_canopen_protocol
+
 defines
 module_ethercat_base: %(dirname %(dirname %(CURDIR)))
 module_ethercat_base_type: %(ifexists "%(module_ethercat_base)/lib/libmodule_ethercat.so", "local_install", "rmpm_release")
