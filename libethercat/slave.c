@@ -164,7 +164,8 @@ int ec_slave_generate_mapping(ec_t *pec, uint16_t slave) {
             int wkc, bit_len = 0, idx = 0x1c10 + sm_idx;
             uint8_t entry_cnt = 0, entry_cnt_2;
             size_t entry_cnt_size = sizeof(entry_cnt);
-            wkc = ec_coe_sdo_read(pec, slave, idx, 0, 0, &entry_cnt, &entry_cnt_size);
+            uint32_t abort_code = 0;
+            wkc = ec_coe_sdo_read(pec, slave, idx, 0, 0, &entry_cnt, &entry_cnt_size, &abort_code);
 
             if (wkc != 1)
                 ec_log(10, "GENERATE_MAPPING", "slave %2d: reading 0x%04X/%d failed\n", slave, idx, 0);
@@ -174,14 +175,14 @@ int ec_slave_generate_mapping(ec_t *pec, uint16_t slave) {
             for (int i = 1; i <= entry_cnt; ++i) {
                 uint16_t entry_idx;
                 size_t entry_size = sizeof(entry_idx);
-                wkc = ec_coe_sdo_read(pec, slave, idx, i, 0, (uint8_t *)&entry_idx, &entry_size);
+                wkc = ec_coe_sdo_read(pec, slave, idx, i, 0, (uint8_t *)&entry_idx, &entry_size, &abort_code);
 
                 if (wkc != 1)
                     ec_log(10, "GENERATE_MAPPING", "slave %2d: reading 0x%04X/%d failed\n", slave, idx, i);
 
                 entry_cnt_size = sizeof(entry_cnt_2);
 
-                wkc = ec_coe_sdo_read(pec, slave, entry_idx, 0, 0, (uint8_t *)&entry_cnt_2, &entry_cnt_size);
+                wkc = ec_coe_sdo_read(pec, slave, entry_idx, 0, 0, (uint8_t *)&entry_cnt_2, &entry_cnt_size, &abort_code);
 
                 if (wkc != 1)
                     ec_log(10, "GENERATE_MAPPING", "slave %2d: reading 0x%04X/%d failed\n", slave, entry_idx, 0);
@@ -191,7 +192,7 @@ int ec_slave_generate_mapping(ec_t *pec, uint16_t slave) {
                 for (int j = 1; j <= entry_cnt_2; ++j) {
                     uint32_t entry;
                     size_t entry_size = sizeof(entry);
-                    wkc = ec_coe_sdo_read(pec, slave, entry_idx, j, 0, (uint8_t *)&entry, &entry_size);
+                    wkc = ec_coe_sdo_read(pec, slave, entry_idx, j, 0, (uint8_t *)&entry, &entry_size, &abort_code);
 
                     if (wkc != 1)
                         ec_log(10, "GENERATE_MAPPING", "slave %2d: reading 0x%04X/%d failed\n", 

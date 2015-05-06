@@ -492,6 +492,7 @@ int master::request(int reqcode, void* ptr) {
         case MOD_REQUEST_CANOPEN_READ_ELEMENT_VALUE: {
             canopen_element_value *value = (canopen_element_value *)ptr;
             size_t size = value->value_len;
+            uint32_t abort_code = 0;
 
 //            ethercat_log(module_verbose, "MOD_REQUEST_CANOPEN_READ_ELEMENT_VALUE", "slave %d: index 0x%X, "
 //                    "sub_index %d, want to read %d bytes\n", value->slave_id, value->index,
@@ -499,8 +500,9 @@ int master::request(int reqcode, void* ptr) {
 
             if (_pec->slaves[value->slave_id].eeprom.mbx_supported & EC_EEPROM_MBX_COE) {
                 ec_coe_sdo_read(_pec, value->slave_id, value->index, value->sub_index, 
-                        0, (uint8_t *)value->value, &size);
+                        0, (uint8_t *)value->value, &size, &abort_code);
                 value->value_len = size;
+                ret = abort_code;
             } else // search in eeprom entries
                 memset(value->value, 0, value->value_len);
             break;

@@ -80,10 +80,12 @@ typedef struct PACKED ec_coe_sdo_entry_desc {
  * \param complete complete access (only if sub_index == 0)
  * \param buf buffer to store answer
  * \param len length of buffer, outputs read length
+ * \param abort_code abort_code if we got abort request
  * \return working counter
  */
 int ec_coe_sdo_read(ec_t *pec, uint16_t slave, uint16_t index, 
-        uint8_t sub_index, int complete, uint8_t *buf, size_t *len);
+        uint8_t sub_index, int complete, uint8_t *buf, size_t *len,
+        uint32_t *abort_code);
 
 //! write coe sdo 
 /*!

@@ -168,10 +168,11 @@ typedef struct {
  * \param complete complete access (only if sub_index == 0)
  * \param buf buffer to store answer
  * \param len length of buffer, outputs read length
+ * \param abort_code abort_code if we got abort request
  * \return working counter
  */
 int ec_coe_sdo_read(ec_t *pec, uint16_t slave, uint16_t index, uint8_t sub_index, 
-        int complete, uint8_t *buf, size_t *len) {
+        int complete, uint8_t *buf, size_t *len, uint32_t *abort_code) {
     int wkc;
 
     ec_sdo_normal_upload_req_t *write_buf = 
@@ -216,6 +217,21 @@ int ec_coe_sdo_read(ec_t *pec, uint16_t slave, uint16_t index, uint8_t sub_index
 
     ec_sdo_normal_upload_resp_t *read_buf  = 
         (ec_sdo_normal_upload_resp_t *)(pec->slaves[slave].mbx_read.buf); 
+
+    if (read_buf->sdo_hdr.command == EC_COE_SDO_ABORT_REQ) {
+        ec_sdo_abort_request_t *abort_buf = 
+            (ec_sdo_abort_request_t *)(pec->slaves[slave].mbx_read.buf); 
+
+        ec_log(10, "ec_coe_sdo_write", "got sdo abort request on idx %#X, "
+            "subidx %d, abortcode %#X: %s\n", index, sub_index, abort_buf->abort_code);
+
+        *abort_code = abort_code;
+        *len = 0;
+        return wkc;
+    }
+
+    // everthing is fine
+    *abort_code = 0;
 
     if (*len == 0) {
         if (read_buf->sdo_hdr.transfer_type)
