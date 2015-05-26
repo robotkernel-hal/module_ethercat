@@ -41,11 +41,12 @@
     (a) = (type *)malloc((len));            \
     memset((a), 0, (len)); }
 
+#define EC_MAX_DATA 4096
 
 typedef union ec_data {
-    uint8_t     bdata[1]; /* variants for easy data access */
-    uint16_t    wdata[1];
-    uint32_t    ldata[1];
+    uint8_t     bdata[EC_MAX_DATA]; /* variants for easy data access */
+    uint16_t    wdata[EC_MAX_DATA];
+    uint32_t    ldata[EC_MAX_DATA];
 } ec_data_t;
 
 #endif // __LIBETHERCAT_COMMON_H__
