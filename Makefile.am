@@ -1,4 +1,4 @@
-ACLOCAL_AMFLAGS = -I m4 
+ACLOCAL_AMFLAGS = -I m4 -I scripts/m4
 
 libdir = $(prefix)/lib
 lib_LTLIBRARIES = libmodule_ethercat.la
