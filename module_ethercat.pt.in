@@ -3,6 +3,7 @@ NAME                = @PACKAGE@
 VERSION             = @PACKAGE_VERSION@
 DESCRIPTION         = robotkernel @PACKAGE@
 MAINTAINER          = Robert Burger <robert.burger@dlr.de>
+DEPENDS             = robotkernel.interface_canopen_protocol, robotkernel.interface_sercos_protocol, robotkernel.interface_process_data_inspection, robotkernel.interface_memory_inspection
 ARCHS               = sled11-x86-gcc4.x, sled11-x86_64-gcc4.x
 
 [install]
