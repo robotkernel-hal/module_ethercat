@@ -56,6 +56,10 @@ typedef struct ec_timer {
      ((a)->nsec CMP (b)->nsec) :                                    \
      ((a)->sec CMP (b)->sec))
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 //! sleep in nanoseconds
 /*!
  * \param nsec time to sleep in nanoseconds
@@ -82,6 +86,10 @@ void ec_timer_init(ec_timer_t *timer, uint64_t timeout);
  * \return 1 if expired, 0 if not
  */
 int ec_timer_expired(ec_timer_t *timer);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // __LIBETHERCAT_TIMER_H__
 

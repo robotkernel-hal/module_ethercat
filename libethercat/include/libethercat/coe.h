@@ -71,6 +71,10 @@ typedef struct PACKED ec_coe_sdo_entry_desc {
     size_t              data_len;
 } PACKED ec_coe_sdo_entry_desc_t;
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 //! read coe sdo 
 /*!
  * \param pec pointer to ethercat master
@@ -133,6 +137,10 @@ int ec_coe_sdo_entry_desc_read(ec_t *pec, uint16_t slave, uint16_t index, uint8_
  * \return working counter
  */
 int ec_coe_odlist_read(ec_t *pec, uint16_t slave, uint8_t *buf, size_t *len);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // __LIBETHERCAT_COE_H__
 

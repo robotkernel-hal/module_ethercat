@@ -37,17 +37,11 @@
 #include "slave.h"
 #include "module_ethercat.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
 #include "libethercat/ec.h"
 #include "libethercat/slave.h"
 #include "libethercat/coe.h"
 #include "libethercat/mbx.h"
 #include "libethercat/dc.h"
-#ifdef __cplusplus
-}
-#endif
 
 //! module_ethercat::
 namespace module_ethercat {

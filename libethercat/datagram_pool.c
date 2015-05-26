@@ -98,7 +98,7 @@ int datagram_pool_close(datagram_pool_t *pp) {
  */
 int datagram_pool_get(datagram_pool_t *pp, 
         datagram_entry_t **datagram, ec_timer_t *timeout) {
-    int ret = ENOPKG;
+    int ret = ENODATA;
     if (!pp || !datagram)
         return (ret = EINVAL);
 
@@ -147,7 +147,7 @@ int datagram_pool_get_next_len(datagram_pool_t *pp, size_t *len) {
     
     pthread_mutex_unlock(&pp->_pool_lock);
 
-    return ENOPKG;
+    return ENODATA;
 }
 
 //! return a datagram to datagram_pool

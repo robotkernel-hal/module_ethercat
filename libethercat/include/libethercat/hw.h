@@ -47,6 +47,10 @@ typedef struct hw {
     datagram_entry_t *tx_send[256]; //!< sent datagrams
 } hw_t;   
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 //! open a new hw
 /*!
  * \param pphw return hw 
@@ -70,6 +74,10 @@ int hw_close(hw_t *phw);
  * \return 0 or error code
  */
 int hw_tx(hw_t *phw);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // __LIBETHERCAT_HW_H__
 

@@ -28,6 +28,10 @@
 
 #include "libethercat/ec.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 //! check all slaves if they support dc and measure delays
 /*!
  * \param pec ethercat master pointer
@@ -57,6 +61,10 @@ void ec_dc_sync0(ec_t *pec, uint16_t slave, int active,
  */
 void ec_dc_sync01(ec_t *pec, uint16_t slave, int active, 
         uint32_t cycle_time_0, uint32_t cycle_time_1, uint32_t cycle_shift);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // __LIBETHERCAT_DC_H__
 

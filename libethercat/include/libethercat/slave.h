@@ -51,6 +51,10 @@ typedef enum ec_state_transition {
     OP_2_OP          = 0x0808,
 } ec_state_transition_t;
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 //! set ethercat state on slave 
 /*!
  * \param pec ethercat master pointer
@@ -85,6 +89,10 @@ int ec_slave_generate_mapping(struct ec *pec, uint16_t slave);
  * \return wkc
  */
 int ec_slave_state_transition(struct ec *pec, uint16_t slave, ec_state_t state);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // __LIBETHERCAT_SLAVE_H__
 

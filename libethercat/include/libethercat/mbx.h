@@ -55,6 +55,10 @@ typedef struct PACKED ec_mbx {
     ec_data_t      mbx_data;
 } PACKED ec_mbx_t;
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 //! check if mailbox is empty
 /*!
  * \param pec pointer to ethercat master
@@ -100,6 +104,10 @@ int ec_mbx_send(ec_t *pec, uint16_t slave, uint32_t nsec);
  * \return working counter
  */
 int ec_mbx_receive(ec_t *pec, uint16_t slave, uint32_t nsec);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // __MBX_H__
 

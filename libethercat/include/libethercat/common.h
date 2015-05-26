@@ -29,6 +29,11 @@
 #include "stdint.h"
 
 #define PACKED __attribute__((__packed__))
+
+#ifdef min
+#undef min
+#endif
+
 #define min(a, b)  ((a) < (b) ? (a) : (b))
 
 #define free_resource(a) {  \

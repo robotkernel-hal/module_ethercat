@@ -38,7 +38,12 @@
 #include <net/if.h> 
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#ifdef __linux__
 #include <netpacket/packet.h>
+#elif defined __VXWORKS__
+#include <vxWorks.h>
+#include <taskLib.h>
+#endif
 #include <stdio.h>
 #include <fcntl.h>
 #include <unistd.h>
@@ -58,11 +63,13 @@ void *hw_rx_thread(void *arg);
  * \return 0 or negative error code
  */
 int hw_open(hw_t **pphw, const char *devname, int prio, int cpumask) {
+#ifdef __linux__
     struct timeval timeout;
     int i, ifindex;
     struct ifreq ifr;
     struct sockaddr_ll sll;
     memset(&sll, 0, sizeof(sll));
+#endif
 
     (*pphw) = (hw_t *)malloc(sizeof(hw_t));
     if (!(*pphw))
@@ -73,6 +80,7 @@ int hw_open(hw_t **pphw, const char *devname, int prio, int cpumask) {
     datagram_pool_open(&(*pphw)->tx_high, 0);
     datagram_pool_open(&(*pphw)->tx_low, 0);
     
+#ifdef __linux__
     // create raw socket connection
     (*pphw)->sockfd = socket(PF_PACKET, SOCK_RAW, htons(ETH_P_ECAT));
     if ((*pphw)->sockfd <= 0) {
@@ -111,7 +119,18 @@ int hw_open(hw_t **pphw, const char *devname, int prio, int cpumask) {
     sll.sll_ifindex = ifindex;
     sll.sll_protocol = htons(ETH_P_ECAT);
     bind((*pphw)->sockfd, (struct sockaddr *)&sll, sizeof(sll));
-   
+#elif defined __VXWORKS__
+    /* we use snarf link layer device driver */
+    (*pphw)->sockfd = open(devname, O_RDWR, 0644);
+    if ((*pphw)->sockfd <= 0) {
+        perror("open");
+        goto error_exit;
+    }
+
+#else
+#error unsopported OS
+#endif
+
     // thread settings
     (*pphw)->rxthreadprio = prio;
     (*pphw)->rxthreadcpumask = cpumask;
@@ -181,7 +200,11 @@ void *hw_rx_thread(void *arg) {
 #endif
 
     while (phw->rxthreadrunning) {
+#ifdef __linux__
         ssize_t bytesrx = recv(phw->sockfd, pframe, ETH_FRAME_LEN, 0);
+#elif defined __VXWORKS__
+        ssize_t bytesrx = read(phw->sockfd, pframe, ETH_FRAME_LEN);
+#endif
         if (bytesrx <= 0) {
             if ((errno == EAGAIN) || (errno == EWOULDBLOCK))
                 continue;
@@ -254,7 +277,11 @@ int hw_tx(hw_t *phw) {
                 break; // nothing to send
 
             // no more datagrams need to be sent or no more space in frame
+#ifdef __linux__
             size_t bytesrx = send(phw->sockfd, pframe, pframe->len, 0);
+#elif defined __VXWORKS__
+            size_t bytesrx = write(phw->sockfd, pframe, pframe->len);
+#endif
 
             if (pframe->len != bytesrx) {
                 ec_log(10, "TX", "got only %d bytes out of %d bytes through.\n", 

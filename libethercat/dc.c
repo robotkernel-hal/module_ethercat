@@ -96,7 +96,7 @@ void ec_dc_sync01(ec_t *pec, uint16_t slave, int active,
 
 /* latched port time of slave */
 inline int32_t ec_dc_porttime(ec_t *pec, uint16_t slave, uint8_t port) {
-    if (port >= 0 && port < 4)
+    if (port < 4)
         return pec->slaves[slave].dc.receive_times[port].time;
 
     return 0;

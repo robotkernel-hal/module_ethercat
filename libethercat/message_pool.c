@@ -43,7 +43,7 @@
  */
 int ec_async_message_loop_get(ec_message_pool_t *ppool,
         ec_message_entry_t **msg, ec_timer_t *timeout) {
-    int ret = ENOPKG;
+    int ret = ENODATA;
     if (!ppool || !msg)
         return (ret = EINVAL);
 

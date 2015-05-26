@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.63])
-AC_INIT([module_ethercat], [3.1.6], [robert.burger@dlr.de])
+AC_INIT([module_ethercat], [3.1.7], [robert.burger@dlr.de])
 AM_INIT_AUTOMAKE([-Wall -Werror foreign subdir-objects])
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_MACRO_DIR([m4])

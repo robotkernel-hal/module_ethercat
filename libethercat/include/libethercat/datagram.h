@@ -64,6 +64,10 @@ typedef struct __attribute__((__packed__)) ec_datagram {
 #define ec_datagram_hdr_length  (sizeof(ec_datagram_t))
 #define ec_datagram_length(pdg) (ec_datagram_hdr_length + (pdg)->len + EC_WKC_SIZE)
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 //! fill datagram with aprd datagram
 /*!
  * \param pdg pointer to datagram
@@ -112,6 +116,10 @@ int ec_frame_add_datagram_log(ec_frame_t *frame, uint8_t cmd, uint8_t idx,
 #define ec_datagram_next(p)       (ec_datagram_t *)((uint8_t *)(p) + ec_datagram_length(p))
 #define ec_datagram_payload(p)    ((uint8_t *)(p) + sizeof(ec_datagram_t))
 #define ec_datagram_wkc(p)        (*(uint16_t *)((uint8_t *)(p) + ec_datagram_length(p) - 2))
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* __LIBETHERCAT_DATAGRAM_H__ */
 
