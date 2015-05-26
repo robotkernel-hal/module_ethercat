@@ -15,7 +15,7 @@ defines
 module_ethercat_base: %(dirname %(dirname %(CURDIR)))
 module_ethercat_base_type: %(ifexists "%(module_ethercat_base)/lib/libmodule_ethercat.so", "local_install", "rmpm_release")
 module_ethercat_libdir: %(ifeq "%(module_ethercat_base_type)", "local_install", "%(module_ethercat_base)/lib", "%(module_ethercat_base)/lib/$(ARCH)")
-add_message_definition_dir: %(module_ethercat_base)/share/message_definitions
+add_message_definition_dir: %(module_ethercat_base)/share/ln/message_definitions
 
 ifndef rk_modules: rk_modules: ""
 rk_modules: %(rk_modules):%(module_ethercat_libdir)
