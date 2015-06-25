@@ -577,13 +577,18 @@ int ec_transceive(ec_t *pec, uint8_t cmd, uint32_t adr,
         hw_tx(pec->phw);
 
     // wait for completion
-    int ret = sem_wait(&p_idx->waiter);
-    if (ret == -1)
+    ec_timer_t timeout;
+    ec_timer_init(&timeout, 1000000000);
+    struct timespec ts = { timeout.sec, timeout.nsec };
+    int ret = sem_timedwait(&p_idx->waiter, &ts);
+    if (ret == -1) {
         ec_log(1, "ec_transceive", "sem_wait returned: %s\n", strerror(errno));
-
-    *wkc = ec_datagram_wkc(&p_de->datagram);
-    if (*wkc)
-        memcpy(data, ec_datagram_payload(&p_de->datagram), datalen);
+        wkc = 0;
+    } else {
+        *wkc = ec_datagram_wkc(&p_de->datagram);
+        if (*wkc)
+            memcpy(data, ec_datagram_payload(&p_de->datagram), datalen);
+    }
 
     datagram_pool_put(pec->pool, p_de);
     ec_index_put(pec, p_idx);

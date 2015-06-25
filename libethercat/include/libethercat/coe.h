@@ -56,23 +56,27 @@ enum {
 
 #define CANOPEN_MAXNAME 40
     
+//! CanOpen over EtherCAT sdo descriptor
 typedef struct PACKED ec_coe_sdo_desc {
-    uint16_t data_type;             //! element data type
-    uint8_t  obj_code;              //! object type
-    uint8_t  max_subindices;        //! maximum number of subindices
-    char     name[CANOPEN_MAXNAME]; //! element name
+    uint16_t data_type;             //!< element data type
+    uint8_t  obj_code;              //!< object type
+    uint8_t  max_subindices;        //!< maximum number of subindices
+    char     name[CANOPEN_MAXNAME]; //!< element name
 } PACKED ec_coe_sdo_desc_t;
 
 typedef struct PACKED ec_coe_sdo_entry_desc {
-    uint16_t            data_type;
-    uint16_t            bit_length;
-    uint16_t            obj_access;
-    uint8_t            *data;
-    size_t              data_len;
+    uint16_t data_type;
+    uint16_t bit_length;
+    uint16_t obj_access;
+    uint8_t *data;
+    size_t   data_len;
 } PACKED ec_coe_sdo_entry_desc_t;
 
 #ifdef __cplusplus
 extern "C" {
+#endif
+#if 0
+}
 #endif
 
 //! read coe sdo 
@@ -121,12 +125,13 @@ int ec_coe_sdo_desc_read(ec_t *pec, uint16_t slave, uint16_t index,
  * \param pec pointer to ethercat master
  * \param slave slave number
  * \param index sdo index
+ * \param sub_index sub index
  * \param buf buffer to store answer
  * \param len length of buffer, outputs read length
  * \return working counter
  */
-int ec_coe_sdo_entry_desc_read(ec_t *pec, uint16_t slave, uint16_t index, uint8_t sub_index,
-        uint8_t value_info, ec_coe_sdo_entry_desc_t *desc);
+int ec_coe_sdo_entry_desc_read(ec_t *pec, uint16_t slave, uint16_t index,
+        uint8_t sub_index, uint8_t value_info, ec_coe_sdo_entry_desc_t *desc);
 
 //! read coe object dictionary list
 /*!
@@ -137,6 +142,14 @@ int ec_coe_sdo_entry_desc_read(ec_t *pec, uint16_t slave, uint16_t index, uint8_
  * \return working counter
  */
 int ec_coe_odlist_read(ec_t *pec, uint16_t slave, uint8_t *buf, size_t *len);
+
+//! generate sync manager process data mapping via coe
+/*!
+ * \param pec pointer to ethercat master
+ * \param slave slave number
+ * \return 0 on success
+ */
+int ec_coe_generate_mapping(ec_t *pec, uint16_t slave);
 
 #ifdef __cplusplus
 }

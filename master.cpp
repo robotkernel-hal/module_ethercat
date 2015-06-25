@@ -24,6 +24,7 @@
 
 #include "master.h"
 #include "interface_canopen_protocol/module_intf.h"
+#include "interface_sercos_protocol/module_intf.h"
 
 using namespace std;
 using namespace robotkernel;
@@ -54,7 +55,7 @@ void ethercat_log_func(int lvl, void *user, const char *format, ...) {
         loglvl = module_warning;
     if (lvl < 1)
         loglvl = module_error;
-    
+
     ethercat_log(loglvl, e->_name, format, ap);
     va_end(ap);
 }
@@ -132,20 +133,20 @@ master::master(const std::string& name, const YAML::Node& node) {
     set_state(module_state_init);
 
     // add process data inspection 
-//    std::stringstream channel_name; 
-//    channel_name << "channel_" << (int)0;
-//    _pd_interface_id = robotkernel::kernel::register_interface_cb(_name.c_str(), 
-//            "libinterface_process_data_inspection.so", channel_name.str().c_str(), 0);
+    //    std::stringstream channel_name; 
+    //    channel_name << "channel_" << (int)0;
+    //    _pd_interface_id = robotkernel::kernel::register_interface_cb(_name.c_str(), 
+    //            "libinterface_process_data_inspection.so", channel_name.str().c_str(), 0);
 }
 
 //! destruction 
-master::~master() {
-    if (_pec)
-        ec_close(_pec);
+    master::~master() {
+        if (_pec)
+            ec_close(_pec);
 
-    _pec = NULL;
-}
-        
+        _pec = NULL;
+    }
+
 //! cyclic process data read
 /*!
  * \param buf process data buffer
@@ -183,12 +184,12 @@ int master::set_state(module_state_t state) {
                 else 
                     _pec->slaves[nr].dc.use_dc = 0;
             }
-        
+
             break;
         }
         case module_state_preop: {
             _pec->tx_sync = 1;
-            
+
             for (nr = 0; nr < _pec->slave_cnt; ++nr) {
                 // apply sm and fmmu config
                 for (slave::sm_map_t::iterator it = _slave_info[nr]->_sm_map.begin();
@@ -224,13 +225,13 @@ int master::set_state(module_state_t state) {
 
                 it->second->register_interfaces(_name);
             }
-            
+
             ec_set_state(_pec, EC_STATE_SAFEOP);
             _pec->tx_sync = 0;
             break;
         case module_state_op:
             _pec->tx_sync = 0;
-            
+
             ec_set_state(_pec, EC_STATE_OP);
             break;
         default:
@@ -280,7 +281,7 @@ int master::request(int reqcode, void* ptr) {
                     pd->len = _pec->slaves[pd->slave_id].pdin_len;
                 }
             }
-            
+
             ethercat_log(module_verbose, _name, "GET_PDIN: %p/%d\n", pd->pd, pd->len);
             break;
         }
@@ -443,7 +444,7 @@ int master::request(int reqcode, void* ptr) {
                 desc->bit_length    = entry_desc.bit_length;
                 desc->obj_access    = entry_desc.obj_access;
 
-                size_t name_len = min(entry_desc.data_len, 40);//CANOPEN_MAXNAME - 1);
+                size_t name_len = min(entry_desc.data_len, CANOPEN_MAXNAME - 1);
                 memcpy(desc->name, &entry_desc.data[0], name_len);
                 desc->name[name_len] = '\0';
 
@@ -460,9 +461,9 @@ int master::request(int reqcode, void* ptr) {
                         desc->data_type         = slv->eeprom.txpdos[i].data_type;
                         desc->bit_length        = slv->eeprom.txpdos[i].bit_len;
                         desc->obj_access        = 7;
-                        
+
                         size_t name_len = min(
-                                strlen(slv->eeprom.strings[slv->eeprom.txpdos[i].name_idx]), 40);//CANOPEN_MAXNAME - 1);
+                                strlen(slv->eeprom.strings[slv->eeprom.txpdos[i].name_idx]), CANOPEN_MAXNAME - 1);
                         memcpy(desc->name, slv->eeprom.strings[slv->eeprom.txpdos[i].name_idx], name_len);
                         desc->name[name_len] = '\0';
                     }
@@ -470,7 +471,7 @@ int master::request(int reqcode, void* ptr) {
 
                 if (found)
                     break;
-                
+
                 for (unsigned i = 0; i < slv->eeprom.rxpdos_cnt; ++i) {
                     if (slv->eeprom.rxpdos[i].pdo_index == desc->index) {
                         found = true;
@@ -479,9 +480,9 @@ int master::request(int reqcode, void* ptr) {
                         desc->data_type         = slv->eeprom.rxpdos[i].data_type;
                         desc->bit_length        = slv->eeprom.rxpdos[i].bit_len;
                         desc->obj_access        = 7;
-                        
+
                         size_t name_len = min(
-                                strlen(slv->eeprom.strings[slv->eeprom.rxpdos[i].name_idx]), 40);//CANOPEN_MAXNAME - 1);
+                                strlen(slv->eeprom.strings[slv->eeprom.rxpdos[i].name_idx]), CANOPEN_MAXNAME - 1);
                         memcpy(desc->name, slv->eeprom.strings[slv->eeprom.rxpdos[i].name_idx], name_len);
                         desc->name[name_len] = '\0';
                     }
@@ -494,9 +495,9 @@ int master::request(int reqcode, void* ptr) {
             size_t size = value->value_len;
             uint32_t abort_code = 0;
 
-//            ethercat_log(module_verbose, "MOD_REQUEST_CANOPEN_READ_ELEMENT_VALUE", "slave %d: index 0x%X, "
-//                    "sub_index %d, want to read %d bytes\n", value->slave_id, value->index,
-//                    value->sub_index, value->value_len);
+            ethercat_log(module_verbose, "MOD_REQUEST_CANOPEN_READ_ELEMENT_VALUE", "slave %d: index 0x%X, "
+                    "sub_index %d, want to read %d bytes\n", value->slave_id, value->index,
+                    value->sub_index, value->value_len);
 
             if (_pec->slaves[value->slave_id].eeprom.mbx_supported & EC_EEPROM_MBX_COE) {
                 ec_coe_sdo_read(_pec, value->slave_id, value->index, value->sub_index, 
@@ -508,14 +509,32 @@ int master::request(int reqcode, void* ptr) {
             break;
         }
         case MOD_REQUEST_CANOPEN_WRITE_ELEMENT_VALUE: {
-//            canopen_element_value *value = (canopen_element_value *)ptr;
-//            int size = value->value_len;
+            canopen_element_value *value = (canopen_element_value *)ptr;
+            size_t size = value->value_len;
+            uint32_t abort_code = 0;
 
-//            pthread_mutex_lock(&_mbx_lock);
-//            ret = ecx_SDOwrite(_ctx, value->slave_id, value->index, value->sub_index, 0, 
-//                    size, value->value, EC_TIMEOUTRXM);
-//            pthread_mutex_unlock(&_mbx_lock);
+            ethercat_log(module_verbose, "MOD_REQUEST_CANOPEN_WRITE_ELEMENT_VALUE", "slave %d: index 0x%X, "
+                    "sub_index %d, want to read %d bytes\n", value->slave_id, value->index,
+                    value->sub_index, value->value_len);
+
+            if (_pec->slaves[value->slave_id].eeprom.mbx_supported & EC_EEPROM_MBX_COE) {
+                ec_coe_sdo_write(_pec, value->slave_id, value->index, value->sub_index, 
+                        0, (uint8_t *)value->value, &size);
+                value->value_len = size;
+                ret = abort_code;
+            } else // search in eeprom entries
+                memset(value->value, 0, value->value_len);
             break;
+        }
+        case MOD_REQUEST_SERCOS_SERVICE_TRANSFER: {
+            sercos_service_transfer *t = (sercos_service_transfer *)ptr;
+
+            if (t->direction == SSD_MASTER_TO_DRIVE)
+                ret = ec_soe_write(_pec, t->slave_id >> 16, t->slave_id & 0x0000FFFFF,
+                        t->idn, t->element, (uint8_t *)t->buf, t->buflen); 
+            else 
+                ret = ec_soe_read(_pec, t->slave_id >> 16, t->slave_id & 0x0000FFFFF,
+                        t->idn, t->element, (uint8_t *)t->buf, &t->buflen); 
         }
         default:
             ret = -1;
@@ -530,7 +549,7 @@ void master::trigger() {
     int i = 0;
     ec_timer_t timeout;
     ec_timer_init(&timeout, 10000000);
-    
+
     if (_state >= module_state_safeop) {
         for (i = 0; i < _pec->pd_group_cnt; ++i) {
             group *g = _group_info[i];
@@ -560,7 +579,7 @@ void master::trigger() {
             for (std::list<int>::iterator it = g->_slaves.begin(); it != g->_slaves.end(); ++it)
                 trigger_modules(*it);
         }
-        
+
         if (_pec->dc.have_dc)
             ec_receive_distributed_clocks_sync(_pec, &timeout);
     }

@@ -642,3 +642,80 @@ int ec_coe_sdo_entry_desc_read(ec_t *pec, uint16_t slave, uint16_t index, uint8_
     return wkc;
 }
 
+int ec_coe_generate_mapping(ec_t *pec, uint16_t slave) {
+    int ret = 0;
+    ec_slave_t *slv = (ec_slave_t *)&pec->slaves[slave];
+
+    for (int sm_idx = 2; sm_idx <= 3; ++sm_idx) {
+        int wkc, bit_len = 0, idx = 0x1c10 + sm_idx;
+        uint8_t entry_cnt = 0, entry_cnt_2;
+        size_t entry_cnt_size = sizeof(entry_cnt);
+        uint32_t abort_code = 0;
+        wkc = ec_coe_sdo_read(pec, slave, idx, 0, 0, &entry_cnt, 
+                &entry_cnt_size, &abort_code);
+
+        if (wkc != 1) {
+            ec_log(10, __func__, "slave %2d: reading 0x%04X/%d failed\n", 
+                    slave, idx, 0);
+            continue;
+        }
+
+        ec_log(100, __func__, "slave %2d: 0x%04X count %d\n", slave, 
+                idx, entry_cnt); 
+
+        for (int i = 1; i <= entry_cnt; ++i) {
+            uint16_t entry_idx;
+            size_t entry_size = sizeof(entry_idx);
+            wkc = ec_coe_sdo_read(pec, slave, idx, i, 0, 
+                    (uint8_t *)&entry_idx, &entry_size, &abort_code);
+
+            if (wkc != 1) {
+                ec_log(10, __func__, "slave %2d: reading 0x%04X/%d failed\n", 
+                        slave, idx, i);
+                continue;
+            }
+
+            entry_cnt_size = sizeof(entry_cnt_2);
+
+            wkc = ec_coe_sdo_read(pec, slave, entry_idx, 0, 0, 
+                    (uint8_t *)&entry_cnt_2, &entry_cnt_size, &abort_code);
+
+            if (wkc != 1) {
+                ec_log(10, __func__, "slave %2d: reading 0x%04X/%d failed\n", 
+                        slave, entry_idx, 0);
+                continue;
+            }
+
+            ec_log(100, __func__, "slave %2d: 0x%04X count %d\n", slave, 
+                    entry_idx, entry_cnt_2); 
+
+            for (int j = 1; j <= entry_cnt_2; ++j) {
+                uint32_t entry;
+                size_t entry_size = sizeof(entry);
+                wkc = ec_coe_sdo_read(pec, slave, entry_idx, j, 0, 
+                        (uint8_t *)&entry, &entry_size, &abort_code);
+
+                if (wkc != 1) {
+                    ec_log(10, __func__, "slave %2d: reading 0x%04X/%d failed\n", 
+                            slave, entry_idx, j);
+                    continue;
+                }
+
+                ec_log(100, __func__, "slave %2d: mapped entry %08X\n", slave, entry);
+
+                bit_len += entry & 0x000000FF;
+            }                        
+        }
+
+        if (bit_len) {
+            ec_log(10, __func__, "slave %2d: sm%d length bits %d, bytes %d\n", 
+                    slave, sm_idx, bit_len, (bit_len + 7) / 8);
+
+            if (slv->sm && slv->sm_ch > sm_idx)
+                slv->sm[sm_idx].len = (bit_len + 7) / 8;
+        }
+    }
+
+    return ret;
+}
+

@@ -42,6 +42,7 @@
 #include "libethercat/coe.h"
 #include "libethercat/mbx.h"
 #include "libethercat/dc.h"
+#include "libethercat/soe.h"
 
 //! module_ethercat::
 namespace module_ethercat {

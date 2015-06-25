@@ -13,6 +13,7 @@ libmodule_ethercat_la_SOURCES  = module_ethercat.cpp \
 								 libethercat/message_pool.c \
 								 libethercat/ec.c \
 								 libethercat/hw.c \
+								 libethercat/soe.c \
 								 libethercat/mbx.c \
 								 libethercat/eeprom.c \
 								 libethercat/dc.c \
@@ -26,7 +27,8 @@ libmodule_ethercat_la_CXXFLAGS = -Wall \
 								 @ROBOTKERNEL_CFLAGS@ \
 								 @LN_CFLAGS@ \
 								 @INTERFACE_MEMORY_INSPECTION_CFLAGS@ \
-								 @INTERFACE_CANOPEN_PROTOCOL_CFLAGS@
+								 @INTERFACE_CANOPEN_PROTOCOL_CFLAGS@ \
+								 @INTERFACE_SERCOS_PROTOCOL_CFLAGS@
 
 libmodule_ethercat_la_CFLAGS   = -std=gnu99 \
 								 -Wall \
@@ -37,7 +39,8 @@ libmodule_ethercat_la_CFLAGS   = -std=gnu99 \
 								 @ROBOTKERNEL_CFLAGS@ \
 								 @LN_CFLAGS@ \
 								 @INTERFACE_MEMORY_INSPECTION_CFLAGS@ \
-								 @INTERFACE_CANOPEN_PROTOCOL_CFLAGS@
+								 @INTERFACE_CANOPEN_PROTOCOL_CFLAGS@ \
+								 @INTERFACE_SERCOS_PROTOCOL_CFLAGS@
 
 libmodule_ethercat_la_LDFLAGS  = -Wall -release $(PACKAGE_VERSION)
 

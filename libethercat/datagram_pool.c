@@ -137,7 +137,9 @@ int datagram_pool_get_next_len(datagram_pool_t *pp, size_t *len) {
         return EINVAL;
     
 
+//    printf("trying to get pool lock\n");
     pthread_mutex_lock(&pp->_pool_lock);
+//    printf("got pool lock\n");
 
     datagram_entry_t *entry = (datagram_entry_t *)TAILQ_FIRST(&pp->avail);
     if (entry)
@@ -145,7 +147,9 @@ int datagram_pool_get_next_len(datagram_pool_t *pp, size_t *len) {
     else
         *len = 0;
     
+//    printf("length is %d\ntrying to return pool lock\n", *len);
     pthread_mutex_unlock(&pp->_pool_lock);
+//    printf("returned pool lock\n");
 
     return ENODATA;
 }
@@ -160,12 +164,14 @@ int datagram_pool_put(datagram_pool_t *pp, datagram_entry_t *datagram) {
     if (!pp || !datagram)
         return -EINVAL;
     
+//    printf("put: trying to get pool lock\n");
     pthread_mutex_lock(&pp->_pool_lock);
 
     TAILQ_INSERT_TAIL(&pp->avail, (datagram_entry_t *)datagram, qh);
     sem_post(&pp->avail_cnt);
     
     pthread_mutex_unlock(&pp->_pool_lock);
+//    printf("put: returned pool lock\n");
     
     return 0;
 }

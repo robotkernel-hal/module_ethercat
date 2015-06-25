@@ -59,6 +59,9 @@ PKG_CHECK_MODULES([INTERFACE_MEMORY_INSPECTION], [interface_memory_inspection], 
 PKG_CHECK_MODULES([INTERFACE_CANOPEN_PROTOCOL], [interface_canopen_protocol], [], [
                     RMPM_CHECK_MODULES([INTERFACE_CANOPEN_PROTOCOL], [robotkernel.interface_canopen_protocol])
                    ])
+PKG_CHECK_MODULES([INTERFACE_SERCOS_PROTOCOL], [interface_sercos_protocol], [], [
+                    RMPM_CHECK_MODULES([INTERFACE_SERCOS_PROTOCOL], [robotkernel.interface_sercos_protocol])
+                   ])
 
 # try to automatically find ln
 LN_GENERATE_ARGS='-md_dir $(srcdir)/share/ln/message_definitions'

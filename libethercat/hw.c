@@ -43,6 +43,8 @@
 #elif defined __VXWORKS__
 #include <vxWorks.h>
 #include <taskLib.h>
+#else
+#error unsupported OS
 #endif
 #include <stdio.h>
 #include <fcntl.h>
@@ -127,6 +129,7 @@ int hw_open(hw_t **pphw, const char *devname, int prio, int cpumask) {
         goto error_exit;
     }
 
+    (*pphw)->mtu_size = 1480;
 #else
 #error unsopported OS
 #endif
@@ -200,10 +203,13 @@ void *hw_rx_thread(void *arg) {
 #endif
 
     while (phw->rxthreadrunning) {
+        ssize_t bytesrx = 
 #ifdef __linux__
-        ssize_t bytesrx = recv(phw->sockfd, pframe, ETH_FRAME_LEN, 0);
+            recv(phw->sockfd, pframe, ETH_FRAME_LEN, 0);
 #elif defined __VXWORKS__
-        ssize_t bytesrx = read(phw->sockfd, pframe, ETH_FRAME_LEN);
+            read(phw->sockfd, pframe, ETH_FRAME_LEN);
+#else
+#error unsupported OS
 #endif
         if (bytesrx <= 0) {
             if ((errno == EAGAIN) || (errno == EWOULDBLOCK))
@@ -240,7 +246,8 @@ void *hw_rx_thread(void *arg) {
 }
 
 static const uint8_t mac_dest[] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
-static const uint8_t mac_src[]  = { 0x00, 0x1B, 0x21, 0xB8, 0x77, 0xCC };
+//static const uint8_t mac_src[]  = { 0x00, 0x1B, 0x21, 0xB8, 0x77, 0xCC };
+static const uint8_t mac_src[]  = { 0x00, 0x30, 0x64, 0x0f, 0x83, 0x35 };
 
 //! start sending queued ethercat datagrams
 /*!
@@ -277,17 +284,20 @@ int hw_tx(hw_t *phw) {
                 break; // nothing to send
 
             // no more datagrams need to be sent or no more space in frame
+            size_t bytestx = 
 #ifdef __linux__
-            size_t bytesrx = send(phw->sockfd, pframe, pframe->len, 0);
+                send(phw->sockfd, pframe, pframe->len, 0);
 #elif defined __VXWORKS__
-            size_t bytesrx = write(phw->sockfd, pframe, pframe->len);
+                write(phw->sockfd, pframe, pframe->len);
+#else
+#error unsupported OS
 #endif
 
-            if (pframe->len != bytesrx) {
+            if (pframe->len != bytestx) {
                 ec_log(10, "TX", "got only %d bytes out of %d bytes through.\n", 
-                        bytesrx, pframe->len);
+                        bytestx, pframe->len);
 
-                if (bytesrx == -1)
+                if (bytestx == -1)
                     ec_log(10, "TX", "error: %s\n", strerror(errno));
             }
 
