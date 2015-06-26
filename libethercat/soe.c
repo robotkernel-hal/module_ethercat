@@ -1,0 +1,257 @@
+//! ethercat servodrive over ethercat mailbox handling
+/*!
+ * author: Robert Burger
+ *
+ * $Id$
+ */
+
+/*
+ * This file is part of libethercat.
+ *
+ * libethercat is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * libethercat is distributed in the hope that 
+ * it will be useful, but WITHOUT ANY WARRANTY; without even the implied 
+ * warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with libethercat
+ * If not, see <http://www.gnu.org/licenses/>.
+ */
+
+#include "libethercat/mbx.h"
+#include "libethercat/soe.h"
+#include "libethercat/timer.h"
+
+#include <stdio.h>
+#include <string.h>
+
+typedef struct PACKED ec_soe_request {
+    ec_mbx_header_t mbx_hdr;
+    ec_soe_header_t soe_hdr;
+    ec_data_t       data;
+} ec_soe_request_t;
+
+/** SoE opcodes */
+enum {
+   EC_SOE_READ_REQ     = 0x01,
+   EC_SOE_READ_RES,
+   EC_SOE_WRITE_REQ,
+   EC_SOE_WRITE_RES,
+   EC_SOE_NOTIFICATION,
+   EC_SOE_EMERGENCY
+};
+
+
+int ec_soe_read(ec_t *pec, uint16_t slave, uint8_t atn, uint16_t idn, 
+        uint8_t elements, uint8_t *buf, size_t *len) {
+    int wkc;
+
+    ec_soe_request_t *write_buf = 
+        (ec_soe_request_t *)(pec->slaves[slave].mbx_write.buf);
+
+    // empty mailbox if anything in
+    ec_mbx_clear(pec, slave, 1);
+    ec_mbx_receive(pec, slave, 0);
+
+    // mailbox header
+    ec_mbx_clear(pec, slave, 0);
+    write_buf->mbx_hdr.length   = sizeof(ec_soe_header_t);
+    write_buf->mbx_hdr.address  = 0x0000;
+    write_buf->mbx_hdr.priority = 0x00;
+    write_buf->mbx_hdr.mbxtype  = EC_MBX_SOE;
+
+    // soe header
+    write_buf->soe_hdr.op_code    = EC_SOE_READ_REQ;
+    write_buf->soe_hdr.incomplete = 0;
+    write_buf->soe_hdr.error      = 0;
+    write_buf->soe_hdr.atn        = atn;
+    write_buf->soe_hdr.elements   = elements;
+    write_buf->soe_hdr.idn        = idn;
+
+    // send request
+    wkc = ec_mbx_send(pec, slave, EC_DEFAULT_TIMEOUT_MBX);
+    if (!wkc) {
+        ec_log(10, "ec_soe_read", "error on writing send mailbox\n");
+        return wkc;
+    }
+
+    uint8_t *to = buf;
+    size_t left_len = *len;
+    ec_soe_request_t *read_buf  = 
+        (ec_soe_request_t *)(pec->slaves[slave].mbx_read.buf); 
+
+    while (1) {
+        // wait for answer
+        ec_mbx_clear(pec, slave, 1);
+        wkc = ec_mbx_receive(pec, slave, EC_DEFAULT_TIMEOUT_MBX);
+        if (!wkc) {
+            ec_log(10, "ec_soe_read", "error on reading receive mailbox\n");
+            return wkc;
+        }
+
+        // check for correct op_code
+        if (!read_buf->soe_hdr.op_code != EC_SOE_READ_RES)
+            continue; // TODO handle unexpected answer
+
+        size_t read_len = read_buf->mbx_hdr.length - sizeof(ec_soe_header_t);
+        memcpy(to, &read_buf->data, min(read_len, left_len));
+        to += read_len;
+        left_len -= read_len;
+    
+        if (!read_buf->soe_hdr.incomplete)
+            break;
+    }
+
+    return wkc;
+}
+
+int ec_soe_write(ec_t *pec, uint16_t slave, uint8_t atn, uint16_t idn, 
+        uint8_t elements, uint8_t *buf, size_t len) {
+    int wkc = 0;
+    
+    ec_soe_request_t *write_buf = 
+        (ec_soe_request_t *)(pec->slaves[slave].mbx_write.buf);
+
+    // empty mailbox if anything in
+    ec_mbx_clear(pec, slave, 1);
+    ec_mbx_receive(pec, slave, 0);
+
+    // mailbox header
+    ec_mbx_clear(pec, slave, 0);
+    write_buf->mbx_hdr.length   = sizeof(ec_soe_header_t);
+    write_buf->mbx_hdr.address  = 0x0000;
+    write_buf->mbx_hdr.priority = 0x00;
+    write_buf->mbx_hdr.mbxtype  = EC_MBX_SOE;
+
+    // soe header
+    write_buf->soe_hdr.op_code    = EC_SOE_WRITE_REQ;
+    write_buf->soe_hdr.error      = 0;
+    write_buf->soe_hdr.atn        = atn;
+    write_buf->soe_hdr.elements   = elements;
+    write_buf->soe_hdr.idn        = idn;
+
+    uint8_t *from = buf;
+    size_t left_len = len;
+    size_t mbx_len = pec->slaves[slave].sm[0].len 
+        - sizeof(ec_mbx_header_t) - sizeof(ec_soe_header_t);
+    ec_soe_request_t *read_buf  = 
+        (ec_soe_request_t *)(pec->slaves[slave].mbx_read.buf); 
+
+    while (1) {
+        size_t send_len = min(left_len, mbx_len);
+        write_buf->mbx_hdr.length += send_len;
+        memcpy(&write_buf->data, from, send_len);
+        from += send_len;
+        left_len -= send_len;
+
+        if (left_len) {
+            write_buf->soe_hdr.incomplete = 1;
+            write_buf->soe_hdr.fragments_left = left_len / mbx_len + 1;
+        } else {
+            write_buf->soe_hdr.incomplete = 0;
+            write_buf->soe_hdr.idn = idn;
+        }
+
+        // send request
+        wkc = ec_mbx_send(pec, slave, EC_DEFAULT_TIMEOUT_MBX);
+        if (!wkc) {
+            ec_log(10, "ec_soe_read", "error on writing send mailbox\n");
+            return wkc;
+        }
+
+        // wait for answer
+        ec_mbx_clear(pec, slave, 1);
+        wkc = ec_mbx_receive(pec, slave, EC_DEFAULT_TIMEOUT_MBX);
+        if (!wkc) {
+            ec_log(10, "ec_soe_read", "error on reading receive mailbox\n");
+            return wkc;
+        }
+
+        // check for correct op_code
+        if (!read_buf->soe_hdr.op_code != EC_SOE_WRITE_RES)
+            continue; // TODO handle unexpected answer
+
+        if (!left_len)
+            break;
+    }
+
+    return wkc;
+}
+
+int ec_coe_generate_mapping_local(ec_t *pec, uint16_t slave, uint8_t atn, 
+        uint16_t idn, int *bitsize) {
+    int ret = 0;
+    
+    *bitsize = 0;
+
+    uint16_t idn_len[2];
+    size_t idn_len_size = sizeof(idn_len);
+    int wkc = ec_soe_read(pec, slave, atn, idn, EC_SOE_VALUE, 
+            (uint8_t *)idn_len, &idn_len_size);
+    
+    size_t idn_size = idn_len[0];
+    uint16_t *idn_value = malloc(idn_size);
+    wkc = ec_soe_read(pec, slave, atn, idn, EC_SOE_VALUE, 
+            (uint8_t *)idn_value, &idn_size);
+
+    int i; 
+    for (i = 0; i < (idn_len[0]/2); ++i) {
+        uint16_t sub_idn = idn_value[i+2];
+        ec_soe_idn_attribute_t sub_idn_attr;
+        size_t sub_idn_attr_size = sizeof(sub_idn_attr);
+
+        wkc = ec_soe_read(pec, slave, atn, sub_idn, EC_SOE_ATTRIBUTE, 
+                (uint8_t*)&sub_idn_attr, &sub_idn_attr_size);
+
+        // 0 = 8 bit, 1 = 16 bit, ...
+        *bitsize += 8 << sub_idn_attr.length;
+    }
+
+    return ret;
+}
+
+int ec_soe_generate_mapping(ec_t *pec, uint16_t slave) {
+    int ret = 0, atn;
+    ec_slave_t *slv = (ec_slave_t *)&pec->slaves[slave];
+
+    uint16_t idn_at = 16;
+    int at_bits, at_sm = 3;
+    for (atn = 0; atn < slv->eeprom.general.soe_channels; ++atn) {
+        int bits = 0;
+        ec_coe_generate_mapping_local(pec, slave, atn, idn_at, &bits);
+
+        at_bits += bits;
+    }
+        
+    if (at_bits) {
+        ec_log(10, __func__, "slave %2d: sm%d length bits %d, bytes %d\n", 
+                slave, at_sm, at_bits, (at_bits + 7) / 8);
+
+        if (slv->sm && slv->sm_ch > at_sm)
+            slv->sm[at_sm].len = (at_bits + 7) / 8;
+    }
+    
+    uint16_t idn_mdt = 24;
+    int mdt_bits, mdt_sm = 2;
+    for (atn = 0; atn < slv->eeprom.general.soe_channels; ++atn) {
+        int bits = 0;
+        ec_coe_generate_mapping_local(pec, slave, atn, idn_mdt, &bits);
+
+        mdt_bits += bits;
+    }
+        
+    if (mdt_bits) {
+        ec_log(10, __func__, "slave %2d: sm%d length bits %d, bytes %d\n", 
+                slave, mdt_sm, mdt_bits, (mdt_bits + 7) / 8);
+
+        if (slv->sm && slv->sm_ch > mdt_sm)
+            slv->sm[mdt_sm].len = (mdt_bits + 7) / 8;
+    }
+
+    return ret;
+}

@@ -159,8 +159,10 @@ int ec_slave_generate_mapping(ec_t *pec, uint16_t slave) {
     ec_slave_t *slv = (ec_slave_t *)&pec->slaves[slave];
     
     // check sm settings
-    if (slv->eeprom.mbx_supported & EC_EEPROM_MBX_COE) // have coe mailbox, check objects 1c12, 1c13
+    if (slv->eeprom.mbx_supported & EC_EEPROM_MBX_COE)
         ec_coe_generate_mapping(pec, slave);
+    else if (slv->eeprom.mbx_supported & EC_EEPROM_MBX_SOE)
+        ec_soe_generate_mapping(pec, slave);
     else {
         // try eeprom
         for (int sm_idx = 0; sm_idx < slv->sm_ch; ++sm_idx) {
