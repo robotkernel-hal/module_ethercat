@@ -183,7 +183,7 @@ int ec_soe_write(ec_t *pec, uint16_t slave, uint8_t atn, uint16_t idn,
     return wkc;
 }
 
-int ec_coe_generate_mapping_local(ec_t *pec, uint16_t slave, uint8_t atn, 
+int ec_soe_generate_mapping_local(ec_t *pec, uint16_t slave, uint8_t atn, 
         uint16_t idn, int *bitsize) {
     int ret = 0;
     
@@ -223,7 +223,7 @@ int ec_soe_generate_mapping(ec_t *pec, uint16_t slave) {
     int at_bits, at_sm = 3;
     for (atn = 0; atn < slv->eeprom.general.soe_channels; ++atn) {
         int bits = 0;
-        ec_coe_generate_mapping_local(pec, slave, atn, idn_at, &bits);
+        ec_soe_generate_mapping_local(pec, slave, atn, idn_at, &bits);
 
         at_bits += bits;
     }
@@ -240,7 +240,7 @@ int ec_soe_generate_mapping(ec_t *pec, uint16_t slave) {
     int mdt_bits, mdt_sm = 2;
     for (atn = 0; atn < slv->eeprom.general.soe_channels; ++atn) {
         int bits = 0;
-        ec_coe_generate_mapping_local(pec, slave, atn, idn_mdt, &bits);
+        ec_soe_generate_mapping_local(pec, slave, atn, idn_mdt, &bits);
 
         mdt_bits += bits;
     }
