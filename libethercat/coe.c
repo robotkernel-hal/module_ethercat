@@ -655,14 +655,14 @@ int ec_coe_generate_mapping(ec_t *pec, uint16_t slave) {
     ec_slave_t *slv = (ec_slave_t *)&pec->slaves[slave];
 
     for (int sm_idx = 2; sm_idx <= 3; ++sm_idx) {
-        int wkc, bit_len = 0, idx = 0x1c10 + sm_idx;
+        int bit_len = 0, idx = 0x1c10 + sm_idx;
         uint8_t entry_cnt = 0, entry_cnt_2;
         size_t entry_cnt_size = sizeof(entry_cnt);
         uint32_t abort_code = 0;
-        wkc = ec_coe_sdo_read(pec, slave, idx, 0, 0, &entry_cnt, 
-                &entry_cnt_size, &abort_code);
-
-        if (wkc != 1) {
+        
+        // read count of mapping entries, stored in subindex 0
+        if (!ec_coe_sdo_read(pec, slave, idx, 0, 0, &entry_cnt, 
+                &entry_cnt_size, &abort_code)) {
             ec_log(10, __func__, "slave %2d: reading 0x%04X/%d failed\n", 
                     slave, idx, 0);
             continue;
@@ -674,10 +674,9 @@ int ec_coe_generate_mapping(ec_t *pec, uint16_t slave) {
         for (int i = 1; i <= entry_cnt; ++i) {
             uint16_t entry_idx;
             size_t entry_size = sizeof(entry_idx);
-            wkc = ec_coe_sdo_read(pec, slave, idx, i, 0, 
-                    (uint8_t *)&entry_idx, &entry_size, &abort_code);
-
-            if (wkc != 1) {
+            // read entry subindex with mapped value
+            if (!ec_coe_sdo_read(pec, slave, idx, i, 0, 
+                    (uint8_t *)&entry_idx, &entry_size, &abort_code)) {
                 ec_log(10, __func__, "slave %2d: reading 0x%04X/%d failed\n", 
                         slave, idx, i);
                 continue;
@@ -685,10 +684,9 @@ int ec_coe_generate_mapping(ec_t *pec, uint16_t slave) {
 
             entry_cnt_size = sizeof(entry_cnt_2);
 
-            wkc = ec_coe_sdo_read(pec, slave, entry_idx, 0, 0, 
-                    (uint8_t *)&entry_cnt_2, &entry_cnt_size, &abort_code);
-
-            if (wkc != 1) {
+            // read count of entries of mapped value
+            if (!ec_coe_sdo_read(pec, slave, entry_idx, 0, 0, 
+                    (uint8_t *)&entry_cnt_2, &entry_cnt_size, &abort_code)) {
                 ec_log(10, __func__, "slave %2d: reading 0x%04X/%d failed\n", 
                         slave, entry_idx, 0);
                 continue;
@@ -700,10 +698,8 @@ int ec_coe_generate_mapping(ec_t *pec, uint16_t slave) {
             for (int j = 1; j <= entry_cnt_2; ++j) {
                 uint32_t entry;
                 size_t entry_size = sizeof(entry);
-                wkc = ec_coe_sdo_read(pec, slave, entry_idx, j, 0, 
-                        (uint8_t *)&entry, &entry_size, &abort_code);
-
-                if (wkc != 1) {
+                if (!ec_coe_sdo_read(pec, slave, entry_idx, j, 0, 
+                        (uint8_t *)&entry, &entry_size, &abort_code)) {
                     ec_log(10, __func__, "slave %2d: reading 0x%04X/%d failed\n", 
                             slave, entry_idx, j);
                     continue;
