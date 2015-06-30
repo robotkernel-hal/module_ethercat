@@ -36,7 +36,7 @@ typedef struct PACKED ec_soe_request {
     ec_data_t       data;
 } ec_soe_request_t;
 
-/** SoE opcodes */
+//! soe op codes
 enum {
     EC_SOE_READ_REQ     = 0x01,
     EC_SOE_READ_RES,
@@ -45,7 +45,6 @@ enum {
     EC_SOE_NOTIFICATION,
     EC_SOE_EMERGENCY
 };
-
 
 int ec_soe_read(ec_t *pec, uint16_t slave, uint8_t atn, uint16_t idn, 
         uint8_t elements, uint8_t *buf, size_t *len) {
@@ -195,14 +194,14 @@ int ec_soe_generate_mapping_local(ec_t *pec, uint16_t slave, uint8_t atn,
     uint16_t idn_len[2];
     size_t idn_len_size = sizeof(idn_len);
     if (ec_soe_read(pec, slave, atn, idn, EC_SOE_VALUE, 
-            (uint8_t *)idn_len, &idn_len_size) != 0)
+                (uint8_t *)idn_len, &idn_len_size) != 0)
         return -1;
 
     // read mapping idn
     size_t idn_size = idn_len[0];
     uint16_t *idn_value = malloc(idn_size);
     if (ec_soe_read(pec, slave, atn, idn, EC_SOE_VALUE, 
-            (uint8_t *)idn_value, &idn_size) != 0)
+                (uint8_t *)idn_value, &idn_size) != 0)
         return -1;
 
     // read all mapped idn's and add bit length, 
@@ -213,7 +212,7 @@ int ec_soe_generate_mapping_local(ec_t *pec, uint16_t slave, uint8_t atn,
         size_t sub_idn_attr_size = sizeof(sub_idn_attr);
 
         if (ec_soe_read(pec, slave, atn, sub_idn, EC_SOE_ATTRIBUTE, 
-                (uint8_t*)&sub_idn_attr, &sub_idn_attr_size) != 0)
+                    (uint8_t*)&sub_idn_attr, &sub_idn_attr_size) != 0)
             continue;
 
         // 0 = 8 bit, 1 = 16 bit, ...

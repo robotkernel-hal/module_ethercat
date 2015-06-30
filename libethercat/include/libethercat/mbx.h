@@ -31,22 +31,22 @@
 
 //! mailbox types
 enum {
-   EC_MBX_ERR = 0x00,   //!< error mailbox
-   EC_MBX_AOE,          //!< ADS over EtherCAT mailbox
-   EC_MBX_EOE,          //!< Ethernet over EtherCAT mailbox
-   EC_MBX_COE,          //!< CANopen over EtherCAT mailbox
-   EC_MBX_FOE,          //!< File over EtherCAT mailbox
-   EC_MBX_SOE,          //!< Servo over EtherCAT mailbox
-   EC_MBX_VOE = 0x0f    //!< Vendor over EtherCAT mailbox
+    EC_MBX_ERR = 0x00,   //!< error mailbox
+    EC_MBX_AOE,          //!< ADS over EtherCAT mailbox
+    EC_MBX_EOE,          //!< Ethernet over EtherCAT mailbox
+    EC_MBX_COE,          //!< CANopen over EtherCAT mailbox
+    EC_MBX_FOE,          //!< File over EtherCAT mailbox
+    EC_MBX_SOE,          //!< Servo over EtherCAT mailbox
+    EC_MBX_VOE = 0x0f    //!< Vendor over EtherCAT mailbox
 };
 
 //! ethercat mailbox header
 typedef struct PACKED ec_mbx_header {
-   uint16_t  length;
-   uint16_t  address;
-   uint8_t   priority;
-   unsigned  mbxtype : 4;
-   unsigned  counter : 4;
+    uint16_t  length;
+    uint16_t  address;
+    uint8_t   priority;
+    unsigned  mbxtype : 4;
+    unsigned  counter : 4;
 } PACKED ec_mbx_header_t;
 
 //! ethercat mailbox data
@@ -57,6 +57,9 @@ typedef struct PACKED ec_mbx {
 
 #ifdef __cplusplus
 extern "C" {
+#endif
+#if 0
+}
 #endif
 
 //! check if mailbox is empty

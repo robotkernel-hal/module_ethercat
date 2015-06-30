@@ -98,7 +98,7 @@ int ec_slave_set_state(ec_t *pec, uint16_t slave, ec_state_t state) {
     uint16_t wkc = 0, act_state, value;
     ec_fpwr(pec, pec->slaves[slave].fixed_address, 
             EC_REG_ALCTL, &state, sizeof(state), &wkc); 
-    
+
     if (state & EC_STATE_RESET)
         return wkc; // just return here, we did an error reset
 
@@ -110,7 +110,7 @@ int ec_slave_set_state(ec_t *pec, uint16_t slave, ec_state_t state) {
 
         ec_log(100, "EC_STATE_SET", "slave %d, state %X, act_state %X, wkc %d\n", 
                 slave, state, act_state, wkc);
-        
+
         if (act_state & EC_STATE_ERROR) {
             ec_fprd(pec, pec->slaves[slave].fixed_address, 
                     EC_REG_ALSTATCODE, &value, sizeof(value), &wkc);
@@ -138,10 +138,10 @@ int ec_slave_get_state(ec_t *pec, uint16_t slave, ec_state_t *state) {
     uint16_t wkc = 0, value = 0;
     ec_fprd(pec, pec->slaves[slave].fixed_address, 
             EC_REG_ALSTAT, &value, sizeof(value), &wkc);
-    
+
     if (wkc)
         *state = (ec_state_t)value;
-    
+
     if (*state & 0x10)
         ec_fprd(pec, pec->slaves[slave].fixed_address, 
                 EC_REG_ALSTATCODE, &value, sizeof(value), &wkc);
@@ -157,7 +157,7 @@ int ec_slave_get_state(ec_t *pec, uint16_t slave, ec_state_t *state) {
  */
 int ec_slave_generate_mapping(ec_t *pec, uint16_t slave) {
     ec_slave_t *slv = (ec_slave_t *)&pec->slaves[slave];
-    
+
     // check sm settings
     if (slv->eeprom.mbx_supported & EC_EEPROM_MBX_COE)
         ec_coe_generate_mapping(pec, slave);
@@ -187,10 +187,10 @@ int ec_slave_generate_mapping(ec_t *pec, uint16_t slave) {
                 if (sm_idx == pdo->sm_nr) 
                     bit_len += pdo->bit_len;
             }
-            
+
             ec_log(100, "GENERATE_MAPPING", "slave %2d: txpdos %d, rxpdos %d, bitlen%d %d\n", 
                     slave, slv->eeprom.txpdos_cnt, slv->eeprom.rxpdos_cnt, sm_idx, bit_len);
-            
+
             if (bit_len > 0) {
                 ec_log(10, "GENERATE_MAPPING", "slave %2d: sm%d length bits %d, bytes %d\n", 
                         slave, sm_idx, bit_len, (bit_len + 7) / 8);
@@ -214,7 +214,7 @@ int ec_slave_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
     uint16_t wkc;
     ec_state_t act_state = 0;
     ec_slave_t *slv = &pec->slaves[slave];
-    
+
 #define ec_reg_read(reg, buf, buflen) { uint16_t wkc; \
     ec_fprd(pec, pec->slaves[slave].fixed_address, (reg), (buf), (buflen), &wkc); \
     if (!wkc) ec_log(10, __func__, "reading reg 0x%X : no answer from slave %d\n", slave); }
@@ -223,7 +223,7 @@ int ec_slave_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
     wkc = ec_slave_get_state(pec, slave, &act_state);
     if (act_state & EC_STATE_ERROR) // reset error state first
         ec_slave_set_state(pec, slave, (act_state & EC_STATE_MASK) | EC_STATE_RESET);
-            
+
     // generate transition
     ec_state_transition_t transition = ((act_state & EC_STATE_MASK) << 8) | (state & EC_STATE_MASK); 
 
@@ -233,9 +233,9 @@ int ec_slave_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
         case INIT_2_OP: {
             // init to preop stuff
             ec_eeprom_dump(pec, slave);
-            
+
             ec_log(10, get_transition_string(transition), "slave %2d, vendor 0x%08X, product 0x%08X, mbx 0x%04X\n",
-                slave, slv->eeprom.vendor_id, slv->eeprom.product_code, slv->eeprom.mbx_supported);
+                    slave, slv->eeprom.vendor_id, slv->eeprom.product_code, slv->eeprom.mbx_supported);
 
             // configure mailboxes if any supported
             if (slv->eeprom.mbx_supported) {
@@ -264,7 +264,7 @@ int ec_slave_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
                             &slv->sm[sm_idx], sizeof(ec_slave_sm_t), &wkc);
                 }
             }
-            
+
             // write state to slave
             wkc = ec_slave_set_state(pec, slave, EC_STATE_PREOP);
 
@@ -300,10 +300,10 @@ int ec_slave_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
                         slv->fmmu[fmmu_idx].type, slv->fmmu[fmmu_idx].active);
 
                 ec_fpwr(pec, slv->fixed_address, 0x600 + (16 * fmmu_idx),
-                            (uint8_t *)&slv->fmmu[fmmu_idx], sizeof(ec_slave_fmmu_t), &wkc);
+                        (uint8_t *)&slv->fmmu[fmmu_idx], sizeof(ec_slave_fmmu_t), &wkc);
 
             }
-            
+
             // write state to slave
             wkc = ec_slave_set_state(pec, slave, EC_STATE_SAFEOP);
 
@@ -320,7 +320,7 @@ int ec_slave_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
         case PREOP_2_INIT:
             // write state to slave
             wkc = ec_slave_set_state(pec, slave, state);
-        
+
         case INIT_2_INIT: {
             // free resources
             free_resource(slv->mbx_read.buf);
@@ -331,7 +331,7 @@ int ec_slave_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
             // get number of sync managers and fmmus
             ec_reg_read(EC_REG_SM_CH, &slv->sm_ch, 1);
             ec_reg_read(EC_REG_FMMU_CH, &slv->fmmu_ch, 1);
-    
+
             // get ram size
             uint8_t ram_size = 0;
             ec_reg_read(EC_REG_RAM_SIZE, &ram_size, sizeof(ram_size));
@@ -339,7 +339,7 @@ int ec_slave_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
 
             // get pdi control 
             ec_reg_read(EC_REG_PDICTL, &slv->pdi_ctrl, sizeof(slv->pdi_ctrl));
-            
+
             // get features
             ec_reg_read(EC_REG_ESCSUP, &slv->features, sizeof(slv->features));
 
@@ -351,7 +351,7 @@ int ec_slave_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
                             ec_to_adr(slv->fixed_address, 0x800 + (8 * i)),
                             (uint8_t *)&slv->sm[i], sizeof(ec_slave_sm_t));
             }
-                        
+
             if (slv->fmmu_ch) {
                 alloc_resource(slv->fmmu, ec_slave_fmmu_t, slv->fmmu_ch * sizeof(ec_slave_fmmu_t));
 
@@ -360,7 +360,7 @@ int ec_slave_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
                             ec_to_adr(slv->fixed_address, 0x600 + (16 * i)),
                             (uint8_t *)&slv->fmmu[i], sizeof(ec_slave_fmmu_t));
             }
-                
+
             ec_log(10, get_transition_string(transition), "slave %2d: pdi ctrl 0x%04X, fmmus %d, syncm %d\n", 
                     slave, slv->pdi_ctrl, slv->fmmu_ch, slv->sm_ch);
         }

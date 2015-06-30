@@ -191,7 +191,7 @@ int ec_coe_sdo_read(ec_t *pec, uint16_t slave, uint16_t index, uint8_t sub_index
             (ec_sdo_abort_request_t *)(slv->mbx_read.buf); 
 
         ec_log(100, "ec_coe_sdo_write", "got sdo abort request on idx %#X, "
-            "subidx %d, abortcode %#X\n", index, sub_index, abort_buf->abort_code);
+                "subidx %d, abortcode %#X\n", index, sub_index, abort_buf->abort_code);
 
         *abort_code = abort_buf->abort_code;
         *len = 0;
@@ -335,7 +335,7 @@ int ec_coe_sdo_write(ec_t *pec, uint16_t slave, uint16_t index,
                 "COE is 0x%X need 0x%X\n", read_buf->mbx_hdr.mbxtype, EC_MBX_COE);
 
     seg_len += (EC_SDO_NORMAL_HDR_LEN - EC_SDO_SEG_HDR_LEN);
-    
+
     ec_sdo_seg_download_req_t *seg_write_buf = 
         (ec_sdo_seg_download_req_t *)(slv->mbx_write.buf);
     ec_sdo_seg_upload_resp_t *seg_read_buf  = 
@@ -359,7 +359,7 @@ int ec_coe_sdo_write(ec_t *pec, uint16_t slave, uint16_t index,
             } else
                 seg_write_buf->mbx_hdr.length = EC_SDO_SEG_HDR_LEN + rest_len;
         }
-        
+
 
         memcpy(&seg_write_buf->sdo_data, tmp, seg_len);
         rest_len -= seg_len;
@@ -379,7 +379,7 @@ int ec_coe_sdo_write(ec_t *pec, uint16_t slave, uint16_t index,
             ec_log(10, "ec_coe_sdo_write", "error on reading receive mailbox\n");
             return wkc;
         }
-    
+
         if (!(seg_read_buf->mbx_hdr.mbxtype == EC_MBX_COE))
             ec_log(10, "ec_coe_sdo_write", "error on reading receive mailbox: answer is not COE\n");
 
@@ -424,7 +424,7 @@ int ec_coe_odlist_read(ec_t *pec, uint16_t slave, uint8_t *buf, size_t *len) {
     ec_sdo_odlist_resp_t *read_buf = (ec_sdo_odlist_resp_t *)(pec->slaves[slave].mbx_read.buf); 
     ec_mbx_clear(pec, slave, 1);
     ec_mbx_receive(pec, slave, 0); // empty mailbox if anything pending
-    
+
     ec_mbx_clear(pec, slave, 0);
 
     // mailbox header
@@ -456,7 +456,7 @@ int ec_coe_odlist_read(ec_t *pec, uint16_t slave, uint8_t *buf, size_t *len) {
             ec_log(10, __func__, "receive mailbox failed\n");
             continue;
         }
-        
+
         uint8_t *from = val == 0 ? &read_buf->sdo_info_data.bdata[4] : 
             &read_buf->sdo_info_data.bdata[0];
         size_t len = val == 0 ? (read_buf->mbx_hdr.length - 10) : (read_buf->mbx_hdr.length - 6);
@@ -528,7 +528,7 @@ int ec_coe_sdo_desc_read(ec_t *pec, uint16_t slave, uint16_t index,
     wkc = ec_mbx_receive(pec, slave, EC_DEFAULT_TIMEOUT_MBX);
     if (wkc != 1)
         ec_log(10, __func__, "receive mailbox failed\n");
-    
+
     if (read_buf->coe_hdr.service == EC_COE_SDOINFO) {
         if (read_buf->sdo_info_hdr.opcode == EC_COE_SDO_INFO_GET_OBJECT_DESC_RESP) {
             // transfer was successfull
@@ -591,7 +591,7 @@ int ec_coe_sdo_entry_desc_read(ec_t *pec, uint16_t slave, uint16_t index, uint8_
     ec_sdo_entry_desc_resp_t *read_buf = (ec_sdo_entry_desc_resp_t *)(pec->slaves[slave].mbx_read.buf); 
     ec_mbx_clear(pec, slave, 1);
     ec_mbx_receive(pec, slave, 0); // empty mailbox if anything pending
-    
+
     ec_mbx_clear(pec, slave, 0);
 
     // mailbox header
@@ -620,7 +620,7 @@ int ec_coe_sdo_entry_desc_read(ec_t *pec, uint16_t slave, uint16_t index, uint8_
     wkc = ec_mbx_receive(pec, slave, EC_DEFAULT_TIMEOUT_MBX);
     if (wkc != 1)
         ec_log(10, __func__, "receive mailbox failed\n");
-    
+
     if (read_buf->coe_hdr.service == EC_COE_SDOINFO) {
         if (read_buf->sdo_info_hdr.opcode == EC_COE_SDO_INFO_GET_ENTRY_DESC_RESP) {
             // transfer was successfull
@@ -628,13 +628,13 @@ int ec_coe_sdo_entry_desc_read(ec_t *pec, uint16_t slave, uint16_t index, uint8_
             desc->bit_length    = read_buf->bit_length;
             desc->obj_access    = read_buf->obj_access;
             desc->data_len      = read_buf->mbx_hdr.length - 6 - 10;
-            
+
             if (desc->data) {
                 memcpy(desc->data, read_buf->desc_data.bdata, desc->data_len);
-//                int h;
-//                for (h = 0; h < desc->data_len; ++h) 
-//                    printf("%02X ", desc->data[h]);
-//                printf("\n");
+                //                int h;
+                //                for (h = 0; h < desc->data_len; ++h) 
+                //                    printf("%02X ", desc->data[h]);
+                //                printf("\n");
             }
 
         }

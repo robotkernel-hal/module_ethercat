@@ -54,6 +54,9 @@ typedef enum ec_state_transition {
 #ifdef __cplusplus
 extern "C" {
 #endif
+#if 0
+}
+#endif
 
 //! set ethercat state on slave 
 /*!

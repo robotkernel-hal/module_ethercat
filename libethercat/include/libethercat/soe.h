@@ -60,15 +60,16 @@ typedef struct PACKED ec_soe_idn_attribute {
     uint32_t reserved2   :1;
 } PACKED ec_soe_idn_attribute_t;
 
+//! soe elements
 enum {
     EC_SOE_DATASTATE   = 0x01,
-    EC_SOE_NAME        = 0x02,
-    EC_SOE_ATTRIBUTE   = 0x04,
-    EC_SOE_UNIT        = 0x08,
-    EC_SOE_MIN         = 0x10,
-    EC_SOE_MAX         = 0x20,
-    EC_SOE_VALUE       = 0x40,
-    EC_SOE_DEFAULT     = 0x80
+    EC_SOE_NAME        = 0x02,      //!< idn name
+    EC_SOE_ATTRIBUTE   = 0x04,      //!< idn attributes
+    EC_SOE_UNIT        = 0x08,      //!< idn unit
+    EC_SOE_MIN         = 0x10,      //!< idn minimum value
+    EC_SOE_MAX         = 0x20,      //!< idn maximum value
+    EC_SOE_VALUE       = 0x40,      //!< idn value
+    EC_SOE_DEFAULT     = 0x80       
 };
 
 #ifdef __cplusplus
