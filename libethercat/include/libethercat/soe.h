@@ -28,36 +28,36 @@
 
 //! soe mailbox structure
 typedef struct PACKED ec_soe_header {
-   uint8_t op_code    : 3;      //!< op code
-   uint8_t incomplete : 1;      //!< incompletion flag
-   uint8_t error      : 1;      //!< error flag
-   uint8_t atn        : 3;      //!< at number
-   uint8_t elements;            //!< servodrive element mask
-   union {
-      uint16_t idn;             //!< id number
-      uint16_t fragments_left;  //!< fragments left
-   };
+    uint8_t op_code    : 3;         //!< op code
+    uint8_t incomplete : 1;         //!< incompletion flag
+    uint8_t error      : 1;         //!< error flag
+    uint8_t atn        : 3;         //!< at number
+    uint8_t elements;               //!< servodrive element mask
+    union {
+        uint16_t idn;               //!< id number
+        uint16_t fragments_left;    //!< fragments left
+    };
 } PACKED ec_soe_header_t;
 
 //! soe idn list 
 typedef struct PACKED ec_soe_idn_list {
-    uint16_t  cur_len;  //!< currently stored length of list in bytes
-    uint16_t  max_len;  //!< maximum length of list in bytes
-    ec_data_t idn_list; //!< idn list
+    uint16_t  cur_len;              //!< currently stored length of list in bytes
+    uint16_t  max_len;              //!< maximum length of list in bytes
+    ec_data_t idn_list;             //!< idn list
 } PACKED ec_soe_idn_list_t;
 
 typedef struct PACKED ec_soe_idn_attribute {
-   uint32_t evafactor   :16;//!< evalution factor 
-   uint32_t length      :2; //!< idn length
-   uint32_t list        :1; //!< idn is list
-   uint32_t command     :1; //!< idn is command
-   uint32_t datatype    :3; //!< datatype
-   uint32_t reserved1   :1;
-   uint32_t decimals    :4; //!< if float, number of decimals to display
-   uint32_t wp_preop    :1; //!< write protect in preop
-   uint32_t wp_safeop   :1; //!< write protect in safeop
-   uint32_t wp_op       :1; //!< write protect in op
-   uint32_t reserved2   :1;
+    uint32_t evafactor   :16;       //!< evalution factor 
+    uint32_t length      :2;        //!< idn length
+    uint32_t list        :1;        //!< idn is list
+    uint32_t command     :1;        //!< idn is command
+    uint32_t datatype    :3;        //!< datatype
+    uint32_t reserved1   :1;
+    uint32_t decimals    :4;        //!< if float, number of decimals to display
+    uint32_t wp_preop    :1;        //!< write protect in preop
+    uint32_t wp_safeop   :1;        //!< write protect in safeop
+    uint32_t wp_op       :1;        //!< write protect in op
+    uint32_t reserved2   :1;
 } PACKED ec_soe_idn_attribute_t;
 
 enum {

@@ -138,9 +138,13 @@ typedef struct {
 int ec_coe_sdo_read(ec_t *pec, uint16_t slave, uint16_t index, uint8_t sub_index, 
         int complete, uint8_t *buf, size_t *len, uint32_t *abort_code) {
     int wkc;
+    ec_slave_t *slv = (ec_slave_t *)&pec->slaves[slave];
+
+    if (!slv->eeprom.mbx_supported)
+        return 0;
 
     ec_sdo_normal_upload_req_t *write_buf = 
-        (ec_sdo_normal_upload_req_t *)(pec->slaves[slave].mbx_write.buf);
+        (ec_sdo_normal_upload_req_t *)(slv->mbx_write.buf);
 
     // empty mailbox if anything in
     ec_mbx_clear(pec, slave, 1);
@@ -180,11 +184,11 @@ int ec_coe_sdo_read(ec_t *pec, uint16_t slave, uint16_t index, uint8_t sub_index
     }
 
     ec_sdo_normal_upload_resp_t *read_buf  = 
-        (ec_sdo_normal_upload_resp_t *)(pec->slaves[slave].mbx_read.buf); 
+        (ec_sdo_normal_upload_resp_t *)(slv->mbx_read.buf); 
 
     if (read_buf->sdo_hdr.command == EC_COE_SDO_ABORT_REQ) {
         ec_sdo_abort_request_t *abort_buf = 
-            (ec_sdo_abort_request_t *)(pec->slaves[slave].mbx_read.buf); 
+            (ec_sdo_abort_request_t *)(slv->mbx_read.buf); 
 
         ec_log(100, "ec_coe_sdo_write", "got sdo abort request on idx %#X, "
             "subidx %d, abortcode %#X\n", index, sub_index, abort_buf->abort_code);
@@ -208,7 +212,7 @@ int ec_coe_sdo_read(ec_t *pec, uint16_t slave, uint16_t index, uint8_t sub_index
             sdo_len = min(*len, 4 - read_buf->sdo_hdr.data_set_size);
 
             ec_sdo_expedited_upload_resp_t *exp_read_buf = 
-                (ec_sdo_expedited_upload_resp_t *)(pec->slaves[slave].mbx_read.buf);
+                (ec_sdo_expedited_upload_resp_t *)(slv->mbx_read.buf);
             memcpy(buf, exp_read_buf->sdo_data.bdata, sdo_len);
         } else
             memcpy(buf, read_buf->sdo_data.bdata, sdo_len);
@@ -232,15 +236,19 @@ int ec_coe_sdo_read(ec_t *pec, uint16_t slave, uint16_t index, uint8_t sub_index
 int ec_coe_sdo_write(ec_t *pec, uint16_t slave, uint16_t index, 
         uint8_t sub_index, int complete, uint8_t *buf, size_t *len) {
     int wkc;
+    ec_slave_t *slv = (ec_slave_t *)&pec->slaves[slave];
+
+    if (!slv->eeprom.mbx_supported)
+        return 0;
 
     ec_sdo_normal_download_req_t *write_buf = 
-        (ec_sdo_normal_download_req_t *)(pec->slaves[slave].mbx_write.buf);
+        (ec_sdo_normal_download_req_t *)(slv->mbx_write.buf);
 
     // empty mailbox if anything pending
     ec_mbx_clear(pec, slave, 1);
     ec_mbx_receive(pec, slave, 0);
 
-    size_t max_len = pec->slaves[slave].sm[0].len - 0x10,
+    size_t max_len = slv->sm[0].len - 0x10,
            rest_len = *len,
            seg_len = rest_len > max_len ? max_len : rest_len;
 
@@ -267,7 +275,7 @@ int ec_coe_sdo_write(ec_t *pec, uint16_t slave, uint16_t index,
 
     if (*len <= 4 && !complete) {
         ec_sdo_expedited_download_req_t *exp_write_buf = 
-            (ec_sdo_expedited_download_req_t *)(pec->slaves[slave].mbx_write.buf);
+            (ec_sdo_expedited_download_req_t *)(slv->mbx_write.buf);
 
         exp_write_buf->mbx_hdr.length        = EC_SDO_NORMAL_HDR_LEN; 
         exp_write_buf->sdo_hdr.transfer_type = 1;
@@ -290,7 +298,7 @@ int ec_coe_sdo_write(ec_t *pec, uint16_t slave, uint16_t index,
         }
 
         ec_sdo_expedited_upload_resp_t *read_buf  = 
-            (ec_sdo_expedited_upload_resp_t *)(pec->slaves[slave].mbx_read.buf); 
+            (ec_sdo_expedited_upload_resp_t *)(slv->mbx_read.buf); 
 
         if (!(read_buf->mbx_hdr.mbxtype == EC_MBX_COE))
             ec_log(10, "ec_coe_sdo_write", "error on reading receive mailbox: answer is not COE\n");
@@ -320,7 +328,7 @@ int ec_coe_sdo_write(ec_t *pec, uint16_t slave, uint16_t index,
     }
 
     ec_sdo_normal_upload_resp_t *read_buf  = 
-        (ec_sdo_normal_upload_resp_t *)(pec->slaves[slave].mbx_read.buf); 
+        (ec_sdo_normal_upload_resp_t *)(slv->mbx_read.buf); 
 
     if (!(read_buf->mbx_hdr.mbxtype == EC_MBX_COE))
         ec_log(10, "ec_coe_sdo_write", "error on reading receive mailbox: answer is not "
@@ -329,9 +337,9 @@ int ec_coe_sdo_write(ec_t *pec, uint16_t slave, uint16_t index,
     seg_len += (EC_SDO_NORMAL_HDR_LEN - EC_SDO_SEG_HDR_LEN);
     
     ec_sdo_seg_download_req_t *seg_write_buf = 
-        (ec_sdo_seg_download_req_t *)(pec->slaves[slave].mbx_write.buf);
+        (ec_sdo_seg_download_req_t *)(slv->mbx_write.buf);
     ec_sdo_seg_upload_resp_t *seg_read_buf  = 
-        (ec_sdo_seg_upload_resp_t *)(pec->slaves[slave].mbx_read.buf); 
+        (ec_sdo_seg_upload_resp_t *)(slv->mbx_read.buf); 
     seg_write_buf->sdo_hdr.toggle = 1;
 
     while (rest_len) {
