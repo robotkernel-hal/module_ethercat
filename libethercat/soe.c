@@ -49,8 +49,13 @@ enum {
 
 int ec_soe_read(ec_t *pec, uint16_t slave, uint8_t atn, uint16_t idn, 
         uint8_t elements, uint8_t *buf, size_t *len) {
+    ec_slave_t *slv = (ec_slave_t *)&pec->slaves[slave];
+
+    if (!slv->eeprom.mbx_supported)
+        return 0;
+
     ec_soe_request_t *write_buf = 
-        (ec_soe_request_t *)(pec->slaves[slave].mbx_write.buf);
+        (ec_soe_request_t *)(slv->mbx_write.buf);
 
     // empty mailbox if anything in
     ec_mbx_clear(pec, slave, 1);
@@ -80,7 +85,7 @@ int ec_soe_read(ec_t *pec, uint16_t slave, uint8_t atn, uint16_t idn,
     uint8_t *to = buf;
     size_t left_len = *len;
     ec_soe_request_t *read_buf  = 
-        (ec_soe_request_t *)(pec->slaves[slave].mbx_read.buf); 
+        (ec_soe_request_t *)(slv->mbx_read.buf); 
 
     while (1) {
         // wait for answer
@@ -108,8 +113,13 @@ int ec_soe_read(ec_t *pec, uint16_t slave, uint8_t atn, uint16_t idn,
 
 int ec_soe_write(ec_t *pec, uint16_t slave, uint8_t atn, uint16_t idn, 
         uint8_t elements, uint8_t *buf, size_t len) {
+    ec_slave_t *slv = (ec_slave_t *)&pec->slaves[slave];
+
+    if (!slv->eeprom.mbx_supported)
+        return 0;
+
     ec_soe_request_t *write_buf = 
-        (ec_soe_request_t *)(pec->slaves[slave].mbx_write.buf);
+        (ec_soe_request_t *)(slv->mbx_write.buf);
 
     // empty mailbox if anything in
     ec_mbx_clear(pec, slave, 1);
@@ -131,10 +141,10 @@ int ec_soe_write(ec_t *pec, uint16_t slave, uint8_t atn, uint16_t idn,
 
     uint8_t *from = buf;
     size_t left_len = len;
-    size_t mbx_len = pec->slaves[slave].sm[0].len 
+    size_t mbx_len = slv->sm[0].len 
         - sizeof(ec_mbx_header_t) - sizeof(ec_soe_header_t);
     ec_soe_request_t *read_buf  = 
-        (ec_soe_request_t *)(pec->slaves[slave].mbx_read.buf); 
+        (ec_soe_request_t *)(slv->mbx_read.buf); 
 
     while (1) {
         size_t send_len = min(left_len, mbx_len);
