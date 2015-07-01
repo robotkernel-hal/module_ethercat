@@ -50,7 +50,7 @@ int ec_soe_read(ec_t *pec, uint16_t slave, uint8_t atn, uint16_t idn,
         uint8_t elements, uint8_t *buf, size_t *len) {
     ec_slave_t *slv = (ec_slave_t *)&pec->slaves[slave];
 
-    if (!slv->eeprom.mbx_supported)
+    if (!slv->eeprom.mbx_supported & EC_EEPROM_MBX_SOE)
         return 0;
 
     ec_soe_request_t *write_buf = 
@@ -114,7 +114,7 @@ int ec_soe_write(ec_t *pec, uint16_t slave, uint8_t atn, uint16_t idn,
         uint8_t elements, uint8_t *buf, size_t len) {
     ec_slave_t *slv = (ec_slave_t *)&pec->slaves[slave];
 
-    if (!slv->eeprom.mbx_supported)
+    if (!slv->eeprom.mbx_supported & EC_EEPROM_MBX_SOE)
         return 0;
 
     ec_soe_request_t *write_buf = 

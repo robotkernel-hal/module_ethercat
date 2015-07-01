@@ -140,7 +140,7 @@ int ec_coe_sdo_read(ec_t *pec, uint16_t slave, uint16_t index, uint8_t sub_index
     int wkc;
     ec_slave_t *slv = (ec_slave_t *)&pec->slaves[slave];
 
-    if (!slv->eeprom.mbx_supported)
+    if (!slv->eeprom.mbx_supported & EC_EEPROM_MBX_COE)
         return 0;
 
     ec_sdo_normal_upload_req_t *write_buf = 
@@ -238,7 +238,7 @@ int ec_coe_sdo_write(ec_t *pec, uint16_t slave, uint16_t index,
     int wkc;
     ec_slave_t *slv = (ec_slave_t *)&pec->slaves[slave];
 
-    if (!slv->eeprom.mbx_supported)
+    if (!slv->eeprom.mbx_supported & EC_EEPROM_MBX_COE)
         return 0;
 
     ec_sdo_normal_download_req_t *write_buf = 

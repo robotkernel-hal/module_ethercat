@@ -140,12 +140,12 @@ master::master(const std::string& name, const YAML::Node& node) {
 }
 
 //! destruction 
-    master::~master() {
-        if (_pec)
-            ec_close(_pec);
+master::~master() {
+    if (_pec)
+        ec_close(_pec);
 
-        _pec = NULL;
-    }
+    _pec = NULL;
+}
 
 //! cyclic process data read
 /*!
