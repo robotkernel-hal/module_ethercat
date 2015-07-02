@@ -208,14 +208,15 @@ void ec_eeprom_dump(ec_t *pec, uint16_t slave) {
 
                 for (i = 0; i < slv->eeprom.strings_cnt; ++i) {
                     uint8_t string_len = buf[local_offset++];
-                    ec_log(100, "EEPROM_STRINGS", "slave %d, string %d, length %d\n", 
-                            slave, i, string_len);
 
                     slv->eeprom.strings[i] = malloc(sizeof(char) * (string_len + 1));
                     strncpy(slv->eeprom.strings[i], (char *)&buf[local_offset], string_len);
                     local_offset+=string_len;
 
                     slv->eeprom.strings[i][string_len] = '\0';
+                    
+                    ec_log(100, "EEPROM_STRINGS", "slave %d, string %d, length %d : %s\n", 
+                            slave, i, string_len, slv->eeprom.strings[i]);
                     if (local_offset > cat_len*2) {
                         ec_log(5, "EEPROM_STRINGS", "slave %d, something wrong in eeprom string section\n",
                                 slave);
@@ -234,6 +235,12 @@ void ec_eeprom_dump(ec_t *pec, uint16_t slave) {
                 ec_log(100, "EEPROM_GENERAL", "slave %d:\n", slave);
 
                 eeprom(cat_offset+2, slv->eeprom.general);
+
+                ec_log(100, "EEPROM_GENERAL", "slave %d: group_idx %d, img_idx %d, order_idx %d, name_idx %d\n", 
+                        slave, slv->eeprom.general.group_idx,
+                        slv->eeprom.general.img_idx,
+                        slv->eeprom.general.order_idx,
+                        slv->eeprom.general.name_idx);
                 break;
             }
             case EC_EEPROM_CAT_FMMU: {

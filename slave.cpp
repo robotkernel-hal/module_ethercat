@@ -204,9 +204,10 @@ bool slave::prepare_state_transition(transition_t transition) {
 
             uint8_t *buf = (uint8_t *)cmd->data;
             size_t buf_len = cmd->datalen;
+            uint32_t abort_code = 0;
 
             int wkc = ec_coe_sdo_write(master_dev->_pec, index, cmd->index, 
-                    cmd->subindex, cmd->ca, buf, &buf_len);
+                    cmd->subindex, cmd->ca, buf, &buf_len, &abort_code);
             if (!wkc) {
                 ethercat_log(module_info, master_dev->_name, "writing sdo, %s\n",
                      "todo");//ecx_elist2string(ctx));
@@ -272,11 +273,9 @@ void slave::register_interfaces() {
     std::stringstream slave_name; 
     slave_name << "slave_" << index;
 
-    if (master_dev->_pec->slaves[index].eeprom.mbx_supported & EC_EEPROM_MBX_COE ||
-            master_dev->_pec->slaves[index].eeprom.txpdos_cnt ||
-            master_dev->_pec->slaves[index].eeprom.rxpdos_cnt)
-        _coe_intf = robotkernel::kernel::register_interface_cb(master_dev->_name.c_str(), 
-                "libinterface_canopen_protocol.so", slave_name.str().c_str(), index);
+    _coe_intf = robotkernel::kernel::register_interface_cb(master_dev->_name.c_str(), 
+            "libinterface_canopen_protocol.so", slave_name.str().c_str(), index);
+
     if (master_dev->_pec->slaves[index].eeprom.mbx_supported & EC_EEPROM_MBX_SOE)
         _soe_intf = robotkernel::kernel::register_interface_cb(master_dev->_name.c_str(), 
                 "libinterface_sercos_protocol.so", slave_name.str().c_str(), index);

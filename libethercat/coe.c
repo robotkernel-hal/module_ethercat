@@ -234,7 +234,8 @@ int ec_coe_sdo_read(ec_t *pec, uint16_t slave, uint16_t index, uint8_t sub_index
  * \return working counter
  */
 int ec_coe_sdo_write(ec_t *pec, uint16_t slave, uint16_t index, 
-        uint8_t sub_index, int complete, uint8_t *buf, size_t *len) {
+        uint8_t sub_index, int complete, uint8_t *buf, size_t *len,
+        uint32_t *abort_code) {
     int wkc;
     ec_slave_t *slv = (ec_slave_t *)&pec->slaves[slave];
 

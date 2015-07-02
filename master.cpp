@@ -359,6 +359,11 @@ int master::request(int reqcode, void* ptr) {
             } else { // search in eeprom entries
                 list->indices_cnt = 0;
 
+                if (list->indices)
+                    list->indices[list->indices_cnt++] = 0x1008;
+                else
+                    list->indices_cnt += 1;
+
                 ec_slave_t *slv = &_pec->slaves[list->slave_id];
                 for (unsigned i = 0; i < slv->eeprom.txpdos_cnt; ++i) {
                     if (list->indices)
@@ -372,7 +377,7 @@ int master::request(int reqcode, void* ptr) {
                     else list->indices_cnt++;
                 }
 
-                list->indices_cnt /= 2;
+//                list->indices_cnt /= 2;
             }
 
             break;
@@ -394,14 +399,22 @@ int master::request(int reqcode, void* ptr) {
                 bool found = false;
 
                 ec_slave_t *slv = &_pec->slaves[desc->slave_id];
+
+                if (desc->index == 0x1008) {
+                    desc->data_type         = 0x0009;
+                    desc->object_code       = 7;
+                    desc->max_subindices    = 0;
+                    strcpy(desc->name, "Device Name");
+                }
+                
                 for (unsigned i = 0; i < slv->eeprom.txpdos_cnt; ++i) {
                     if (slv->eeprom.txpdos[i].pdo_index == desc->index) {
                         found = true;
 
                         desc->data_type         = slv->eeprom.txpdos[i].data_type;
-                        desc->object_code       = 6;
+                        desc->object_code       = 7;
                         desc->max_subindices    = slv->eeprom.txpdos[i].n_entry;
-                        strcpy(desc->name, slv->eeprom.strings[slv->eeprom.txpdos[i].name_idx]);
+                        strcpy(desc->name, slv->eeprom.strings[slv->eeprom.txpdos[i].name_idx-1]);
                     }
                 }
 
@@ -413,9 +426,9 @@ int master::request(int reqcode, void* ptr) {
                         found = true;
 
                         desc->data_type         = slv->eeprom.rxpdos[i].data_type;
-                        desc->object_code       = 6;
+                        desc->object_code       = 7;
                         desc->max_subindices    = slv->eeprom.rxpdos[i].n_entry;
-                        strcpy(desc->name, slv->eeprom.strings[slv->eeprom.rxpdos[i].name_idx]);
+                        strcpy(desc->name, slv->eeprom.strings[slv->eeprom.rxpdos[i].name_idx-1]);
                     }
                 }
             }
@@ -453,6 +466,17 @@ int master::request(int reqcode, void* ptr) {
                 bool found = false;
 
                 ec_slave_t *slv = &_pec->slaves[desc->slave_id];
+
+                // device name
+                if (desc->index == 0x1008) {
+                    if (slv->eeprom.general.name_idx <= slv->eeprom.strings_cnt) {
+                        desc->value_info = 0x7F;
+                        desc->data_type = 0x0009;
+                        desc->bit_length = strlen(slv->eeprom.strings[slv->eeprom.general.name_idx-1]) * 8;
+                        desc->obj_access = 7;
+                    }
+                }
+
                 for (unsigned i = 0; i < slv->eeprom.txpdos_cnt; ++i) {
                     if (slv->eeprom.txpdos[i].pdo_index == desc->index) {
                         found = true;
@@ -463,8 +487,8 @@ int master::request(int reqcode, void* ptr) {
                         desc->obj_access        = 7;
 
                         size_t name_len = min(
-                                strlen(slv->eeprom.strings[slv->eeprom.txpdos[i].name_idx]), CANOPEN_MAXNAME - 1);
-                        memcpy(desc->name, slv->eeprom.strings[slv->eeprom.txpdos[i].name_idx], name_len);
+                                strlen(slv->eeprom.strings[slv->eeprom.txpdos[i].name_idx-1]), CANOPEN_MAXNAME - 1);
+                        memcpy(desc->name, slv->eeprom.strings[slv->eeprom.txpdos[i].name_idx-1], name_len);
                         desc->name[name_len] = '\0';
                     }
                 }
@@ -482,8 +506,8 @@ int master::request(int reqcode, void* ptr) {
                         desc->obj_access        = 7;
 
                         size_t name_len = min(
-                                strlen(slv->eeprom.strings[slv->eeprom.rxpdos[i].name_idx]), CANOPEN_MAXNAME - 1);
-                        memcpy(desc->name, slv->eeprom.strings[slv->eeprom.rxpdos[i].name_idx], name_len);
+                                strlen(slv->eeprom.strings[slv->eeprom.rxpdos[i].name_idx-1]), CANOPEN_MAXNAME - 1);
+                        memcpy(desc->name, slv->eeprom.strings[slv->eeprom.rxpdos[i].name_idx-1], name_len);
                         desc->name[name_len] = '\0';
                     }
                 }
@@ -504,8 +528,19 @@ int master::request(int reqcode, void* ptr) {
                         0, (uint8_t *)value->value, &size, &abort_code);
                 value->value_len = size;
                 ret = abort_code;
-            } else // search in eeprom entries
+            } else { // search in eeprom entries
                 memset(value->value, 0, value->value_len);
+
+                if (value->index == 0x1008) {
+                    ec_slave_t *slv = &_pec->slaves[value->slave_id];
+                    if (slv->eeprom.general.name_idx <= slv->eeprom.strings_cnt) {
+                        value->value_len = strlen(slv->eeprom.strings[slv->eeprom.general.name_idx-1]);
+                        memcpy(value->value, slv->eeprom.strings[slv->eeprom.general.name_idx-1], 
+                                value->value_len);
+                    }
+                }
+
+            }
             break;
         }
         case MOD_REQUEST_CANOPEN_WRITE_ELEMENT_VALUE: {
@@ -514,12 +549,17 @@ int master::request(int reqcode, void* ptr) {
             uint32_t abort_code = 0;
 
             ethercat_log(module_verbose, "MOD_REQUEST_CANOPEN_WRITE_ELEMENT_VALUE", "slave %d: index 0x%X, "
-                    "sub_index %d, want to read %d bytes\n", value->slave_id, value->index,
+                    "sub_index %d, want to write %d bytes\n", value->slave_id, value->index,
                     value->sub_index, value->value_len);
+
+            int i;
+            for (i = 0; i < value->value_len; ++i)
+                printf("%02X ", ((uint8_t *)value->value)[i]);
+            printf("\n");
 
             if (_pec->slaves[value->slave_id].eeprom.mbx_supported & EC_EEPROM_MBX_COE) {
                 ec_coe_sdo_write(_pec, value->slave_id, value->index, value->sub_index, 
-                        0, (uint8_t *)value->value, &size);
+                        0, (uint8_t *)value->value, &size, &abort_code);
                 value->value_len = size;
                 ret = abort_code;
             } else // search in eeprom entries
