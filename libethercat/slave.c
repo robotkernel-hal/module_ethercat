@@ -157,6 +157,8 @@ int ec_slave_get_state(ec_t *pec, uint16_t slave, ec_state_t *state) {
  */
 int ec_slave_generate_mapping(ec_t *pec, uint16_t slave) {
     ec_slave_t *slv = (ec_slave_t *)&pec->slaves[slave];
+    if (slv->sm_set_by_user)
+        return 0; // we're already done
 
     // check sm settings
     if (slv->eeprom.mbx_supported & EC_EEPROM_MBX_COE)
@@ -285,6 +287,10 @@ int ec_slave_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
 
                 ec_fpwr(pec, slv->fixed_address, 0x800 + (sm_idx * 8),
                         &slv->sm[sm_idx], sizeof(ec_slave_sm_t), &wkc);
+
+                if (!wkc)
+                    ec_log(10, get_transition_string(transition), "slave %2d: no answer on "
+                            "writing sm%d settings\n", slave, sm_idx);
             }
 
             for (int fmmu_idx = 0; fmmu_idx < slv->fmmu_ch; ++fmmu_idx) { 
@@ -292,8 +298,8 @@ int ec_slave_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
                     continue;
 
                 // safeop to op stuff 
-                ec_log(10, get_transition_string(transition), "slave %2d: log 0x%08X/%d/%d, len %3d, "
-                        "pyhs 0x%04X/%d, type %d, active %d\n", slave,
+                ec_log(10, get_transition_string(transition), "slave %2d: log%d 0x%08X/%d/%d, len %3d, "
+                        "pyhs 0x%04X/%d, type %d, active %d\n", slave, fmmu_idx,
                         slv->fmmu[fmmu_idx].log, slv->fmmu[fmmu_idx].log_bit_start,
                         slv->fmmu[fmmu_idx].log_bit_stop, slv->fmmu[fmmu_idx].log_len,
                         slv->fmmu[fmmu_idx].phys, slv->fmmu[fmmu_idx].phys_bit_start,

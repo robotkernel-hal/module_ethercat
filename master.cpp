@@ -26,6 +26,8 @@
 #include "interface_canopen_protocol/module_intf.h"
 #include "interface_sercos_protocol/module_intf.h"
 
+MODULE_DEF(module_ethercat, module_ethercat::master)
+
 using namespace std;
 using namespace robotkernel;
 using namespace module_ethercat;
@@ -43,7 +45,7 @@ const string module_ethercat::state_strings[] = {
     "EtherCAT OP"
 };
 
-void ethercat_log_func(int lvl, void *user, const char *format, ...) {
+void log_func(int lvl, void *user, const char *format, ...) {
     master *e = (master *)user;
     va_list ap;
     va_start(ap, format);
@@ -56,7 +58,7 @@ void ethercat_log_func(int lvl, void *user, const char *format, ...) {
     if (lvl < 1)
         loglvl = module_error;
 
-    ethercat_log(loglvl, e->_name, format, ap);
+    e->log(loglvl, format, ap);
     va_end(ap);
 }
 
@@ -97,15 +99,14 @@ void master::group::unregister_interfaces() {
 /*!
  * \param node yaml intialization node
  */
-master::master(const std::string& name, const YAML::Node& node) {
-    _name       = name;
+master::master(const std::string& name, const YAML::Node& node) : module_base("module_ethercat", name) {
     _ifname     = node["ifname"].to<string>();
     _recv_prio  = node["recv_prio"].to<int>();
     _recv_mask  = node["recv_mask"].to<int>();
     _pec        = NULL;
 
     ec_log_func_user = this;
-    ec_log_func = ethercat_log_func;
+    ec_log_func = log_func;
 
     // group settings
     const YAML::Node *groups_node = node.FindValue("groups");
@@ -147,25 +148,15 @@ master::~master() {
     _pec = NULL;
 }
 
-//! cyclic process data read
-/*!
- * \param buf process data buffer
- * \param bufsize size of process data buffer
- * \return size of read bytes
- */
-size_t master::read(void* buf, size_t bufsize) {
-    return 0;
-}
-
 //! set module state machine to defined state
 /*!
  * \param state requested state
  * \return success or failure
  */
-int master::set_state(module_state_t state) {
+int master::set_state(module_state_t new_state) {
     int ret = 0, nr;
 
-    switch (state) {
+    switch (new_state) {
         case module_state_init: {
             _pec->tx_sync = 1;
 
@@ -173,7 +164,7 @@ int master::set_state(module_state_t state) {
 
             for (nr = 0; nr < _pec->slave_cnt; ++nr) {
                 if (_slave_info.find(nr) == _slave_info.end()) {
-                    ethercat_log(module_verbose, _name, "slave %d creating empty one\n", nr);
+                    log(module_verbose, "slave %d creating empty one\n", nr);
 
                     slave *slv = new slave(nr, this);
                     _slave_info[nr] = slv;
@@ -189,6 +180,8 @@ int master::set_state(module_state_t state) {
         }
         case module_state_preop: {
             _pec->tx_sync = 1;
+            
+            ec_set_state(_pec, EC_STATE_PREOP);
 
             for (nr = 0; nr < _pec->slave_cnt; ++nr) {
                 // apply sm and fmmu config
@@ -197,15 +190,19 @@ int master::set_state(module_state_t state) {
                     int sm_nr = it->first;
 
                     if (sm_nr < _pec->slaves[nr].sm_ch) {
+                        log(module_verbose, "slave %d: applying sm%d: adr 0x%X, len %d, flags 0x%X\n",
+                                nr, sm_nr, it->second->_address,
+                                it->second->_length,
+                                it->second->_flags);
+
                         _pec->slaves[nr].sm[sm_nr].adr = it->second->_address;
                         _pec->slaves[nr].sm[sm_nr].len = it->second->_length;
                         _pec->slaves[nr].sm[sm_nr].flags = it->second->_flags;
+                        _pec->slaves[nr].sm_set_by_user = 1;
                     }
                 }
             }
-
-            ec_set_state(_pec, EC_STATE_PREOP);
-
+            
             for (nr = 0; nr < _pec->slave_cnt; ++nr)
                 _slave_info[nr]->register_interfaces();
 
@@ -219,11 +216,18 @@ int master::set_state(module_state_t state) {
                 for (std::list<int>::iterator it2 = it->second->_slaves.begin();
                         it2 != it->second->_slaves.end(); ++it2) {
 
-                    _pec->slaves[*it2].assigned_pd_group = g_nr;
-                    _slave_info[*it2]->prepare_state_transition(preop_to_safeop);
+                    int s_nr = *it2;
+                    if (_pec->slave_cnt <= s_nr) {
+                        log(module_warning, "slave %d not connected to ethercat bus, "
+                                "not adding to group %d\n", s_nr, g_nr);
+                        continue;
+                    }
+
+                    _pec->slaves[s_nr].assigned_pd_group = g_nr;
+                    _slave_info[s_nr]->prepare_state_transition(preop_to_safeop);
                 }
 
-                it->second->register_interfaces(_name);
+                it->second->register_interfaces(name);
             }
 
             ec_set_state(_pec, EC_STATE_SAFEOP);
@@ -240,17 +244,9 @@ int master::set_state(module_state_t state) {
     }
 
     if (ret == 0)
-        _state = state;
+        state = new_state;
 
     return ret;
-}
-
-//! get module state machine state
-/*!
- * \return current state
- */
-module_state_t master::get_state() {
-    return _state;
 }
 
 //! send a request to module
@@ -275,6 +271,9 @@ int master::request(int reqcode, void* ptr) {
                     pd->pd = _pec->pd_groups[g_nr].pd + _pec->pd_groups[g_nr].pdout_len;
                     pd->len = _pec->pd_groups[g_nr].pdin_len;
                 }
+            } else if (pd->slave_id == 0x00020000) {
+                pd->pd = &_pec->dc.dc_time;
+                pd->len = (uint8_t *)&_pec->dc.p_de_dc - (uint8_t *)&_pec->dc.dc_time;
             } else {
                 if (pd->slave_id < (unsigned)_pec->slave_cnt) {
                     pd->pd = _pec->slaves[pd->slave_id].pdin;
@@ -282,7 +281,7 @@ int master::request(int reqcode, void* ptr) {
                 }
             }
 
-            ethercat_log(module_verbose, _name, "GET_PDIN: %p/%d\n", pd->pd, pd->len);
+            log(module_verbose, "GET_PDIN: %p/%d\n", pd->pd, pd->len);
             break;
         }
         case MOD_REQUEST_GET_PDOUT: {            
@@ -304,7 +303,7 @@ int master::request(int reqcode, void* ptr) {
                 }
             }
 
-            ethercat_log(module_verbose, _name, "GET_PDOUT: %p/%d\n", pd->pd, pd->len);
+            log(module_verbose, "GET_PDOUT: %p/%d\n", pd->pd, pd->len);
             break;
         }
 
@@ -322,7 +321,7 @@ int master::request(int reqcode, void* ptr) {
         case MOD_REQUEST_SET_TRIGGER_CB: {
             set_trigger_cb_t *cb = (set_trigger_cb_t *)ptr;
             if (cb->cb == NULL) {
-                ethercat_log(module_error, _name, "ERROR could not register, callback is NULL\n");
+                log(module_error, "ERROR could not register, callback is NULL\n");
                 break;
             }
 
@@ -333,7 +332,7 @@ int master::request(int reqcode, void* ptr) {
             set_trigger_cb_t *cb = (set_trigger_cb_t *)ptr;
 
             if (cb->cb == NULL) {
-                ethercat_log(module_error, _name, "ERROR could not remove, callback is NULL\n");
+                log(module_error, "ERROR could not remove, callback is NULL\n");
                 break;
             }
 
@@ -519,7 +518,7 @@ int master::request(int reqcode, void* ptr) {
             size_t size = value->value_len;
             uint32_t abort_code = 0;
 
-            ethercat_log(module_verbose, "MOD_REQUEST_CANOPEN_READ_ELEMENT_VALUE", "slave %d: index 0x%X, "
+            log(module_verbose, "slave %d: index 0x%X, "
                     "sub_index %d, want to read %d bytes\n", value->slave_id, value->index,
                     value->sub_index, value->value_len);
 
@@ -548,7 +547,7 @@ int master::request(int reqcode, void* ptr) {
             size_t size = value->value_len;
             uint32_t abort_code = 0;
 
-            ethercat_log(module_verbose, "MOD_REQUEST_CANOPEN_WRITE_ELEMENT_VALUE", "slave %d: index 0x%X, "
+            log(module_verbose, "slave %d: index 0x%X, "
                     "sub_index %d, want to write %d bytes\n", value->slave_id, value->index,
                     value->sub_index, value->value_len);
 
@@ -590,7 +589,7 @@ void master::trigger() {
     ec_timer_t timeout;
     ec_timer_init(&timeout, 10000000);
 
-    if (_state >= module_state_safeop) {
+    if (state >= module_state_safeop) {
         for (i = 0; i < _pec->pd_group_cnt; ++i) {
             group *g = _group_info[i];
             if ((++g->_divisor_cnt % g->_divisor) != 0)
@@ -607,7 +606,7 @@ void master::trigger() {
 
     hw_tx(_pec->phw);
 
-    if (_state >= module_state_safeop) {
+    if (state >= module_state_safeop) {
         for (i = 0; i < _pec->pd_group_cnt; ++i) {
             group *g = _group_info[i];
 

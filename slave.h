@@ -37,6 +37,11 @@
 //#include "ln_messages.h"
 #undef LN_UNREGISTER_SERVICE_IN_BASE_DETOR
 
+#define MEM_ADDRESS(x)          ((x) & 0x0000FFFF)
+#define MEM_TYPE_SLAVE_MEM      0x00000000
+#define MEM_TYPE_SLAVE_EEPROM   0x00010000
+#define MEM_TYPE_MASK           0x000F0000
+
 extern "C" void convert_string_to_hex(std::string input, char **output, size_t *outlen);
 
 //! module_ethercat::

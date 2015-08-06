@@ -33,9 +33,9 @@
 #include "robotkernel/kernel.h"
 #include "robotkernel/trigger_base.h"
 #include "robotkernel/module_intf.h"
+#include "robotkernel/module_base.h"
 #include "robotkernel/exceptions.h"
 #include "slave.h"
-#include "module_ethercat.h"
 
 #include "libethercat/ec.h"
 #include "libethercat/slave.h"
@@ -47,9 +47,12 @@
 //! module_ethercat::
 namespace module_ethercat {
 
+class slave;
 extern const std::string state_strings[];
 
-class master : public robotkernel::trigger_base {
+class master : public robotkernel::module_base, public robotkernel::trigger_base {
+    friend class slave;
+
     public:
         typedef struct group {
             group(int index, const YAML::Node& node);
@@ -85,9 +88,6 @@ class master : public robotkernel::trigger_base {
         int _recv_prio;
         int _recv_mask;
         std::string _ifname;
-        std::string _name;          //!< module name
-        module_state_t   _state;    //!< actual module state
-
     public:
         //! construction
         /*!
@@ -98,14 +98,6 @@ class master : public robotkernel::trigger_base {
         //! destruction 
         ~master();
 
-        //! cyclic process data read
-        /*!
-         * \param buf process data buffer
-         * \param bufsize size of process data buffer
-         * \return size of read bytes
-         */
-        size_t read(void* buf, size_t bufsize);
-
         //! module trigger callback
         void trigger();
 
@@ -115,12 +107,6 @@ class master : public robotkernel::trigger_base {
          * \return success or failure
          */
         int set_state(module_state_t state);
-
-        //! get module state machine state
-        /*!
-         * \return current state
-         */
-        module_state_t get_state();
 
         //! send a request to module
         /*!

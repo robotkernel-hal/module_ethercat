@@ -43,8 +43,9 @@
     } }
 
 #define alloc_resource(a, type, len) {      \
-    (a) = (type *)malloc((len));            \
-    memset((a), 0, (len)); }
+    if (len) {                              \
+        (a) = (type *)malloc((len));        \
+        memset((a), 0, (len)); } }
 
 #define EC_MAX_DATA 4096
 

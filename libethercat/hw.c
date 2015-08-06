@@ -86,7 +86,7 @@ int hw_open(hw_t **pphw, const char *devname, int prio, int cpumask) {
     // create raw socket connection
     (*pphw)->sockfd = socket(PF_PACKET, SOCK_RAW, htons(ETH_P_ECAT));
     if ((*pphw)->sockfd <= 0) {
-        perror("socket");
+        perror("socket error on opening SOCK_RAW");
         goto error_exit;
     }
    
@@ -107,7 +107,7 @@ int hw_open(hw_t **pphw, const char *devname, int prio, int cpumask) {
     strcpy(ifr.ifr_name, devname);
     ifr.ifr_flags = 0;
     ioctl((*pphw)->sockfd, SIOCGIFFLAGS, &ifr);
-    ifr.ifr_flags = ifr.ifr_flags | IFF_PROMISC | IFF_BROADCAST;
+    ifr.ifr_flags = ifr.ifr_flags | IFF_PROMISC | IFF_BROADCAST | IFF_UP;
     ioctl((*pphw)->sockfd, SIOCSIFFLAGS, &ifr);
     
     memset(&ifr, 0, sizeof(ifr));

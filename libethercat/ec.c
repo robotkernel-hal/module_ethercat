@@ -180,6 +180,7 @@ int ec_set_state(ec_t *pec, ec_state_t state) {
                 pec->slaves[i].auto_inc_address = auto_inc;
                 pec->slaves[i].fixed_address = fixed;
                 pec->slaves[i].dc.use_dc = 1;
+                pec->slaves[i].sm_set_by_user = 0;
 
                 ec_apwr(pec, auto_inc, EC_REG_STADR, (uint8_t *)&fixed, sizeof(fixed), &wkc); 
                 if (wkc == 1)
@@ -309,6 +310,8 @@ int ec_set_state(ec_t *pec, ec_state_t state) {
                         continue;
                     
                     int fmmu_next = 0;
+                    int wkc_expected = 0;
+
                     for (k = start_sm; k < slv->sm_ch; ++k) {
                         if ((!slv->sm[k].len))
                             continue; // empty 
@@ -329,7 +332,7 @@ int ec_set_state(ec_t *pec, ec_state_t state) {
 
                             pdout += slv->sm[k].len;
                             log_base_out += slv->sm[k].len;
-                            pd->wkc_expected += 2;
+                            wkc_expected |= 2;
                         } else {
                             slv->fmmu[fmmu_next].log = log_base_in;
                             slv->fmmu[fmmu_next].log_len = slv->sm[k].len;
@@ -346,11 +349,13 @@ int ec_set_state(ec_t *pec, ec_state_t state) {
 
                             pdin += slv->sm[k].len;
                             log_base_in += slv->sm[k].len;
-                            pd->wkc_expected += 1;
+                            wkc_expected |= 1;
                         }
 
                         fmmu_next++;
                     }
+                    
+                    pd->wkc_expected += wkc_expected;
                 }
             }
             
@@ -426,7 +431,22 @@ int ec_open(ec_t **ppec, const char *ifname, int prio, int cpumask) {
 
     datagram_pool_open(&(*ppec)->pool, 1000);
         
-    hw_open(&(*ppec)->phw, ifname, prio, cpumask);
+    if (hw_open(&(*ppec)->phw, ifname, prio, cpumask) == -1) {
+        datagram_pool_close((*ppec)->pool);
+
+        idx_entry_t *idx;
+        while ((idx = TAILQ_FIRST(&(*ppec)->idx)) != NULL) {
+            TAILQ_REMOVE(&(*ppec)->idx, idx, qh);
+            free(idx);
+        }
+
+        pthread_mutex_destroy(&(*ppec)->idx_lock);
+        free(*ppec);
+        *ppec = NULL;
+
+        return -1;
+    }
+
     ec_async_message_loop_create(&(*ppec)->async_loop, (*ppec));
 
     return 0;
@@ -698,6 +718,8 @@ int ec_send_process_data_group(ec_t *pec, int group) {
 int ec_receive_process_data_group(ec_t *pec, int group, ec_timer_t *timeout) {
     uint16_t wkc = 0;
     ec_pd_group_t *pd = &pec->pd_groups[group];
+    if (!pd->p_idx)
+        return 0;
     
     // wait for completion
     struct timespec ts = { timeout->sec, timeout->nsec };
@@ -707,10 +729,10 @@ int ec_receive_process_data_group(ec_t *pec, int group, ec_timer_t *timeout) {
                 group, strerror(errno));
     } else {
         wkc = ec_datagram_wkc(&pd->p_de->datagram);
-        if (wkc == pd->wkc_expected)
-            memcpy(pd->pd + pd->pdout_len, ec_datagram_payload(&pd->p_de->datagram) + 
-                    pd->pdout_len, pd->pdin_len);
-        else {
+        memcpy(pd->pd + pd->pdout_len, ec_datagram_payload(&pd->p_de->datagram) + 
+                pd->pdout_len, pd->pdin_len);
+        
+        if (wkc != pd->wkc_expected) {
             ec_log(10, __func__, "group %2d: working counter mismatch got %u, expected %u, "
                     "slave_cnt %d\n", group, wkc, pd->wkc_expected, pec->slave_cnt);
             ec_async_check_group(pec->async_loop, group);
@@ -723,7 +745,7 @@ int ec_receive_process_data_group(ec_t *pec, int group, ec_timer_t *timeout) {
     return 0;
 }
 
-#define DC_DCSOFF_SAMPLES 100
+#define DC_DCSOFF_SAMPLES 1000
 
 //! send distributed clock sync datagram
 /*!
@@ -809,11 +831,8 @@ int ec_receive_distributed_clocks_sync(ec_t *pec, ec_timer_t *timeout) {
                 if (pec->dc.dc_cycle_cnt == DC_DCSOFF_SAMPLES) {                    
                     pec->dc.dc_cycle_cnt = 0;
 
-                    uint64_t dc_cycle = pec->dc.dc_cycle_sum / DC_DCSOFF_SAMPLES;
-                    pec->dc.dc_sto += (pec->dc.rtc_cycle - dc_cycle) * DC_DCSOFF_SAMPLES;
-
-                    ec_log(100, __func__, "rtc_cycle %10lld, dc_time %16lld, dc_cycle %10lld, sto %lld\n", 
-                            pec->dc.rtc_cycle, pec->dc.dc_time, dc_cycle, pec->dc.dc_sto);
+                    pec->dc.dc_cycle = pec->dc.dc_cycle_sum / DC_DCSOFF_SAMPLES;
+                    pec->dc.dc_sto += (pec->dc.rtc_cycle - pec->dc.dc_cycle) * DC_DCSOFF_SAMPLES;
 
                     datagram_entry_t *p_de_dc_sto;
                     idx_entry_t *p_idx_dc_sto;

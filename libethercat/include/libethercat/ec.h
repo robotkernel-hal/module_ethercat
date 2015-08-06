@@ -63,9 +63,9 @@ typedef struct ec_slave_mbx {
 } ec_slave_mbx_t;
 
 typedef struct PACKED ec_slave_sm {
-   uint16_t adr;
-   uint16_t len;
-   uint32_t flags;
+    uint16_t adr;
+    uint16_t len;
+    uint32_t flags;
 } PACKED ec_slave_sm_t;
 
 typedef struct PACKED ec_slave_fmmu {
@@ -124,6 +124,7 @@ typedef struct ec_slave {
     int         parent;             //!< parent slave number
     int         parentport;         //!< port attached on parent slave 
 
+    int sm_set_by_user;
     ec_slave_sm_t *sm;
     ec_slave_fmmu_t *fmmu;
 
@@ -150,13 +151,14 @@ typedef struct ec_dc_info {
 
     uint64_t dc_time;
     uint64_t dc_cycle_sum;
-    int dc_cycle_cnt;
+    uint64_t dc_cycle;
+    int32_t dc_cycle_cnt;
     int64_t dc_sto;
 
     uint64_t rtc_time;
     uint64_t rtc_cycle_sum;
     uint64_t rtc_cycle;
-    int rtc_count;
+    int32_t rtc_count;
     
     datagram_entry_t *p_de_dc;
     idx_entry_t *p_idx_dc;
@@ -310,7 +312,7 @@ int ec_receive_distributed_clocks_sync(ec_t *pec, ec_timer_t *timeout);
 #endif
 
 #define ec_to_adr(ado, adp) \
-    ((uint32_t)(ado) << 16) | ((adp) & 0xFFFF)
+    ((uint32_t)(adp) << 16) | ((ado) & 0xFFFF)
 
 #define ec_brd(pec, ado, data, datalen, wkc) \
     ec_transceive((pec), EC_CMD_BRD, ((uint32_t)(ado) << 16), (uint8_t *)(data), (datalen), (wkc))

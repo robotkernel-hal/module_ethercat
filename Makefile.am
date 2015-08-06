@@ -3,8 +3,7 @@ ACLOCAL_AMFLAGS = -I m4 -I scripts/m4
 libdir = $(prefix)/lib
 lib_LTLIBRARIES = libmodule_ethercat.la
 
-libmodule_ethercat_la_SOURCES  = module_ethercat.cpp \
-								 master.cpp \
+libmodule_ethercat_la_SOURCES  = master.cpp \
 								 slave.cpp \
 								 libethercat/coe.c \
 								 libethercat/slave.c \

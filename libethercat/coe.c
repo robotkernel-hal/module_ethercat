@@ -239,7 +239,7 @@ int ec_coe_sdo_write(ec_t *pec, uint16_t slave, uint16_t index,
     int wkc;
     ec_slave_t *slv = (ec_slave_t *)&pec->slaves[slave];
 
-    if (!slv->eeprom.mbx_supported & EC_EEPROM_MBX_COE)
+    if (!(slv->eeprom.mbx_supported & EC_EEPROM_MBX_COE))
         return 0;
 
     ec_sdo_normal_download_req_t *write_buf = 
@@ -424,14 +424,15 @@ int ec_coe_odlist_read(ec_t *pec, uint16_t slave, uint8_t *buf, size_t *len) {
     ec_sdo_odlist_req_t *write_buf = (ec_sdo_odlist_req_t *)(pec->slaves[slave].mbx_write.buf);
     ec_sdo_odlist_resp_t *read_buf = (ec_sdo_odlist_resp_t *)(pec->slaves[slave].mbx_read.buf); 
     ec_mbx_clear(pec, slave, 1);
-    ec_mbx_receive(pec, slave, 0); // empty mailbox if anything pending
+    while (ec_mbx_receive(pec, slave, 0) > 0)
+        ; // empty mailbox if anything pending
 
     ec_mbx_clear(pec, slave, 0);
 
     // mailbox header
-    write_buf->mbx_hdr.length       = 12; // (mbxhdr (6) - length (2)) + coehdr (2) + sdoinfohdr (4)
+    write_buf->mbx_hdr.length       = 8;//12; // (mbxhdr (6) - length (2)) + coehdr (2) + sdoinfohdr (4)
     write_buf->mbx_hdr.address      = 0x0000;
-    write_buf->mbx_hdr.priority     = 0x02;
+    write_buf->mbx_hdr.priority     = 0x00;
     write_buf->mbx_hdr.mbxtype      = EC_MBX_COE;
 
     // coe header
@@ -447,7 +448,7 @@ int ec_coe_odlist_read(ec_t *pec, uint16_t slave, uint8_t *buf, size_t *len) {
     if (wkc != 1)
         ec_log(10, __func__, "send mailbox failed\n");
 
-    int val = 0;
+    int val = 0, errors = 0;
 
     do {
         // wait for answer
@@ -455,6 +456,15 @@ int ec_coe_odlist_read(ec_t *pec, uint16_t slave, uint8_t *buf, size_t *len) {
         wkc = ec_mbx_receive(pec, slave, 10 * EC_DEFAULT_TIMEOUT_MBX);
         if (wkc != 1) {
             ec_log(10, __func__, "receive mailbox failed\n");
+            continue;
+        }
+
+        if (read_buf->mbx_hdr.mbxtype != EC_MBX_COE) {
+            if (++errors == 10) {
+                ec_log(10, __func__, "receive mailbox got more than 10 errors...\n");
+                return 0;
+            }
+
             continue;
         }
 
@@ -664,12 +674,12 @@ int ec_coe_generate_mapping(ec_t *pec, uint16_t slave) {
         // read count of mapping entries, stored in subindex 0
         if (!ec_coe_sdo_read(pec, slave, idx, 0, 0, &entry_cnt, 
                 &entry_cnt_size, &abort_code)) {
-            ec_log(10, __func__, "slave %2d: reading 0x%04X/%d failed\n", 
+            ec_log(10, __func__, "sm : slave %2d: reading 0x%04X/%d failed\n", 
                     slave, idx, 0);
             continue;
         }
 
-        ec_log(100, __func__, "slave %2d: 0x%04X count %d\n", slave, 
+        ec_log(100, __func__, "sm : slave %2d: 0x%04X count %d\n", slave, 
                 idx, entry_cnt); 
 
         for (int i = 1; i <= entry_cnt; ++i) {
@@ -678,8 +688,14 @@ int ec_coe_generate_mapping(ec_t *pec, uint16_t slave) {
             // read entry subindex with mapped value
             if (!ec_coe_sdo_read(pec, slave, idx, i, 0, 
                     (uint8_t *)&entry_idx, &entry_size, &abort_code)) {
-                ec_log(10, __func__, "slave %2d: reading 0x%04X/%d failed\n", 
+                ec_log(10, __func__, "   : pdo : slave %2d: reading 0x%04X/%d failed\n", 
                         slave, idx, i);
+                continue;
+            }
+            
+            // read entry subindex with mapped value
+            if (entry_idx == 0) {
+                ec_log(100, __func__, "   : pdo : slave %2d: entry_idx is 0\n", slave);
                 continue;
             }
 
@@ -688,12 +704,12 @@ int ec_coe_generate_mapping(ec_t *pec, uint16_t slave) {
             // read count of entries of mapped value
             if (!ec_coe_sdo_read(pec, slave, entry_idx, 0, 0, 
                     (uint8_t *)&entry_cnt_2, &entry_cnt_size, &abort_code)) {
-                ec_log(10, __func__, "slave %2d: reading 0x%04X/%d failed\n", 
+                ec_log(10, __func__, "   : pdo : slave %2d: reading 0x%04X/%d failed\n", 
                         slave, entry_idx, 0);
                 continue;
             }
 
-            ec_log(100, __func__, "slave %2d: 0x%04X count %d\n", slave, 
+            ec_log(100, __func__, "   : pdo : slave %2d: 0x%04X count %d\n", slave, 
                     entry_idx, entry_cnt_2); 
 
             for (int j = 1; j <= entry_cnt_2; ++j) {
@@ -701,14 +717,17 @@ int ec_coe_generate_mapping(ec_t *pec, uint16_t slave) {
                 size_t entry_size = sizeof(entry);
                 if (!ec_coe_sdo_read(pec, slave, entry_idx, j, 0, 
                         (uint8_t *)&entry, &entry_size, &abort_code)) {
-                    ec_log(10, __func__, "slave %2d: reading 0x%04X/%d failed\n", 
+                    ec_log(10, __func__, "         : slave %2d: reading 0x%04X/%d failed\n", 
                             slave, entry_idx, j);
                     continue;
                 }
 
-                ec_log(100, __func__, "slave %2d: mapped entry %08X\n", slave, entry);
-
                 bit_len += entry & 0x000000FF;
+                
+                ec_log(100, __func__, "         : slave %2d: mapped entry 0x%04X / %d -> %d bits\n", slave, 
+                        (entry & 0xFFFF0000) >> 16, 
+                        (entry & 0x0000FF00) >> 8, 
+                        (entry & 0x000000FF));
             }                        
         }
 

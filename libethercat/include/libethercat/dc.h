@@ -48,7 +48,7 @@ int ec_dc_config(ec_t *pec);
  * \param cycle_shift shift of first sync 0 start in [ns]
  */
 void ec_dc_sync0(ec_t *pec, uint16_t slave, int active, 
-        uint32_t cycle_time, uint32_t cycle_shift);
+        uint32_t cycle_time, int32_t cycle_shift);
 
 //! configure slave for distributed clock sync 0 and sync 1 pulse
 /*/
@@ -60,7 +60,7 @@ void ec_dc_sync0(ec_t *pec, uint16_t slave, int active,
  * \param cycle_shift shift of first sync 0 start in [ns]
  */
 void ec_dc_sync01(ec_t *pec, uint16_t slave, int active, 
-        uint32_t cycle_time_0, uint32_t cycle_time_1, uint32_t cycle_shift);
+        uint32_t cycle_time_0, uint32_t cycle_time_1, int32_t cycle_shift);
 
 #ifdef __cplusplus
 }
