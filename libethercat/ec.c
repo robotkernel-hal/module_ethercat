@@ -825,7 +825,7 @@ int ec_receive_distributed_clocks_sync(ec_t *pec, ec_timer_t *timeout) {
             memcpy(&act_dc_time, ec_datagram_payload(&pec->dc.p_de_dc->datagram), 8);
 
             if (pec->dc.dc_time > 0) {
-                pec->dc.dc_cycle_sum += (act_dc_time - pec->dc.dc_time);
+                pec->dc.dc_cycle_sum += abs(act_dc_time - pec->dc.dc_time);
                 pec->dc.dc_cycle_cnt++;
 
                 if (pec->dc.dc_cycle_cnt == DC_DCSOFF_SAMPLES) {                    

@@ -131,6 +131,12 @@ master::master(const std::string& name, const YAML::Node& node) : module_base("m
     if (ret != 0) 
         throw str_exception("ec_open failed: %s!\n", strerror(ret));
 
+   
+    stringstream intf_name;
+    intf_name << "distributed_clocks";
+    dc_pd_intf = robotkernel::kernel::register_interface_cb(name.c_str(), 
+            "libinterface_process_data_inspection.so", intf_name.str().c_str(), 0x00020000);
+
     set_state(module_state_init);
 
     // add process data inspection 

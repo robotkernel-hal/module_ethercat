@@ -66,7 +66,7 @@ void ec_sleep(uint64_t nsec) {
  */
 int ec_timer_gettime(ec_timer_t *timer) {
     struct timespec ts;
-    if (clock_gettime(CLOCK_MONOTONIC, &ts) == -1) {
+    if (clock_gettime(CLOCK_REALTIME, &ts) == -1) {
         perror("clock_gettime");
         return -1;
     }
