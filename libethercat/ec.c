@@ -181,6 +181,7 @@ int ec_set_state(ec_t *pec, ec_state_t state) {
                 pec->slaves[i].fixed_address = fixed;
                 pec->slaves[i].dc.use_dc = 1;
                 pec->slaves[i].sm_set_by_user = 0;
+                pthread_mutex_init(&pec->slaves[i].mbx_lock, NULL);
 
                 ec_apwr(pec, auto_inc, EC_REG_STADR, (uint8_t *)&fixed, sizeof(fixed), &wkc); 
                 if (wkc == 1)
@@ -285,8 +286,10 @@ int ec_set_state(ec_t *pec, ec_state_t state) {
                         } else  {
                             pd->pdin_len += slv->sm[k].len;  // inputs
                         }
-
                     }
+
+                    if (slv->eeprom.mbx_supported)
+                        pd->pdin_len += 1; // add state of sync manager read mailbox
                 }
                 
                 ec_log(10, get_state_string(state), "group %2d: pd out 0x%08X %3d bytes, in 0x%08X %3d bytes\n", 
@@ -353,6 +356,29 @@ int ec_set_state(ec_t *pec, ec_state_t state) {
                         }
 
                         fmmu_next++;
+                    }
+
+                    if (slv->eeprom.mbx_supported) {
+                        // add state of sync manager read mailbox
+                        slv->fmmu[fmmu_next].log = log_base_in;
+                        slv->fmmu[fmmu_next].log_len = 1;
+                        slv->fmmu[fmmu_next].log_bit_start = 0;
+                        slv->fmmu[fmmu_next].log_bit_stop = 7;
+                        slv->fmmu[fmmu_next].phys = 0x80D;
+                        slv->fmmu[fmmu_next].type = 1;
+                        slv->fmmu[fmmu_next].active = 1;
+
+                        if (!slv->pdin_len) {
+                            slv->pdin = pdin; 
+                            slv->pdin_len = 1;
+                        } else 
+                            slv->pdin_len += 1;
+
+                        slv->mbx_read.sm_state = pdin;
+
+                        pdin += 1;
+                        log_base_in += 1;
+                        wkc_expected |= 1;
                     }
                     
                     pd->wkc_expected += wkc_expected;
@@ -491,6 +517,8 @@ int ec_close(ec_t *pec) {
             free_resource(slv->fmmu);
             free_resource(slv->mbx_read.buf);
             free_resource(slv->mbx_write.buf);
+
+            pthread_mutex_destroy(&slv->mbx_lock);
         }
 
         free(pec->slaves);

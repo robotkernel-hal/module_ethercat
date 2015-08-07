@@ -59,6 +59,7 @@ TAILQ_HEAD(idx_queue, idx_entry);
     
 typedef struct ec_slave_mbx {
     uint8_t  sm_nr;
+    uint8_t *sm_state;
     uint8_t *buf;
 } ec_slave_mbx_t;
 
@@ -128,6 +129,7 @@ typedef struct ec_slave {
     ec_slave_sm_t *sm;
     ec_slave_fmmu_t *fmmu;
 
+    pthread_mutex_t mbx_lock;
     ec_slave_mbx_t mbx_read;
     ec_slave_mbx_t mbx_write;
 
