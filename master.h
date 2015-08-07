@@ -50,7 +50,9 @@ namespace module_ethercat {
 class slave;
 extern const std::string state_strings[];
 
-class master : public robotkernel::module_base, public robotkernel::trigger_base {
+class master :  public robotkernel::module_base, 
+                public robotkernel::trigger_base,
+                public robotkernel::runnable {
     friend class slave;
 
     public:
@@ -90,6 +92,10 @@ class master : public robotkernel::module_base, public robotkernel::trigger_base
         std::string _ifname;
             
         robotkernel::kernel::interface_id_t dc_pd_intf;
+
+        pthread_mutex_t async_lock;
+        pthread_cond_t async_cond;
+
     public:
         //! construction
         /*!
@@ -117,6 +123,9 @@ class master : public robotkernel::module_base, public robotkernel::trigger_base
          * \return success or failure
          */
         int request(int reqcode, void* ptr);
+
+        //! async handler thread
+        void run();
 };
 
 //! module_ethercat::

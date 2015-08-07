@@ -132,6 +132,9 @@ master::master(const std::string& name, const YAML::Node& node) : module_base("m
         throw str_exception("ec_open failed: %s!\n", strerror(ret));
 
    
+    pthread_mutex_init(&async_lock, NULL);
+    pthread_cond_init(&async_cond, NULL);
+
     stringstream intf_name;
     intf_name << "distributed_clocks";
     dc_pd_intf = robotkernel::kernel::register_interface_cb(name.c_str(), 
@@ -152,6 +155,9 @@ master::~master() {
         ec_close(_pec);
 
     _pec = NULL;
+    
+    pthread_mutex_destroy(&async_lock);
+    pthread_cond_destroy(&async_cond);
 }
 
 //! set module state machine to defined state
@@ -164,6 +170,7 @@ int master::set_state(module_state_t new_state) {
 
     switch (new_state) {
         case module_state_init: {
+            stop();
             _pec->tx_sync = 1;
 
             ec_set_state(_pec, EC_STATE_INIT);
@@ -185,6 +192,7 @@ int master::set_state(module_state_t new_state) {
             break;
         }
         case module_state_preop: {
+            stop();
             _pec->tx_sync = 1;
             
             ec_set_state(_pec, EC_STATE_PREOP);
@@ -214,7 +222,7 @@ int master::set_state(module_state_t new_state) {
 
             break;
         }
-        case module_state_safeop:
+        case module_state_safeop:            
             ec_create_pd_groups(_pec, _group_info.size());
             for (group_map_t::iterator it = _group_info.begin(); it != _group_info.end(); ++it) {
                 int g_nr = it->first;
@@ -237,9 +245,11 @@ int master::set_state(module_state_t new_state) {
             }
 
             ec_set_state(_pec, EC_STATE_SAFEOP);
+            start();
             _pec->tx_sync = 0;
             break;
         case module_state_op:
+            start();
             _pec->tx_sync = 0;
 
             ec_set_state(_pec, EC_STATE_OP);
@@ -624,9 +634,71 @@ void master::trigger() {
             for (std::list<int>::iterator it = g->_slaves.begin(); it != g->_slaves.end(); ++it)
                 trigger_modules(*it);
         }
+        
+        int slave;
+        for (slave = 0; slave < _pec->slave_cnt; ++slave) {
+            ec_slave_t *slv = &_pec->slaves[slave];
+
+            if (slv->eeprom.mbx_supported && slv->mbx_read.sm_state) {
+                if (*slv->mbx_read.sm_state & 0x08) {
+                    pthread_cond_signal(&async_cond);
+                    break;
+                }
+            }
+        }
 
         if (_pec->dc.have_dc)
             ec_receive_distributed_clocks_sync(_pec, &timeout);
     }
+}
+
+//! async handler thread
+void master::run() {
+    log(module_info, "async handler thread running\n");
+
+    pthread_mutex_lock(&async_lock);
+
+    while (running()) {
+        struct timespec timeout;
+        ec_timer_t abstime;
+        ec_timer_init(&abstime, 100000000);
+        timeout.tv_sec = abstime.sec;
+        timeout.tv_nsec = abstime.nsec;
+
+        if (pthread_cond_timedwait(&async_cond, &async_lock, &timeout) != 0)
+            continue;
+
+        int slave;
+        for (slave = 0; slave < _pec->slave_cnt; ++slave) {
+            ec_slave_t *slv = &_pec->slaves[slave];
+
+            if (slv->eeprom.mbx_supported && slv->mbx_read.sm_state) {
+                if (pthread_mutex_trylock(&slv->mbx_lock) != 0)
+                    continue;
+
+                if (((*slv->mbx_read.sm_state) & 0x08) == 0x08) {
+                    log(module_info, "slave %d read mailbox is full\n", slave);
+
+                    char buf[1024];
+                    int wkc = ec_mbx_receive(_pec, slave, EC_DEFAULT_TIMEOUT_MBX);
+                    if (wkc) {
+                        int cnt = sprintf(buf, "wkc %d: ", wkc);
+
+                        ec_mbx_header_t *mbx_hdr = (ec_mbx_header_t *)(slv->mbx_read.buf);
+                        for (int z = 0; z < mbx_hdr->length; ++z)
+                            cnt += snprintf(buf+cnt, 1024 - cnt, "%02X ", slv->mbx_read.buf[z]);
+                    
+                        log(module_info, "%s\n", buf);
+                    }
+                }
+
+                pthread_mutex_unlock(&slv->mbx_lock);
+            }
+        }
+    }
+
+    pthread_mutex_unlock(&async_lock);
+
+    log(module_info, "async handler thread stopped\n");
 }
 
