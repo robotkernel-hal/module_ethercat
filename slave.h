@@ -34,7 +34,7 @@
 #include "interface_memory_inspection/module_intf.h"
 
 #define LN_UNREGISTER_SERVICE_IN_BASE_DETOR  
-//#include "ln_messages.h"
+#include "ln_messages.h"
 #undef LN_UNREGISTER_SERVICE_IN_BASE_DETOR
 
 #define MEM_ADDRESS(x)          ((x) & 0x0000FFFF)
@@ -70,7 +70,8 @@ typedef enum transition {
 } transition_t;
 
 
-class slave {
+class slave : public ln_service_set_ec_state_base,
+              public ln_service_get_ec_state_base {
     public:
         //! canopen over ethercat init cmd
         typedef struct coe_init_cmd {
@@ -94,10 +95,21 @@ class slave {
 
         //! servodrive over ethercat init cmd
         typedef struct soe_init_cmd {
-            int idx;     //! servodrive id number
-            int element; //! servodrive element number
-            int drive;   //! servodrive drive number
-            int val;     //! servodrive id value
+            int idn;                    //!< servodrive id number
+            int element;                //!< servodrive element number
+            int atn;                    //!< servodrive drive number
+            char *data;                 //!< servodrive id data
+            size_t datalen;             //!< servodrive id data length
+            transition_t transition;    //!< init command transition
+
+            //! construction
+            /*!
+             * \param node yaml intialization node
+             */
+            soe_init_cmd(const YAML::Node& node);
+
+            //! destruction
+            ~soe_init_cmd();
         } soe_init_cmd_t;
         typedef std::list<soe_init_cmd_t *> soe_list_t;
 
@@ -187,6 +199,9 @@ class slave {
          *                       above    0x00010000              eeprom memory
          */
         void memory_request(int code, memory_t *memreq);
+	
+        int on_set_ec_state(ln::service_request& req, ln_service_module_ethercat_set_ec_state& svc);
+        int on_get_ec_state(ln::service_request& req, ln_service_module_ethercat_get_ec_state& svc);
 
     private:
         robotkernel::kernel::interface_id_t _soe_intf;

@@ -6,6 +6,7 @@
 #include "slave.h"
 #include "master.h"
 #include "robotkernel/kernel.h"
+#include "robotkernel/helpers.h"
 #include <iomanip>
 #include <stdio.h>
 
@@ -46,6 +47,26 @@ slave::coe_init_cmd::coe_init_cmd(const YAML::Node& node) {
 
 //! destruction
 slave::coe_init_cmd::~coe_init_cmd() {
+    if (data) {
+        delete[] data;
+    }
+}
+
+//! construction
+/*!
+ * \param node yaml intialization node
+ */
+slave::soe_init_cmd::soe_init_cmd(const YAML::Node& node) {
+    idn        = get_as<int>(node, "idn");
+    element    = get_as<int>(node, "element") >> 1;
+    atn        = get_as<int>(node, "atn");
+    transition = (transition_t)get_as<int>(node, "transition");
+    string data_string = get_as<string>(node, "data");
+    convert_string_to_hex(data_string, &data, &datalen);
+}
+
+//! destruction
+slave::soe_init_cmd::~soe_init_cmd() {
     if (data) {
         delete[] data;
     }
@@ -141,10 +162,21 @@ slave::slave(const YAML::Node& node, master *master_dev)
                 it != init_cmds.end(); ++it) {
             string type = (*it)["type"].to<string>();
 
-            if (type == "coe") {
+            if (type == "coe")
                 coe_init_cmds.push_back(new coe_init_cmd_t(*it));
-            }
+            else if (type == "soe")
+                soe_init_cmds.push_back(new soe_init_cmd_t(*it));
         }
+    }
+	
+    kernel& k = *kernel::get_instance();
+    if (k.clnt) {
+        stringstream base;
+        base << k.clnt->name << "." << master_dev->name <<
+            ".slave_" << index;
+
+        register_set_ec_state(k.clnt, base.str() + ".set_ec_state");
+        register_get_ec_state(k.clnt, base.str() + ".get_ec_state");
     }
 
     master_dev->log(module_verbose,
@@ -154,9 +186,13 @@ slave::slave(const YAML::Node& node, master *master_dev)
 //! destruction
 slave::~slave() {
     for (coe_list_t::iterator it = coe_init_cmds.begin();
-            it != coe_init_cmds.end(); ++it) {
+            it != coe_init_cmds.end(); ++it)
         delete(*it);
-    }
+    
+    for (soe_list_t::iterator it = soe_init_cmds.begin();
+            it != soe_init_cmds.end(); ++it)
+        delete(*it);
+    
 }
 
 //! prepare state transitions
@@ -208,6 +244,24 @@ bool slave::prepare_state_transition(transition_t transition) {
 
             int wkc = ec_coe_sdo_write(master_dev->_pec, index, cmd->index, 
                     cmd->subindex, cmd->ca, buf, &buf_len, &abort_code);
+            if (!wkc) {
+                master_dev->log(module_info, "writing sdo, %s\n",
+                     "todo");//ecx_elist2string(ctx));
+            }
+        } 
+    }
+    
+    for (soe_list_t::iterator it = soe_init_cmds.begin();
+            it != soe_init_cmds.end(); ++it) {
+
+        soe_init_cmd_t *cmd = *it;
+
+        if (cmd->transition == transition) {
+            master_dev->log(module_verbose, "sending soe init "
+                    "command slave %d, idn %d, atn %d\n", index, cmd->idn, cmd->atn);
+
+            int wkc = ec_soe_write(master_dev->_pec, index, cmd->atn, cmd->idn, 
+                    cmd->element, (uint8_t *)cmd->data, cmd->datalen/2);
             if (!wkc) {
                 master_dev->log(module_info, "writing sdo, %s\n",
                      "todo");//ecx_elist2string(ctx));
@@ -276,14 +330,21 @@ void slave::register_interfaces() {
     _coe_intf = robotkernel::kernel::register_interface_cb(master_dev->name.c_str(), 
             "libinterface_canopen_protocol.so", slave_name.str().c_str(), index);
 
-    if (master_dev->_pec->slaves[index].eeprom.mbx_supported & EC_EEPROM_MBX_SOE)
-        _soe_intf = robotkernel::kernel::register_interface_cb(master_dev->name.c_str(), 
-                "libinterface_sercos_protocol.so", slave_name.str().c_str(), index);
-
     _pd_intf = robotkernel::kernel::register_interface_cb(master_dev->name.c_str(), 
             "libinterface_process_data_inspection.so", slave_name.str().c_str(), index);
     _mem_intf = robotkernel::kernel::register_interface_cb(master_dev->name.c_str(),
             "libinterface_memory_inspection.so", slave_name.str().c_str(), index);
+    
+    if (master_dev->_pec->slaves[index].eeprom.mbx_supported & EC_EEPROM_MBX_SOE) {
+        int atn;
+        for (atn = 0; atn < master_dev->_pec->slaves[index].eeprom.general.soe_channels; ++atn) {
+            std::stringstream atn_name;
+            atn_name << "slave_" << index << ".atn_" << atn;
+            _soe_intf = robotkernel::kernel::register_interface_cb(master_dev->name.c_str(), 
+                "libinterface_sercos_protocol.so", atn_name.str().c_str(), (index << 16) | atn);
+        }
+    }
+
 }
 
 //! unregister interfaces of slave
@@ -310,5 +371,49 @@ void slave::unregister_interfaces() {
         kernel::unregister_interface_cb(_coe_intf);
         _coe_intf = NULL; 
     }
+}
+
+int slave::on_set_ec_state(ln::service_request& req, ln_service_module_ethercat_set_ec_state& svc) {
+    string state_to = string(svc.req.state, svc.req.state_len);
+
+    if (state_to == string("init"))
+        ec_slave_set_state(master_dev->_pec, index, EC_STATE_INIT);
+    else if (state_to == "preop")    
+        ec_slave_set_state(master_dev->_pec, index, EC_STATE_PREOP);
+    else if (state_to == "safeop")    
+        ec_slave_set_state(master_dev->_pec, index, EC_STATE_SAFEOP);
+    else if (state_to == "op")    
+        ec_slave_set_state(master_dev->_pec, index, EC_STATE_OP);
+
+    req.respond();
+    return 0;
+}
+
+int slave::on_get_ec_state(ln::service_request& req, ln_service_module_ethercat_get_ec_state& svc) {
+    ec_state_t state;
+    int wkc = ec_slave_get_state(master_dev->_pec,
+            index, &state);
+
+    string state_string;
+    if ((state & 0x000F) == EC_STATE_INIT)
+        state_string = strdup("init");
+    else if ((state & 0x000F) == EC_STATE_PREOP)
+        state_string = strdup("preop");
+    else if ((state & 0x000F) == EC_STATE_SAFEOP)
+        state_string = strdup("safeop");
+    else if ((state & 0x000F) == EC_STATE_OP)
+        state_string = strdup("op");
+    else 
+        state_string = strdup("unknown");
+
+    if ((state & 0x0010) == 0x0010)
+        state_string += " ERROR";
+
+    svc.resp.state = strdup(state_string.c_str());
+    svc.resp.state_len = strlen(svc.resp.state);
+
+    req.respond();
+    free(svc.resp.state);
+    return 0;
 }
 

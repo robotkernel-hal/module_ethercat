@@ -57,8 +57,8 @@ int ec_mbx_is_full(ec_t *pec, uint16_t slave, uint8_t mbx_nr, uint32_t nsec) {
         ec_sleep(EC_DEFAULT_DELAY);
     } while (ec_timer_expired(&timer));
 
-    if (nsec)
-        ec_log(10, "MAILBOX", "timeout waiting for full mailbox %d\n", mbx_nr);
+//    if (nsec)
+//        ec_log(100, "MAILBOX", "timeout waiting for full mailbox %d\n", mbx_nr);
 
     return 0;
 }
@@ -88,8 +88,8 @@ int ec_mbx_is_empty(ec_t *pec, uint16_t slave, uint8_t mbx_nr, uint32_t nsec) {
         ec_sleep(EC_DEFAULT_DELAY);
     } while (ec_timer_expired(&timer));
 
-    if (nsec)
-        ec_log(10, "MAILBOX", "timeout waiting for empty mailbox %d\n", mbx_nr);
+//    if (nsec)
+//        ec_log(100, "MAILBOX", "timeout waiting for empty mailbox %d\n", mbx_nr);
 
     return 0;
 }
@@ -130,8 +130,8 @@ int ec_mbx_send(ec_t *pec, uint16_t slave, uint32_t nsec) {
 
     // wait for send mailbox available 
     if (!ec_mbx_is_empty(pec, slave, slv->mbx_write.sm_nr, nsec)) {
-//        ec_log(10, __func__, "slave %d waiting for empty send "
-//                "mailbox failed!\n", slave);
+        ec_log(10, __func__, "slave %d waiting for empty send "
+                "mailbox failed!\n", slave);
         return 0;
     }
 

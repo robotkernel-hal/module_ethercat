@@ -145,7 +145,7 @@ typedef struct ec_slave {
     ec_state_t expected_state;
 } ec_slave_t;
 
-typedef struct ec_dc_info {
+typedef struct PACKED ec_dc_info {
     uint16_t master_address;
     int have_dc;
     int next;
@@ -157,6 +157,7 @@ typedef struct ec_dc_info {
     int32_t dc_cycle_cnt;
     int64_t dc_sto;
 
+    uint64_t rtc_sto;
     uint64_t rtc_time;
     uint64_t rtc_cycle_sum;
     uint64_t rtc_cycle;
@@ -164,7 +165,7 @@ typedef struct ec_dc_info {
     
     datagram_entry_t *p_de_dc;
     idx_entry_t *p_idx_dc;
-} ec_dc_info_t;
+} PACKED ec_dc_info_t;
 
 typedef struct ec {
     hw_t *phw;
@@ -274,8 +275,6 @@ int ec_transmit_no_reply(ec_t *pec, uint8_t cmd, uint32_t adr,
  * \return 0 on success
  */
 int ec_set_state(ec_t *pec, ec_state_t state);
-
-int ec_state_transition(ec_t *pec, uint16_t slave, ec_state_t state);
 
 //! send process data for specific group with logical commands
 /*!

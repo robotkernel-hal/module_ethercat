@@ -2,6 +2,8 @@ ACLOCAL_AMFLAGS = -I m4 -I scripts/m4
 
 libdir = $(prefix)/lib
 lib_LTLIBRARIES = libmodule_ethercat.la
+BUILT_SOURCES = ln_messages.h
+CLEANFILES = ln_messages.h
 
 libmodule_ethercat_la_SOURCES  = master.cpp \
 								 slave.cpp \
@@ -43,7 +45,10 @@ libmodule_ethercat_la_CFLAGS   = -std=gnu99 \
 
 libmodule_ethercat_la_LDFLAGS  = -Wall -release $(PACKAGE_VERSION)
 
-install-exec-hook:
-	mkdir -p $(prefix)/share/ln
-	-cp -rf $(srcdir)/share/ln/* $(prefix)/share/ln/
+VPATH = $(srcdir):$(srcdir)/share/ln/message_definitions 
+
+LN_MESSAGES = 	module_ethercat/set_ec_state \
+				module_ethercat/get_ec_state 
+
+include $(top_srcdir)/Makefile.defs
 

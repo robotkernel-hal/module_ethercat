@@ -1,0 +1,4 @@
+service
+response
+char* state
+char* error_message

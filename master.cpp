@@ -99,7 +99,7 @@ void master::group::unregister_interfaces() {
 /*!
  * \param node yaml intialization node
  */
-master::master(const std::string& name, const YAML::Node& node) : module_base("module_ethercat", name) {
+master::master(const std::string& name, const YAML::Node& node) : module_base("module_ethercat", name), runnable(node) {
     _ifname     = node["ifname"].to<string>();
     _recv_prio  = node["recv_prio"].to<int>();
     _recv_mask  = node["recv_mask"].to<int>();
@@ -586,16 +586,18 @@ int master::request(int reqcode, void* ptr) {
 
             if (t->direction == SSD_MASTER_TO_DRIVE)
                 ret = ec_soe_write(_pec, t->slave_id >> 16, t->slave_id & 0x0000FFFFF,
-                        t->idn, t->element, (uint8_t *)t->buf, t->buflen); 
+                        t->idn, t->element >> 1, (uint8_t *)t->buf, t->buflen); 
             else 
                 ret = ec_soe_read(_pec, t->slave_id >> 16, t->slave_id & 0x0000FFFFF,
-                        t->idn, t->element, (uint8_t *)t->buf, &t->buflen); 
+                        t->idn, t->element >> 1, (uint8_t *)t->buf, &t->buflen); 
+            break;
         }
         default:
             ret = -1;
             break;
     }
 
+//    log(module_info, "returning %d\n", ret);
     return ret;
 }
 
@@ -685,7 +687,7 @@ void master::run() {
                         int cnt = sprintf(buf, "wkc %d: ", wkc);
 
                         ec_mbx_header_t *mbx_hdr = (ec_mbx_header_t *)(slv->mbx_read.buf);
-                        for (int z = 0; z < mbx_hdr->length; ++z)
+                        for (int z = 0; z < mbx_hdr->length + sizeof(ec_mbx_header_t); ++z)
                             cnt += snprintf(buf+cnt, 1024 - cnt, "%02X ", slv->mbx_read.buf[z]);
                     
                         log(module_info, "%s\n", buf);

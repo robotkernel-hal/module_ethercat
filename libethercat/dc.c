@@ -116,7 +116,7 @@ void ec_dc_sync01(ec_t *pec, uint16_t slave, int active,
    
     // program first trigger time and cycle time
     ec_fpwr(pec, slv->fixed_address, EC_REG_DCSTART0, &dc_start, sizeof(dc_start), &wkc);
-    ec_fpwr(pec, slv->fixed_address, EC_REG_DCCYCLE0, &cycle_time_0, sizeof(cycle_time_0), &wkc);
+    ec_fpwr(pec, slv->fixed_address, EC_REG_DCCYCLE0, &cycle_time_0, sizeof(cycle_time_0), &wkc);    
     ec_fpwr(pec, slv->fixed_address, EC_REG_DCCYCLE1, &cycle_time_1, sizeof(cycle_time_1), &wkc);
 
     if (active) {
@@ -233,8 +233,12 @@ int ec_dc_config(ec_t *pec) {
             dcsof *= -1;
             ec_fpwr(pec, slv->fixed_address, EC_REG_DCSYSOFFSET, &dcsof, sizeof(dcsof), &wkc);
 
-            if (pec->dc.master_address == slv->fixed_address)
+            if (pec->dc.master_address == slv->fixed_address) {
                 pec->dc.dc_sto = dcsof;
+                ec_timer_t tmr;
+                ec_timer_gettime(&tmr);
+                pec->dc.rtc_sto = tmr.sec * 1E9 + tmr.nsec;
+            }
 
             // assume port 0 is entry port
             slv->entryport = 0;
