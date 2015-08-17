@@ -28,12 +28,16 @@
 #include <string.h>
 #include <math.h>
 #include <stdarg.h>
+#include <limits.h>
+
 
 #include "libethercat/ec.h"
 #include "libethercat/slave.h"
 #include "libethercat/mbx.h"
 #include "libethercat/coe.h"
 #include "libethercat/dc.h"
+
+#define DC_DCSOFF_SAMPLES 1000
 
 void *ec_log_func_user = NULL;
 void (*ec_log_func)(int lvl, void *user, const char *format, ...) = NULL;
@@ -782,11 +786,6 @@ int ec_receive_process_data_group(ec_t *pec, int group, ec_timer_t *timeout) {
     return 0;
 }
 
-#define DC_DCSOFF_SAMPLES 1000
-
-uint64_t old_time = 0, act_time = 0;
-uint64_t old_dc = 0, act_dc = 0;
-
 //! send distributed clock sync datagram
 /*!
  * \param pec ethercat master pointer
@@ -806,10 +805,8 @@ int ec_send_distributed_clocks_sync(ec_t *pec) {
 
         if (pec->dc.rtc_count == DC_DCSOFF_SAMPLES) {
             pec->dc.rtc_cycle = pec->dc.rtc_cycle_sum / DC_DCSOFF_SAMPLES;
-
-            act_time = act_rtc_time;
-//            pec->dc.rtc_cycle_sum = 0;
-//            pec->dc.rtc_count = 0;
+            pec->dc.rtc_count = 0;
+            pec->dc.rtc_cycle_sum = 0;
         }
     }
 
@@ -840,8 +837,6 @@ int ec_send_distributed_clocks_sync(ec_t *pec) {
     datagram_pool_put(pec->phw->tx_high, pec->dc.p_de_dc);
     return 0;
 }
-
-#include <limits.h>
 
 //! receive distributed clocks sync datagram
 /*!
@@ -875,12 +870,26 @@ int ec_receive_distributed_clocks_sync(ec_t *pec, ec_timer_t *timeout) {
             uint64_t diff_time = act_time - pec->dc.rtc_sto;
 
                 
+            static int64_t old_rtc = 0, old_dc = 0;
+
             int64_t rtc_temp = diff_time%UINT_MAX;
             int64_t dc_temp  = act_dc_time%UINT_MAX;
-            int64_t diff_temp = rtc_temp - dc_temp;
 
+
+            int64_t diff_temp = rtc_temp - dc_temp;
+            if ((old_rtc < rtc_temp) && (old_dc > dc_temp))
+                diff_temp = rtc_temp - (UINT_MAX + dc_temp);
+            else if ((old_rtc > rtc_temp) && (old_dc < dc_temp))
+                diff_temp = UINT_MAX + rtc_temp - dc_temp;
+
+//            pec->dc.dc_time = diff_temp;
+
+            old_rtc = rtc_temp;
+            old_dc  = dc_temp;
+
+            static int test = 1000;
             static int h = 0;
-            if (h++%1000 == 0) {
+            if (h++%test == 0) {
                 ec_log(10, __func__, "act_dc_time: %20lld, diff_time: %20lld, diff_temp: %20lld\n", 
                         rtc_temp, dc_temp, diff_temp);
                     
@@ -890,13 +899,13 @@ int ec_receive_distributed_clocks_sync(ec_t *pec, ec_timer_t *timeout) {
                 // dc system time offset frame
                 if (ec_index_get(pec, &p_idx_dc_sto) != 0) {
                     ec_log(5, __func__, "error getting ethercat index\n");
-//                    goto sto_exit;
+                    goto sto_exit;
                 }
 
                 if (datagram_pool_get(pec->pool, &p_de_dc_sto, NULL) != 0) {
                     ec_index_put(pec, p_idx_dc_sto);
                     ec_log(5, __func__, "error getting datagram from pool\n");
-//                    goto sto_exit;
+                    goto sto_exit;
                 }
 
                 pec->dc.dc_sto += diff_temp;
@@ -917,100 +926,26 @@ int ec_receive_distributed_clocks_sync(ec_t *pec, ec_timer_t *timeout) {
                 datagram_pool_put(pec->phw->tx_low, p_de_dc_sto);
 
             }
-/*
+
+sto_exit:
             if (pec->dc.dc_time > 0) {
                 if (act_dc_time < pec->dc.dc_time) {
-                    if (pec->dc.dc_time < (uint64_t)UINT_MAX) { // 32-bit dc clock
-//                        printf("this case: %llu, %llu, %llu, %llu\n", 
-//                                (unsigned long long int)UINT_MAX,
-//                                (unsigned long long int)pec->dc.dc_time,
-//                                (unsigned long long int)act_dc_time,
-//                                (unsigned long long int)((uint64_t)UINT_MAX - pec->dc.dc_time) + act_dc_time);
+                    if (pec->dc.dc_time < (uint64_t)UINT_MAX) // 32-bit dc clock
                         pec->dc.dc_cycle_sum += ((uint64_t)UINT_MAX - pec->dc.dc_time) + act_dc_time;
-                    } else
-                        pec->dc.dc_cycle_sum += abs(act_dc_time - pec->dc.dc_time);
+                    else
+                        pec->dc.dc_cycle_sum += (ULONG_MAX - pec->dc.dc_time) + act_dc_time;
                 } else 
                     pec->dc.dc_cycle_sum += act_dc_time - pec->dc.dc_time;
                 pec->dc.dc_cycle_cnt++;                
 
                 if (pec->dc.dc_cycle_cnt == DC_DCSOFF_SAMPLES) {                    
-                    act_dc = act_dc_time;
-
-                    int64_t dc_sto = pec->dc.dc_sto;
-//                    if ((old_dc > 0) && (old_time > 0)) {
-//                        int64_t dc_diff;
-//                        if (act_dc < old_dc) {
-//                            if (old_dc < (uint64_t)UINT_MAX) // 32-bit dc clock
-//                                dc_diff = ((uint64_t)UINT_MAX - old_dc) + act_dc;
-//                            else
-//                                dc_diff = (ULONG_MAX - old_dc) + act_dc;
-//                        } else 
-//                            dc_diff = old_dc - act_dc;
-//
-//
-//
-//                        int64_t diff = (int64_t)(act_time - old_time) - (int64_t)dc_diff;    
-//                        dc_sto = -1*diff;
-//                        printf("diff %lld\n", diff);
-//                    }
-//
-//                    old_dc = act_dc;
-//                    old_time = act_time;
-//
-                    pec->dc.dc_cycle_cnt = 0;
-
                     pec->dc.dc_cycle = pec->dc.dc_cycle_sum / DC_DCSOFF_SAMPLES;
-//                    pec->dc.dc_sto += ((int64_t)pec->dc.rtc_cycle_sum - (int64_t)pec->dc.dc_cycle_sum) / 2;
-//                    printf("correcting about %lld\n", ((int64_t)pec->dc.rtc_cycle_sum - (int64_t)pec->dc.dc_cycle_sum) / 2);
-//                    pec->dc.dc_sto += (1000000 - pec->dc.dc_cycle) * DC_DCSOFF_SAMPLES;
-                    
-                    pec->dc.dc_sto += (((int64_t)pec->dc.dc_cycle_sum - (int64_t)pec->dc.rtc_cycle_sum));
-//                    ec_log(10, __func__, "correcting about %lld, dc %lld, rtc %lld\n", 
-//                            (long long int)dc_sto,
-//                            (long long int)pec->dc.dc_cycle_sum,
-//                            (long long int)pec->dc.rtc_cycle_sum
-//                            );//(1000000 - pec->dc.dc_cycle) * DC_DCSOFF_SAMPLES);
-//
-                    datagram_entry_t *p_de_dc_sto;
-                    idx_entry_t *p_idx_dc_sto;
-
-                    // dc system time offset frame
-                    if (ec_index_get(pec, &p_idx_dc_sto) != 0) {
-                        ec_log(5, __func__, "error getting ethercat index\n");
-                        goto sto_exit;
-                    }
-
-                    if (datagram_pool_get(pec->pool, &p_de_dc_sto, NULL) != 0) {
-                        ec_index_put(pec, p_idx_dc_sto);
-                        ec_log(5, __func__, "error getting datagram from pool\n");
-                        goto sto_exit;
-                    }
-
-                    memset(&p_de_dc_sto->datagram, 0, sizeof(ec_datagram_t) + 8 + 2);
-                    p_de_dc_sto->datagram.cmd = EC_CMD_FPWR;
-                    p_de_dc_sto->datagram.idx = p_idx_dc_sto->idx;
-                    p_de_dc_sto->datagram.adr = (EC_REG_DCSYSOFFSET << 16) | pec->dc.master_address;
-                    p_de_dc_sto->datagram.len = sizeof(pec->dc.dc_sto);
-                    p_de_dc_sto->datagram.irq = 0;
-                    memcpy(ec_datagram_payload(&p_de_dc_sto->datagram), &pec->dc.dc_sto, sizeof(pec->dc.dc_sto));
-                    //memcpy(ec_datagram_payload(&p_de_dc_sto->datagram), &dc_sto, sizeof(pec->dc.dc_sto));
-
-                    // we don't care about the answer, cb_no_reply frees datagram and index
-                    p_idx_dc_sto->pec = pec;
-                    p_de_dc_sto->user_cb = cb_no_reply;
-                    p_de_dc_sto->user_arg = p_idx_dc_sto;
-
-                    // queue frame and trigger tx
-                    datagram_pool_put(pec->phw->tx_low, p_de_dc_sto);
-
-sto_exit:
-                    pec->dc.rtc_cycle_sum = 0;
+                    pec->dc.dc_cycle_cnt = 0;
                     pec->dc.dc_cycle_sum = 0;
                 }
             }
 
             pec->dc.dc_time = act_dc_time;
-            */
         }
     }
 
