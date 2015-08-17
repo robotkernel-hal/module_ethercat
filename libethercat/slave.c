@@ -105,6 +105,9 @@ int ec_slave_set_state(ec_t *pec, uint16_t slave, ec_state_t state) {
     pec->slaves[slave].expected_state = state;
 
     do {
+        ec_fpwr(pec, pec->slaves[slave].fixed_address, 
+                EC_REG_ALCTL, &state, sizeof(state), &wkc); 
+
         act_state = 0;
         wkc = ec_slave_get_state(pec, slave, &act_state);
 
@@ -121,7 +124,7 @@ int ec_slave_set_state(ec_t *pec, uint16_t slave, ec_state_t state) {
             break;
         }
 
-        ec_sleep(1000000);
+        ec_sleep(100000000);
     } while (act_state != state);
 
     return wkc;

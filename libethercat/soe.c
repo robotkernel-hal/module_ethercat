@@ -51,9 +51,6 @@ int ec_soe_read(ec_t *pec, uint16_t slave, uint8_t atn, uint16_t idn,
     int ret = 0;
     ec_slave_t *slv = (ec_slave_t *)&pec->slaves[slave];
 
-    ec_log(10, "ec_soe_read", "trying: slave %d, atn %d, idn %d, elements 0x%X, len %d\n", 
-            slave, atn, idn, elements, *len);
-
     if (!slv->eeprom.mbx_supported & EC_EEPROM_MBX_SOE)
         return 0;
 
@@ -143,9 +140,6 @@ int ec_soe_write(ec_t *pec, uint16_t slave, uint8_t atn, uint16_t idn,
     int ret = 0;
     ec_slave_t *slv = (ec_slave_t *)&pec->slaves[slave];
 
-    ec_log(10, "ec_soe_write", "trying: slave %d, atn %d, idn %d, elements 0x%X, len %d, buf[0]: 0x%X\n", 
-            slave, atn, idn, elements, len, buf[0]);
-
     if (!slv->eeprom.mbx_supported & EC_EEPROM_MBX_SOE)
         return 0;
 
@@ -227,7 +221,6 @@ int ec_soe_generate_mapping_local(ec_t *pec, uint16_t slave, uint8_t atn,
         uint16_t idn, int *bitsize) {
     int ret = 0, i;
 
-    printf("soe mapping for idn %d, line %d\n", idn, __LINE__);
     *bitsize = 16; // control and status word are always present
 
     // read size of mapping idn first
@@ -238,7 +231,6 @@ int ec_soe_generate_mapping_local(ec_t *pec, uint16_t slave, uint8_t atn,
         ret = -1;
         goto exit;
     }
-    printf("soe mapping for idn %d, line %d\n", idn, __LINE__);
 
     // read mapping idn
     size_t idn_size = (idn_len[0] + 4) / 2;
@@ -248,13 +240,11 @@ int ec_soe_generate_mapping_local(ec_t *pec, uint16_t slave, uint8_t atn,
         ret = -1;
         goto exit;
     }
-    printf("soe mapping for idn %d, line %d\n", idn, __LINE__);
 
     // read all mapped idn's and add bit length, 
     // length is stored in idn attributes
     for (i = 0; i < (idn_len[0]/2); ++i) {
         uint16_t sub_idn = idn_value[i+2];
-        ec_log(10, __func__, "i %d, i+2 %d, idn_value[i] %d, subidn %d\n", i, i+2, idn_value[i], sub_idn);
         ec_soe_idn_attribute_t sub_idn_attr;
         size_t sub_idn_attr_size = sizeof(sub_idn_attr);
 
@@ -264,12 +254,10 @@ int ec_soe_generate_mapping_local(ec_t *pec, uint16_t slave, uint8_t atn,
 
         // 0 = 8 bit, 1 = 16 bit, ...
         *bitsize += 8 << sub_idn_attr.length;
-        ec_log(10, __func__, "adding %d bits for idn %d, total %d\n", 
-                8 << sub_idn_attr.length, sub_idn, *bitsize);
     }
 
 exit:
-    printf("soe mapping for idn %d, bitsize %d, ret %d\n", idn, *bitsize, ret);
+    ec_log(10, __func__, "soe mapping for idn %d, bitsize %d\n", idn, *bitsize);
     return ret;
 }
 

@@ -211,11 +211,17 @@ int ec_dc_config(ec_t *pec) {
         slv->dc.consumedports = slv->active_ports;
 
         if (slv->dc.use_dc && (slv->features & 0x04)) { // dc available
-            if (!pec->dc.have_dc) {
+            if (!pec->dc.have_dc) {                
                 pec->dc.master_address = slv->fixed_address;
                 pec->dc.have_dc = 1;
+                pec->dc.offset_compensation = 1000;
+                pec->dc.offset_compensation_cnt = 0;
+    
+                pec->dc.prev_rtc = 0;
+                pec->dc.prev_dc = 0;
+
                 pec->dc.next = slave;
-                slv->dc.prev = -1;
+                slv->dc.prev = -1;                
             } else {
                 pec->slaves[prev].dc.next = slave;
                 slv->dc.prev = prev;

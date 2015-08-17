@@ -162,7 +162,15 @@ typedef struct PACKED ec_dc_info {
     uint64_t rtc_cycle_sum;
     uint64_t rtc_cycle;
     int32_t rtc_count;
-    
+
+    int32_t act_diff;
+               
+    int64_t prev_rtc;   //!< rtc value of previous cycle (truncated to 32-bit)
+    int64_t prev_dc;    //!< dc  value of previous cycle (truncated to 32-bit)
+
+    int offset_compensation;
+    int offset_compensation_cnt;
+
     datagram_entry_t *p_de_dc;
     idx_entry_t *p_idx_dc;
 } PACKED ec_dc_info_t;
