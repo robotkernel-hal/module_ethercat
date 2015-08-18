@@ -1,6 +1,25 @@
 //! robotkernel module ethercat slave
 /*!
-  $Id$
+ * author: Robert Burger
+ *
+ * $Id$
+ */
+
+/*
+ * This file is part of robotkernel.
+ *
+ * robotkernel is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * robotkernel is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with robotkernel.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include "slave.h"
@@ -38,10 +57,10 @@ void convert_string_to_hex(string input, char **output, size_t *outlen) {
  * \param node yaml intialization node
  */
 slave::coe_init_cmd::coe_init_cmd(const YAML::Node& node) {
-    index      = node["index"].to<int>();
-    subindex   = node["subindex"].to<int>();
-    ca         = node["ca"].to<int>();
-    transition = (transition_t)node["transition"].to<int>();
+    index      = get_as<int>(node, "index");
+    subindex   = get_as<int>(node, "subindex", 0);
+    ca         = get_as<int>(node, "ca", 0);
+    transition = (transition_t)get_as<int>(node, "transition", 0x24);
     convert_string_to_hex(node["data"].to<string>(), &data, &datalen);
 }
 
@@ -115,9 +134,6 @@ slave::slave(int index, master *master_dev)
     : index(index),
     master_dev(master_dev) {
                 
-    _pd_intf = NULL;
-    _coe_intf = NULL;
-
     master_dev->log(module_verbose, "default slave index %d created\n", index);
 };
 
@@ -128,9 +144,6 @@ slave::slave(int index, master *master_dev)
  */
 slave::slave(const YAML::Node& node, master *master_dev)
     : master_dev(master_dev) {
-    _pd_intf = NULL;
-    _coe_intf = NULL;
-
     name  = node["name"].to<string>();
     index = node["index"].to<int>();
 
@@ -327,24 +340,22 @@ void slave::register_interfaces() {
     std::stringstream slave_name; 
     slave_name << "slave_" << index;
 
-    _coe_intf = robotkernel::kernel::register_interface_cb(master_dev->name.c_str(), 
-            "libinterface_canopen_protocol.so", slave_name.str().c_str(), index);
-
-    _pd_intf = robotkernel::kernel::register_interface_cb(master_dev->name.c_str(), 
-            "libinterface_process_data_inspection.so", slave_name.str().c_str(), index);
-    _mem_intf = robotkernel::kernel::register_interface_cb(master_dev->name.c_str(),
-            "libinterface_memory_inspection.so", slave_name.str().c_str(), index);
+    ifaces.push_back(robotkernel::kernel::register_interface_cb(master_dev->name.c_str(), 
+            "libinterface_canopen_protocol.so", slave_name.str().c_str(), index));
+    ifaces.push_back(robotkernel::kernel::register_interface_cb(master_dev->name.c_str(), 
+            "libinterface_process_data_inspection.so", slave_name.str().c_str(), index));
+    ifaces.push_back(robotkernel::kernel::register_interface_cb(master_dev->name.c_str(),
+            "libinterface_memory_inspection.so", slave_name.str().c_str(), index));
     
     if (master_dev->_pec->slaves[index].eeprom.mbx_supported & EC_EEPROM_MBX_SOE) {
         int atn;
         for (atn = 0; atn < master_dev->_pec->slaves[index].eeprom.general.soe_channels; ++atn) {
             std::stringstream atn_name;
             atn_name << "slave_" << index << ".atn_" << atn;
-            _soe_intf = robotkernel::kernel::register_interface_cb(master_dev->name.c_str(), 
-                "libinterface_sercos_protocol.so", atn_name.str().c_str(), (index << 16) | atn);
+            ifaces.push_back(robotkernel::kernel::register_interface_cb(master_dev->name.c_str(), 
+                "libinterface_sercos_protocol.so", atn_name.str().c_str(), (index << 16) | atn));
         }
     }
-
 }
 
 //! unregister interfaces of slave
@@ -352,25 +363,8 @@ void slave::register_interfaces() {
  * \return N/A
  */
 void slave::unregister_interfaces() {
-    if (_mem_intf) {
-        kernel::unregister_interface_cb(_mem_intf);
-        _mem_intf = NULL;
-    }
-
-    if (_pd_intf) {
-        kernel::unregister_interface_cb(_pd_intf);
-        _pd_intf = NULL; 
-    }
-    
-    if (_soe_intf) {
-        kernel::unregister_interface_cb(_soe_intf);
-        _soe_intf = NULL; 
-    }
-    
-    if (_coe_intf) {
-        kernel::unregister_interface_cb(_coe_intf);
-        _coe_intf = NULL; 
-    }
+    for (iface_list_t::iterator it = ifaces.begin(); it != ifaces.end(); ++it)
+        kernel::unregister_interface_cb(*it);
 }
 
 int slave::on_set_ec_state(ln::service_request& req, ln_service_module_ethercat_set_ec_state& svc) {
@@ -391,23 +385,26 @@ int slave::on_set_ec_state(ln::service_request& req, ln_service_module_ethercat_
 
 int slave::on_get_ec_state(ln::service_request& req, ln_service_module_ethercat_get_ec_state& svc) {
     ec_state_t state;
+    string state_string;
     int wkc = ec_slave_get_state(master_dev->_pec,
             index, &state);
 
-    string state_string;
-    if ((state & 0x000F) == EC_STATE_INIT)
-        state_string = strdup("init");
-    else if ((state & 0x000F) == EC_STATE_PREOP)
-        state_string = strdup("preop");
-    else if ((state & 0x000F) == EC_STATE_SAFEOP)
-        state_string = strdup("safeop");
-    else if ((state & 0x000F) == EC_STATE_OP)
-        state_string = strdup("op");
-    else 
-        state_string = strdup("unknown");
+    if (wkc > 0) {
+        if ((state & 0x000F) == EC_STATE_INIT)
+            state_string = strdup("init");
+        else if ((state & 0x000F) == EC_STATE_PREOP)
+            state_string = strdup("preop");
+        else if ((state & 0x000F) == EC_STATE_SAFEOP)
+            state_string = strdup("safeop");
+        else if ((state & 0x000F) == EC_STATE_OP)
+            state_string = strdup("op");
+        else 
+            state_string = strdup("unknown");
 
-    if ((state & 0x0010) == 0x0010)
-        state_string += " ERROR";
+        if ((state & 0x0010) == 0x0010)
+            state_string += " ERROR";
+    } else
+        state_string = "ERROR got no answer on get_state command\n";
 
     svc.resp.state = strdup(state_string.c_str());
     svc.resp.state_len = strlen(svc.resp.state);

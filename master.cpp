@@ -584,12 +584,15 @@ int master::request(int reqcode, void* ptr) {
         case MOD_REQUEST_SERCOS_SERVICE_TRANSFER: {
             sercos_service_transfer *t = (sercos_service_transfer *)ptr;
 
-            if (t->direction == SSD_MASTER_TO_DRIVE)
-                ret = ec_soe_write(_pec, t->slave_id >> 16, t->slave_id & 0x0000FFFFF,
-                        t->idn, t->element >> 1, (uint8_t *)t->buf, t->buflen); 
-            else 
-                ret = ec_soe_read(_pec, t->slave_id >> 16, t->slave_id & 0x0000FFFFF,
-                        t->idn, t->element >> 1, (uint8_t *)t->buf, &t->buflen); 
+            if (t->direction == SSD_MASTER_TO_DRIVE) {
+                if (ec_soe_write(_pec, t->slave_id >> 16, t->slave_id & 0x0000FFFFF,
+                        t->idn, t->element >> 1, (uint8_t *)t->buf, t->buflen) == 1)
+                    ret = 0; 
+             } else {
+                if (ec_soe_read(_pec, t->slave_id >> 16, t->slave_id & 0x0000FFFFF,
+                        t->idn, t->element >> 1, (uint8_t *)t->buf, &t->buflen) == 1)
+                    ret = 0; 
+             }
             break;
         }
         default:
@@ -679,7 +682,7 @@ void master::run() {
                     continue;
 
                 if (((*slv->mbx_read.sm_state) & 0x08) == 0x08) {
-                    log(module_info, "slave %d read mailbox is full\n", slave);
+                    log(module_verbose, "async worker: slave %d read mailbox is full\n", slave);
 
                     char buf[1024];
                     int wkc = ec_mbx_receive(_pec, slave, EC_DEFAULT_TIMEOUT_MBX);

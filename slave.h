@@ -75,12 +75,12 @@ class slave : public ln_service_set_ec_state_base,
     public:
         //! canopen over ethercat init cmd
         typedef struct coe_init_cmd {
-            int index;                        //! canopen dictionary identifier
-            int subindex;                     //! canopen sub index
-            int ca;                           //! write in complete access mode
-            char *data;                       //! new id data
-            size_t datalen;                   //! new id data length
-            transition_t transition; //! init command transition
+            int index;                  //!< canopen dictionary identifier
+            int subindex;               //!< canopen sub index
+            int ca;                     //!< write in complete access mode
+            char *data;                 //!< new id data
+            size_t datalen;             //!< new id data length
+            transition_t transition;    //!< init command transition
 
             //! construction
             /*!
@@ -204,10 +204,8 @@ class slave : public ln_service_set_ec_state_base,
         int on_get_ec_state(ln::service_request& req, ln_service_module_ethercat_get_ec_state& svc);
 
     private:
-        robotkernel::kernel::interface_id_t _soe_intf;
-        robotkernel::kernel::interface_id_t _coe_intf;
-        robotkernel::kernel::interface_id_t _pd_intf;
-        robotkernel::kernel::interface_id_t _mem_intf;
+        typedef std::list<robotkernel::kernel::interface_id_t> iface_list_t;
+        iface_list_t ifaces;
 
         module_ethercat::master *master_dev;
 };
