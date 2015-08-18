@@ -138,7 +138,7 @@ master::master(const std::string& name, const YAML::Node& node) : module_base("m
     stringstream intf_name;
     intf_name << "distributed_clocks";
     dc_pd_intf = robotkernel::kernel::register_interface_cb(name.c_str(), 
-            "libinterface_process_data_inspection.so", intf_name.str().c_str(), 0x00020000);
+            "libinterface_process_data_inspection.so", intf_name.str().c_str(), 0x20000000);
 
     set_state(module_state_init);
 
@@ -287,13 +287,25 @@ int master::request(int reqcode, void* ptr) {
                     pd->pd = _pec->pd_groups[g_nr].pd + _pec->pd_groups[g_nr].pdout_len;
                     pd->len = _pec->pd_groups[g_nr].pdin_len;
                 }
-            } else if (pd->slave_id == 0x00020000) {
+            } else if (pd->slave_id == 0x20000000) {
                 pd->pd = &_pec->dc.dc_time;
                 pd->len = (uint8_t *)&_pec->dc.p_de_dc - (uint8_t *)&_pec->dc.dc_time;
             } else {
+                int sub_slave_id = -1; 
+
+                if (pd->slave_id & 0x10000000) {
+                    sub_slave_id = (pd->slave_id & 0x00FF0000) >> 16;
+                    pd->slave_id = pd->slave_id & 0x0000FFFF;
+                }
+
                 if (pd->slave_id < (unsigned)_pec->slave_cnt) {
-                    pd->pd = _pec->slaves[pd->slave_id].pdin;
-                    pd->len = _pec->slaves[pd->slave_id].pdin_len;
+                    if (sub_slave_id != -1) {
+                        pd->pd = _pec->slaves[pd->slave_id].pdin + (sub_slave_id * _pec->slaves[pd->slave_id].pdin_len/2);
+                        pd->len = _pec->slaves[pd->slave_id].pdin_len/2.;
+                    } else {
+                        pd->pd = _pec->slaves[pd->slave_id].pdin;
+                        pd->len = _pec->slaves[pd->slave_id].pdin_len;
+                    }
                 }
             }
 
@@ -313,9 +325,21 @@ int master::request(int reqcode, void* ptr) {
                     pd->len = _pec->pd_groups[g_nr].pdout_len;
                 }
             } else {
+                int sub_slave_id = -1; 
+
+                if (pd->slave_id & 0x10000000) {
+                    sub_slave_id = (pd->slave_id & 0x00FF0000) >> 16;
+                    pd->slave_id = pd->slave_id & 0x0000FFFF;
+                }
+
                 if (pd->slave_id < (unsigned)_pec->slave_cnt) {
-                    pd->pd = _pec->slaves[pd->slave_id].pdout;
-                    pd->len = _pec->slaves[pd->slave_id].pdout_len;
+                    if (sub_slave_id != -1) {
+                        pd->pd = _pec->slaves[pd->slave_id].pdout + (sub_slave_id * _pec->slaves[pd->slave_id].pdout_len/2);
+                        pd->len = _pec->slaves[pd->slave_id].pdout_len/2.;
+                    } else {
+                        pd->pd = _pec->slaves[pd->slave_id].pdout;
+                        pd->len = _pec->slaves[pd->slave_id].pdout_len;
+                    }
                 }
             }
 
