@@ -184,6 +184,8 @@ int master::set_state(module_state_t new_state) {
                     slave *slv = new slave(nr, this);
                     _slave_info[nr] = slv;
                 }
+                
+                _slave_info[nr]->unregister_interfaces();
 
                 if (_slave_info[nr]->dc.has_dc)
                     _pec->slaves[nr].dc.use_dc = 1;
