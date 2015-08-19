@@ -214,7 +214,7 @@ int ec_dc_config(ec_t *pec) {
             if (!pec->dc.have_dc) {                
                 pec->dc.master_address = slv->fixed_address;
                 pec->dc.have_dc = 1;
-                pec->dc.offset_compensation = 1000;
+                pec->dc.offset_compensation = 250;
                 pec->dc.offset_compensation_cnt = 0;
     
                 pec->dc.prev_rtc = 0;

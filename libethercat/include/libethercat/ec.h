@@ -107,6 +107,16 @@ typedef struct PACKED ec_slave_dc_info {
     int consumedports;
 } ec_slave_dc_info_t;
 
+typedef struct ec_pd {
+    uint8_t *pd;
+    size_t len;
+} ec_pd_t;
+
+typedef struct ec_slave_subdev {
+    ec_pd_t pdin;
+    ec_pd_t pdout;
+} ec_slave_subdev_t;
+
 typedef struct ec_slave {
     int16_t     auto_inc_address;   //!< physical bus address
     uint16_t    fixed_address;      //!< virtual bus address, programmed on start
@@ -134,10 +144,12 @@ typedef struct ec_slave {
     ec_slave_mbx_t mbx_write;
 
     int assigned_pd_group;
-    uint8_t *pdin;
-    size_t pdin_len;
-    uint8_t *pdout;
-    size_t pdout_len;
+
+    ec_pd_t pdin;
+    ec_pd_t pdout;
+
+    size_t subdev_cnt;
+    ec_slave_subdev_t *subdevs;
 
     eeprom_info_t eeprom;
     ec_slave_dc_info_t dc;

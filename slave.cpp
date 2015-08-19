@@ -354,6 +354,9 @@ void slave::register_interfaces() {
             atn_name << "slave_" << index << ".atn_" << atn;
             ifaces.push_back(robotkernel::kernel::register_interface_cb(master_dev->name.c_str(), 
                 "libinterface_sercos_protocol.so", atn_name.str().c_str(), (index << 16) | atn));
+            ifaces.push_back(robotkernel::kernel::register_interface_cb(master_dev->name.c_str(), 
+                "libinterface_process_data_inspection.so", atn_name.str().c_str(), 
+                ECAT_SLAVE_ID_SUB | (atn << 16) | index));
         }
     }
 }

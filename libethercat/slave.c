@@ -270,6 +270,28 @@ int ec_slave_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
                     ec_fpwr(pec, slv->fixed_address, 0x800 + (sm_idx * 8),
                             &slv->sm[sm_idx], sizeof(ec_slave_sm_t), &wkc);
                 }
+
+                if (slv->eeprom.general.ds402_channels > 0) {
+                    slv->subdev_cnt = slv->eeprom.general.ds402_channels;
+                    slv->subdevs = (ec_slave_subdev_t *)malloc(slv->subdev_cnt * 
+                            sizeof(ec_slave_subdev_t));
+
+                    int q;
+                    for (q = 0; q < slv->subdev_cnt; q++) {
+                        slv->subdevs[q].pdin.pd = slv->subdevs[q].pdout.pd = NULL;
+                        slv->subdevs[q].pdin.len = slv->subdevs[q].pdout.len = 0;
+                    }
+                } else if (slv->eeprom.general.soe_channels > 0) {
+                    slv->subdev_cnt = slv->eeprom.general.soe_channels;
+                    slv->subdevs = (ec_slave_subdev_t *)malloc(slv->subdev_cnt * 
+                            sizeof(ec_slave_subdev_t));
+
+                    int q;
+                    for (q = 0; q < slv->subdev_cnt; q++) {
+                        slv->subdevs[q].pdin.pd = slv->subdevs[q].pdout.pd = NULL;
+                        slv->subdevs[q].pdin.len = slv->subdevs[q].pdout.len = 0;
+                    }
+                }
             }
 
             // write state to slave
@@ -331,6 +353,11 @@ int ec_slave_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
         case PREOP_2_INIT:
             // write state to slave
             wkc = ec_slave_set_state(pec, slave, state);
+
+            if (slv->subdevs) {
+                free(slv->subdevs);
+                slv->subdev_cnt = 0;
+            }
 
         case INIT_2_INIT: {
             // free resources

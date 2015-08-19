@@ -81,7 +81,8 @@ void master::group::register_interfaces(std::string name) {
     group_name << "group_" << _index;
 
     _pd_intf = robotkernel::kernel::register_interface_cb(name.c_str(), 
-            "libinterface_process_data_inspection.so", group_name.str().c_str(), _index | 0x80000000);
+            "libinterface_process_data_inspection.so", group_name.str().c_str(), 
+            _index | ECAT_SLAVE_ID_GROUP);
 }
 
 //! unregister interfaces of group
@@ -138,7 +139,8 @@ master::master(const std::string& name, const YAML::Node& node) : module_base("m
     stringstream intf_name;
     intf_name << "distributed_clocks";
     dc_pd_intf = robotkernel::kernel::register_interface_cb(name.c_str(), 
-            "libinterface_process_data_inspection.so", intf_name.str().c_str(), 0x20000000);
+            "libinterface_process_data_inspection.so", intf_name.str().c_str(), 
+            ECAT_SLAVE_ID_DC);
 
     set_state(module_state_init);
 
@@ -280,31 +282,29 @@ int master::request(int reqcode, void* ptr) {
             pd->pd = NULL;
             pd->len = 0;
 
-            if (pd->slave_id & 0x80000000) {
+            if (pd->slave_id & ECAT_SLAVE_ID_GROUP) {
                 // group case
-                int g_nr = pd->slave_id & ~0x80000000; 
+                int g_nr = ECAT_SLAVE_ID_GET_GROUP(pd->slave_id);
                 if (g_nr < _pec->pd_group_cnt) {
                     pd->pd = _pec->pd_groups[g_nr].pd + _pec->pd_groups[g_nr].pdout_len;
                     pd->len = _pec->pd_groups[g_nr].pdin_len;
                 }
-            } else if (pd->slave_id == 0x20000000) {
+            } else if (pd->slave_id & ECAT_SLAVE_ID_DC) {
                 pd->pd = &_pec->dc.dc_time;
                 pd->len = (uint8_t *)&_pec->dc.p_de_dc - (uint8_t *)&_pec->dc.dc_time;
             } else {
-                int sub_slave_id = -1; 
+                int sub_slave_id = ECAT_SLAVE_ID_GET_SUB(pd->slave_id),
+                    slave_id = ECAT_SLAVE_ID_GET_SLAVE(pd->slave_id);
 
-                if (pd->slave_id & 0x10000000) {
-                    sub_slave_id = (pd->slave_id & 0x00FF0000) >> 16;
-                    pd->slave_id = pd->slave_id & 0x0000FFFF;
-                }
-
-                if (pd->slave_id < (unsigned)_pec->slave_cnt) {
-                    if (sub_slave_id != -1) {
-                        pd->pd = _pec->slaves[pd->slave_id].pdin + (sub_slave_id * _pec->slaves[pd->slave_id].pdin_len/2);
-                        pd->len = _pec->slaves[pd->slave_id].pdin_len/2.;
+                if (slave_id < _pec->slave_cnt) {
+                    if (pd->slave_id & ECAT_SLAVE_ID_SUB) {
+                        if (_pec->slaves[slave_id].subdev_cnt > (unsigned)sub_slave_id) {
+                            pd->pd = _pec->slaves[slave_id].subdevs[sub_slave_id].pdin.pd;
+                            pd->len = _pec->slaves[slave_id].subdevs[sub_slave_id].pdin.len;
+                        }
                     } else {
-                        pd->pd = _pec->slaves[pd->slave_id].pdin;
-                        pd->len = _pec->slaves[pd->slave_id].pdin_len;
+                        pd->pd = _pec->slaves[slave_id].pdin.pd;
+                        pd->len = _pec->slaves[slave_id].pdin.len;
                     }
                 }
             }
@@ -316,29 +316,26 @@ int master::request(int reqcode, void* ptr) {
             process_data_t *pd = (process_data_t *)ptr;
             pd->pd = NULL;
             pd->len = 0;
-
-            if (pd->slave_id & 0x80000000) {
+            if (pd->slave_id & ECAT_SLAVE_ID_GROUP) {
                 // group case
-                int g_nr = pd->slave_id & ~0x80000000; 
+                int g_nr = ECAT_SLAVE_ID_GET_GROUP(pd->slave_id);
                 if (g_nr < _pec->pd_group_cnt) {
                     pd->pd = _pec->pd_groups[g_nr].pd;
                     pd->len = _pec->pd_groups[g_nr].pdout_len;
                 }
             } else {
-                int sub_slave_id = -1; 
+                int sub_slave_id = ECAT_SLAVE_ID_GET_SUB(pd->slave_id),
+                    slave_id = ECAT_SLAVE_ID_GET_SLAVE(pd->slave_id);
 
-                if (pd->slave_id & 0x10000000) {
-                    sub_slave_id = (pd->slave_id & 0x00FF0000) >> 16;
-                    pd->slave_id = pd->slave_id & 0x0000FFFF;
-                }
-
-                if (pd->slave_id < (unsigned)_pec->slave_cnt) {
-                    if (sub_slave_id != -1) {
-                        pd->pd = _pec->slaves[pd->slave_id].pdout + (sub_slave_id * _pec->slaves[pd->slave_id].pdout_len/2);
-                        pd->len = _pec->slaves[pd->slave_id].pdout_len/2.;
+                if (slave_id < _pec->slave_cnt) {
+                    if (pd->slave_id & ECAT_SLAVE_ID_SUB) {
+                        if (_pec->slaves[slave_id].subdev_cnt > (unsigned)sub_slave_id) {
+                            pd->pd = _pec->slaves[slave_id].subdevs[sub_slave_id].pdout.pd;
+                            pd->len = _pec->slaves[slave_id].subdevs[sub_slave_id].pdout.len;
+                        }
                     } else {
-                        pd->pd = _pec->slaves[pd->slave_id].pdout;
-                        pd->len = _pec->slaves[pd->slave_id].pdout_len;
+                        pd->pd = _pec->slaves[slave_id].pdout.pd;
+                        pd->len = _pec->slaves[slave_id].pdout.len;
                     }
                 }
             }
@@ -610,13 +607,14 @@ int master::request(int reqcode, void* ptr) {
 
             if (t->direction == SSD_MASTER_TO_DRIVE) {
                 if (ec_soe_write(_pec, t->slave_id >> 16, t->slave_id & 0x0000FFFFF,
-                        t->idn, t->element >> 1, (uint8_t *)t->buf, t->buflen) == 1)
+                            t->idn, t->element >> 1, (uint8_t *)t->buf, t->buflen) == 1)
                     ret = 0; 
-             } else {
+            } else {
                 if (ec_soe_read(_pec, t->slave_id >> 16, t->slave_id & 0x0000FFFFF,
-                        t->idn, t->element >> 1, (uint8_t *)t->buf, &t->buflen) == 1)
+                            t->idn, t->element >> 1, (uint8_t *)t->buf, &t->buflen) == 1) {
                     ret = 0; 
-             }
+                }
+            }
             break;
         }
         default:
@@ -717,7 +715,7 @@ void master::run() {
                         for (int z = 0; z < mbx_hdr->length + sizeof(ec_mbx_header_t); ++z)
                             cnt += snprintf(buf+cnt, 1024 - cnt, "%02X ", slv->mbx_read.buf[z]);
                     
-                        log(module_info, "%s\n", buf);
+                        log(module_info, "async worker %s\n", buf);
                     }
                 }
 

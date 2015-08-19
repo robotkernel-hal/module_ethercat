@@ -185,6 +185,8 @@ int ec_set_state(ec_t *pec, ec_state_t state) {
                 pec->slaves[i].fixed_address = fixed;
                 pec->slaves[i].dc.use_dc = 1;
                 pec->slaves[i].sm_set_by_user = 0;
+                pec->slaves[i].subdev_cnt = 0;
+                pec->slaves[i].subdevs = NULL;
                 pthread_mutex_init(&pec->slaves[i].mbx_lock, NULL);
 
                 ec_apwr(pec, auto_inc, EC_REG_STADR, (uint8_t *)&fixed, sizeof(fixed), &wkc); 
@@ -332,13 +334,20 @@ int ec_set_state(ec_t *pec, ec_state_t state) {
                                 slv->fmmu[fmmu_next].type = 2;
                                 slv->fmmu[fmmu_next].active = 1;
 
-                                if (!slv->pdout_len) {
-                                    slv->pdout = pdout; 
-                                    slv->pdout_len = slv->sm[k].len;
+                                if (!slv->pdout.len) {
+                                    slv->pdout.pd = pdout; 
+                                    slv->pdout.len = slv->sm[k].len;
                                 } else 
-                                    slv->pdout_len += slv->sm[k].len;
+                                    slv->pdout.len += slv->sm[k].len;
                             
                                 wkc_expected |= 2;
+
+                                int z;
+                                int pdoff = 0;
+                                for (z = 0; z < slv->subdev_cnt; ++z) {
+                                    slv->subdevs[z].pdout.pd = pdout + pdoff;
+                                    pdoff += slv->subdevs[z].pdout.len;
+                                }
                             }
 
                             pdout += slv->sm[k].len;
@@ -352,13 +361,20 @@ int ec_set_state(ec_t *pec, ec_state_t state) {
                                 slv->fmmu[fmmu_next].type = 1;
                                 slv->fmmu[fmmu_next].active = 1;
 
-                                if (!slv->pdin_len) {
-                                    slv->pdin = pdin; 
-                                    slv->pdin_len = slv->sm[k].len;
+                                if (!slv->pdin.len) {
+                                    slv->pdin.pd = pdin; 
+                                    slv->pdin.len = slv->sm[k].len;
                                 } else 
-                                    slv->pdin_len += slv->sm[k].len;
+                                    slv->pdin.len += slv->sm[k].len;
                             
                                 wkc_expected |= 1;
+
+                                int z;
+                                int pdoff = 0;
+                                for (z = 0; z < slv->subdev_cnt; ++z) {
+                                    slv->subdevs[z].pdin.pd = pdin + pdoff;
+                                    pdoff += slv->subdevs[z].pdin.len;
+                                }
                             }
 
                             pdin += slv->sm[k].len;
@@ -379,11 +395,11 @@ int ec_set_state(ec_t *pec, ec_state_t state) {
                             slv->fmmu[fmmu_next].type = 1;
                             slv->fmmu[fmmu_next].active = 1;
 
-                            if (!slv->pdin_len) {
-                                slv->pdin = pdin; 
-                                slv->pdin_len = 1;
+                            if (!slv->pdin.len) {
+                                slv->pdin.pd = pdin; 
+                                slv->pdin.len = 1;
                             } else 
-                                slv->pdin_len += 1;
+                                slv->pdin.len += 1;
 
                             slv->mbx_read.sm_state = pdin;
                         

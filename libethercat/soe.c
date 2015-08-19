@@ -61,8 +61,9 @@ int ec_soe_read(ec_t *pec, uint16_t slave, uint8_t atn, uint16_t idn,
 
     // empty mailbox if anything in
     ec_mbx_clear(pec, slave, 1);
-    while (ec_mbx_receive(pec, slave, EC_SHORT_TIMEOUT_MBX) != 0)
-        ;
+    ec_mbx_receive(pec, slave, 0);//EC_SHORT_TIMEOUT_MBX);
+//    while (ec_mbx_receive(pec, slave, EC_SHORT_TIMEOUT_MBX) != 0)
+//        ;
 
     // mailbox header
     ec_mbx_clear(pec, slave, 0);
@@ -100,15 +101,20 @@ int ec_soe_read(ec_t *pec, uint16_t slave, uint8_t atn, uint16_t idn,
         }
 
         // check for correct op_code
-        if (read_buf->soe_hdr.op_code != EC_SOE_READ_RES)
+        if (read_buf->soe_hdr.op_code != EC_SOE_READ_RES) {
+            ec_log(10, __func__, "got unexpected response %d\n", 
+                    read_buf->soe_hdr.op_code);
             continue; // TODO handle unexpected answer
+        }
 
-        size_t read_len = read_buf->mbx_hdr.length - sizeof(ec_soe_header_t);
-        memcpy(to, &read_buf->data, min(read_len, left_len));
-        to += read_len;
-        left_len -= read_len;
+        if (left_len > 0) {
+            size_t read_len = read_buf->mbx_hdr.length - sizeof(ec_soe_header_t);
+            memcpy(to, &read_buf->data, min(read_len, left_len));
+            to += read_len;
+            left_len -= read_len;
+        }
 
-        if ((left_len < 0) || !read_buf->soe_hdr.incomplete)
+        if (/*(left_len < 0) ||*/ !read_buf->soe_hdr.incomplete)
             break;
     }
     
@@ -266,6 +272,9 @@ int ec_soe_generate_mapping(ec_t *pec, uint16_t slave) {
             continue;
 
         at_bits += bits;
+
+        // we only care about whole bytes
+        slv->subdevs[atn].pdin.len = bits/8;
     }
 
     if (at_bits) {
@@ -288,6 +297,9 @@ int ec_soe_generate_mapping(ec_t *pec, uint16_t slave) {
             continue;
 
         mdt_bits += bits;
+        
+        // we only care about whole bytes
+        slv->subdevs[atn].pdout.len = bits/8;
     }
 
     if (mdt_bits) {
