@@ -1,9 +1,18 @@
-module heinzmann
+module ethercat
 
 1. configuration
 
-  devname: /dev/jr30
-  filter: 0
+-   name: ethercat
+    module_file: libmodule_ethercat.so
+    config:
+        ifname: en1
+        recv_prio: 19
+        recv_mask: 0x01
+        groups:
+            0: { divisor: 1, slaves: [ 0, 1, 2,  ] }
+        slaves:
+        -   name
+
 
 2. lnrk device class
 - name: jr3
