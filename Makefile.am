@@ -50,5 +50,12 @@ VPATH = $(srcdir):$(srcdir)/share/ln/message_definitions
 LN_MESSAGES = 	module_ethercat/set_ec_state \
 				module_ethercat/get_ec_state 
 
-include $(top_srcdir)/Makefile.defs
+ln_messages.h: Makefile $(LN_MESSAGES)
+	@echo creating ln_messages.h
+	@LN_GENERATE@ -o $@ $(LN_MESSAGES)
+	touch $@
+
+install-exec-hook:
+	mkdir -p $(prefix)/share
+	cp -ru $(srcdir)/share/* $(prefix)/share
 
