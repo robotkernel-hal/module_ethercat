@@ -100,7 +100,10 @@ void master::group::unregister_interfaces() {
 /*!
  * \param node yaml intialization node
  */
-master::master(const std::string& name, const YAML::Node& node) : module_base("module_ethercat", name), runnable(node) {
+master::master(const std::string& name, const YAML::Node& node) 
+    : module_base("module_ethercat", name, node), 
+      cmd_delay(node),
+      runnable(node) {
     _ifname     = node["ifname"].to<string>();
     _recv_prio  = node["recv_prio"].to<int>();
     _recv_mask  = node["recv_mask"].to<int>();
@@ -132,6 +135,8 @@ master::master(const std::string& name, const YAML::Node& node) : module_base("m
     if (ret != 0) 
         throw str_exception("ec_open failed: %s!\n", strerror(ret));
 
+    pthread_mutex_init(&pd_lock, NULL);
+    pthread_cond_init(&pd_cond, NULL);
    
     pthread_mutex_init(&async_lock, NULL);
     pthread_cond_init(&async_cond, NULL);
@@ -141,6 +146,8 @@ master::master(const std::string& name, const YAML::Node& node) : module_base("m
     dc_pd_intf = robotkernel::kernel::register_interface_cb(name.c_str(), 
             "libinterface_process_data_inspection.so", intf_name.str().c_str(), 
             ECAT_SLAVE_ID_DC);
+
+    pd_cookie = 0;
 
     set_state(module_state_init);
 
@@ -160,6 +167,9 @@ master::~master() {
     
     pthread_mutex_destroy(&async_lock);
     pthread_cond_destroy(&async_cond);
+    
+    pthread_mutex_destroy(&pd_lock);
+    pthread_cond_destroy(&pd_cond);
 }
 
 //! set module state machine to defined state
@@ -345,7 +355,12 @@ int master::request(int reqcode, void* ptr) {
             log(module_verbose, "GET_PDOUT: %p/%d\n", pd->pd, pd->len);
             break;
         }
-
+        case MOD_REQUEST_SET_PDOUT:
+            ret = set_pdout((set_pd_t *)ptr);
+            break;
+        case MOD_REQUEST_GET_PD_COOKIE:
+            *(uint64_t **)ptr = &pd_cookie;
+            break;
         case MOD_REQUEST_MEMORY_READ:
         case MOD_REQUEST_MEMORY_WRITE:
         case MOD_REQUEST_MEMORY_GET_INFO: {
@@ -557,7 +572,7 @@ int master::request(int reqcode, void* ptr) {
             size_t size = value->value_len;
             uint32_t abort_code = 0;
 
-            log(module_verbose, "slave %d: index 0x%X, "
+            log(module_verbose, "CANOPEN_READ_ELEMENT slave %d: index 0x%X, "
                     "sub_index %d, want to read %d bytes\n", value->slave_id, value->index,
                     value->sub_index, value->value_len);
 
@@ -586,7 +601,7 @@ int master::request(int reqcode, void* ptr) {
             size_t size = value->value_len;
             uint32_t abort_code = 0;
 
-            log(module_verbose, "slave %d: index 0x%X, "
+            log(module_verbose, "CANOPEN_WRITE_ELEMENT slave %d: index 0x%X, "
                     "sub_index %d, want to write %d bytes\n", value->slave_id, value->index,
                     value->sub_index, value->value_len);
 
@@ -679,6 +694,9 @@ void master::trigger() {
         if (_pec->dc.have_dc)
             ec_receive_distributed_clocks_sync(_pec, &timeout);
     }
+
+    pd_cookie++;
+    pthread_cond_signal(&pd_cond);
 }
 
 //! async handler thread
@@ -714,7 +732,7 @@ void master::run() {
                         int cnt = sprintf(buf, "wkc %d: ", wkc);
 
                         ec_mbx_header_t *mbx_hdr = (ec_mbx_header_t *)(slv->mbx_read.buf);
-                        for (int z = 0; z < mbx_hdr->length + sizeof(ec_mbx_header_t); ++z)
+                        for (unsigned z = 0; z < mbx_hdr->length + sizeof(ec_mbx_header_t); ++z)
                             cnt += snprintf(buf+cnt, 1024 - cnt, "%02X ", slv->mbx_read.buf[z]);
                     
                         log(module_info, "async worker %s\n", buf);
@@ -729,5 +747,85 @@ void master::run() {
     pthread_mutex_unlock(&async_lock);
 
     log(module_info, "async handler thread stopped\n");
+}
+
+//! set new pdout pointers
+/*!
+ * \param pdout new pdout pointers
+ * \return 0 on success
+ */
+int master::set_pdout(set_pd_t *pdout) {
+    unsigned int i;
+
+    if(!pdout || !pdout->cnt)
+        return 0;
+
+    // calculate differece (without sign, so we do not concert overflows)
+    uint64_t difference = pd_cookie - pdout->pd_cookie;
+
+    // check if we are commanding to slow
+    if (difference > _cmd_delay) {
+        if (_cmd_mode == user_defined) {
+            throw robotkernel::str_exception("[module_ethercat|%s] commanding to slow"
+                    ": have difference of %llu while configured cmd_delay is %llu\n", 
+                    name.c_str(), difference, _cmd_delay);
+        }
+
+        _cmd_delay += difference - _cmd_delay;
+
+        log(module_warning, "you are commanding to SLOW! Increased cmd_delay to %d!!!\n", 
+                (unsigned int)_cmd_delay);
+    }
+
+    pthread_mutex_lock(&pd_lock);
+
+    while (difference < _cmd_delay) {
+        // need to wait until mdt cnt is big enough
+        struct timespec timeout;
+        ec_timer_t abstime;
+        ec_timer_init(&abstime, 100000000);
+        timeout.tv_sec = abstime.sec;
+        timeout.tv_nsec = abstime.nsec;
+
+        pthread_cond_timedwait(&pd_cond, &pd_lock, &timeout);
+        
+        difference = pd_cookie - pdout->pd_cookie;
+    }
+
+    pthread_mutex_unlock(&pd_lock);
+
+    for (i = 0; i < pdout->cnt; ++i) {
+        uint8_t *to = NULL;
+        size_t to_len = 0;
+
+        if (pdout->pd[i].slave_id & ECAT_SLAVE_ID_GROUP) {
+            // group case
+            int g_nr = ECAT_SLAVE_ID_GET_GROUP(pdout->pd[i].slave_id);
+            if (g_nr < _pec->pd_group_cnt) {
+                to = _pec->pd_groups[g_nr].pd;
+                to_len = _pec->pd_groups[g_nr].pdout_len;
+            }
+        } else {
+            int sub_slave_id = ECAT_SLAVE_ID_GET_SUB(pdout->pd[i].slave_id),
+                slave_id = ECAT_SLAVE_ID_GET_SLAVE(pdout->pd[i].slave_id);
+
+            if (slave_id < _pec->slave_cnt) {
+                if (pdout->pd[i].slave_id & ECAT_SLAVE_ID_SUB) {
+                    if (_pec->slaves[slave_id].subdev_cnt > (unsigned)sub_slave_id) {
+                        to = _pec->slaves[slave_id].subdevs[sub_slave_id].pdout.pd;
+                        to_len = _pec->slaves[slave_id].subdevs[sub_slave_id].pdout.len;
+                    }
+                } else {
+                    to = _pec->slaves[slave_id].pdout.pd;
+                    to_len = _pec->slaves[slave_id].pdout.len;
+                }
+            }
+        }
+
+        if (to && to_len)
+            memcpy(to, pdout->pd[i].pd, min(to_len, pdout->pd[i].len));
+    }
+
+    return 0;
 }
 

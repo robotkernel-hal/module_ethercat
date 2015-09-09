@@ -34,6 +34,7 @@
 #include "robotkernel/trigger_base.h"
 #include "robotkernel/module_intf.h"
 #include "robotkernel/module_base.h"
+#include "robotkernel/cmd_delay.h"
 #include "robotkernel/exceptions.h"
 #include "slave.h"
 
@@ -61,6 +62,7 @@ extern const std::string state_strings[];
 
 class master :  public robotkernel::module_base, 
                 public robotkernel::trigger_base,
+                public robotkernel::cmd_delay,
                 public robotkernel::runnable {
     friend class slave;
 
@@ -102,6 +104,10 @@ class master :  public robotkernel::module_base,
             
         robotkernel::kernel::interface_id_t dc_pd_intf;
 
+        uint64_t pd_cookie;
+        pthread_mutex_t pd_lock;
+        pthread_cond_t pd_cond;
+
         pthread_mutex_t async_lock;
         pthread_cond_t async_cond;
 
@@ -135,6 +141,13 @@ class master :  public robotkernel::module_base,
 
         //! async handler thread
         void run();
+
+        //! set new pdout pointers
+        /*!
+         * \param pdout new pdout pointers
+         * \return 0 on success
+         */
+        int set_pdout(set_pd_t *pdout);
 };
 
 //! module_ethercat::
