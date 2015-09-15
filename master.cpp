@@ -50,13 +50,13 @@ void log_func(int lvl, void *user, const char *format, ...) {
     va_list ap;
     va_start(ap, format);
 
-    robotkernel::loglevel loglvl = module_verbose;
+    robotkernel::loglevel loglvl = verbose;
     if (lvl < 100)
-        loglvl = module_info;
+        loglvl = info;
     if (lvl < 10)
-        loglvl = module_warning;
+        loglvl = warning;
     if (lvl < 1)
-        loglvl = module_error;
+        loglvl = error;
 
     e->log(loglvl, format, ap);
     va_end(ap);
@@ -64,11 +64,12 @@ void log_func(int lvl, void *user, const char *format, ...) {
 
 master::group::group(int index, const YAML::Node& node) {
     _index          = index;
-    _divisor        = node["divisor"].to<int>();
+    _divisor        = get_as<int>(node, "divisor");
     _divisor_cnt    = 0;
 
-    for (YAML::Iterator it = node["slaves"].begin(); it != node["slaves"].end(); ++it)
-        _slaves.push_back(it->to<int>());
+    for (YAML::const_iterator it = node["slaves"].begin(); 
+            it != node["slaves"].end(); ++it)
+        _slaves.push_back(it->as<int>());
 }
 
 //! register interfaces for group
@@ -76,13 +77,18 @@ master::group::group(int index, const YAML::Node& node) {
  * \param ctx ethercat context
  * \return N/A
  */
-void master::group::register_interfaces(std::string name) {
+void master::group::register_interfaces(std::string name, const loglevel& ll) {
     std::stringstream group_name; 
     group_name << "group_" << _index;
 
-    _pd_intf = robotkernel::kernel::register_interface_cb(name.c_str(), 
-            "libinterface_process_data_inspection.so", group_name.str().c_str(), 
-            _index | ECAT_SLAVE_ID_GROUP);
+    YAML::Node node;
+    node["mod_name"] = name;
+    node["dev_name"] = group_name.str();
+    node["slave_id"] = _index | ECAT_SLAVE_ID_GROUP;
+    node["loglevel"] = (string)ll;
+
+    _pd_intf = kernel::register_interface_cb(
+            "libinterface_process_data_inspection.so", node);
 }
 
 //! unregister interfaces of group
@@ -104,28 +110,27 @@ master::master(const std::string& name, const YAML::Node& node)
     : module_base("module_ethercat", name, node), 
       cmd_delay(node),
       runnable(node) {
-    _ifname     = node["ifname"].to<string>();
-    _recv_prio  = node["recv_prio"].to<int>();
-    _recv_mask  = node["recv_mask"].to<int>();
+    _ifname     = get_as<string>(node, "ifname");
+    _recv_prio  = get_as<int>(node, "recv_prio");
+    _recv_mask  = get_as<int>(node, "recv_mask");
     _pec        = NULL;
 
     ec_log_func_user = this;
     ec_log_func = log_func;
 
     // group settings
-    const YAML::Node *groups_node = node.FindValue("groups");
-    if (groups_node) {
-        for (YAML::Iterator it = groups_node->begin();
-                it != groups_node->end(); ++it) {
-            int g_nr = it.first().to<int>();
-            _group_info[g_nr] = new group(g_nr, it.second());
+    if (node["groups"]) {
+        for (YAML::const_iterator it = node["groups"].begin();
+                it != node["groups"].end(); ++it) {
+            int g_nr = it->first.as<int>();
+            _group_info[g_nr] = new group(g_nr, it->second);
         }
     }
 
-    if (node.FindValue("slaves") != NULL) {
+    if (node["slaves"] != NULL) {
         // parsing slave configurations
         const YAML::Node& slaves = node["slaves"];
-        for (YAML::Iterator it = slaves.begin(); it != slaves.end(); ++it) {
+        for (YAML::const_iterator it = slaves.begin(); it != slaves.end(); ++it) {
             slave *slv = new slave(*it, this);
             _slave_info[slv->index] = slv;
         }
@@ -141,11 +146,14 @@ master::master(const std::string& name, const YAML::Node& node)
     pthread_mutex_init(&async_lock, NULL);
     pthread_cond_init(&async_cond, NULL);
 
-    stringstream intf_name;
-    intf_name << "distributed_clocks";
-    dc_pd_intf = robotkernel::kernel::register_interface_cb(name.c_str(), 
-            "libinterface_process_data_inspection.so", intf_name.str().c_str(), 
-            ECAT_SLAVE_ID_DC);
+    YAML::Node dc_node;
+    dc_node["mod_name"] = name;
+    dc_node["dev_name"] = "distributed_clocks";
+    dc_node["slave_id"] = ECAT_SLAVE_ID_DC;
+    dc_node["loglevel"] = (string)ll;
+
+    dc_pd_intf = kernel::register_interface_cb(
+            "libinterface_process_data_inspection.so", dc_node);
 
     pd_cookie = 0;
 
@@ -189,7 +197,7 @@ int master::set_state(module_state_t new_state) {
 
             for (nr = 0; nr < _pec->slave_cnt; ++nr) {
                 if (_slave_info.find(nr) == _slave_info.end()) {
-                    log(module_verbose, "slave %d creating empty one\n", nr);
+                    log(verbose, "slave %d creating empty one\n", nr);
 
                     slave *slv = new slave(nr, this);
                     _slave_info[nr] = slv;
@@ -218,7 +226,7 @@ int master::set_state(module_state_t new_state) {
                     int sm_nr = it->first;
 
                     if (sm_nr < _pec->slaves[nr].sm_ch) {
-                        log(module_verbose, "slave %d: applying sm%d: adr 0x%X, len %d, flags 0x%X\n",
+                        log(verbose, "slave %d: applying sm%d: adr 0x%X, len %d, flags 0x%X\n",
                                 nr, sm_nr, it->second->_address,
                                 it->second->_length,
                                 it->second->_flags);
@@ -246,7 +254,7 @@ int master::set_state(module_state_t new_state) {
 
                     int s_nr = *it2;
                     if (_pec->slave_cnt <= s_nr) {
-                        log(module_warning, "slave %d not connected to ethercat bus, "
+                        log(warning, "slave %d not connected to ethercat bus, "
                                 "not adding to group %d\n", s_nr, g_nr);
                         continue;
                     }
@@ -255,7 +263,7 @@ int master::set_state(module_state_t new_state) {
                     _slave_info[s_nr]->prepare_state_transition(preop_to_safeop);
                 }
 
-                it->second->register_interfaces(name);
+                it->second->register_interfaces(name, ll);
             }
 
             ec_set_state(_pec, EC_STATE_SAFEOP);
@@ -321,7 +329,7 @@ int master::request(int reqcode, void* ptr) {
                 }
             }
 
-            log(module_verbose, "GET_PDIN: %p/%d\n", pd->pd, pd->len);
+            log(verbose, "GET_PDIN: %p/%d\n", pd->pd, pd->len);
             break;
         }
         case MOD_REQUEST_GET_PDOUT: {            
@@ -352,7 +360,7 @@ int master::request(int reqcode, void* ptr) {
                 }
             }
 
-            log(module_verbose, "GET_PDOUT: %p/%d\n", pd->pd, pd->len);
+            log(verbose, "GET_PDOUT: %p/%d\n", pd->pd, pd->len);
             break;
         }
         case MOD_REQUEST_SET_PDOUT:
@@ -375,7 +383,7 @@ int master::request(int reqcode, void* ptr) {
         case MOD_REQUEST_SET_TRIGGER_CB: {
             set_trigger_cb_t *cb = (set_trigger_cb_t *)ptr;
             if (cb->cb == NULL) {
-                log(module_error, "ERROR could not register, callback is NULL\n");
+                log(error, "ERROR could not register, callback is NULL\n");
                 break;
             }
 
@@ -386,7 +394,7 @@ int master::request(int reqcode, void* ptr) {
             set_trigger_cb_t *cb = (set_trigger_cb_t *)ptr;
 
             if (cb->cb == NULL) {
-                log(module_error, "ERROR could not remove, callback is NULL\n");
+                log(error, "ERROR could not remove, callback is NULL\n");
                 break;
             }
 
@@ -429,8 +437,6 @@ int master::request(int reqcode, void* ptr) {
                         list->indices[list->indices_cnt++] = slv->eeprom.rxpdos[i].pdo_index;
                     else list->indices_cnt++;
                 }
-
-//                list->indices_cnt /= 2;
             }
 
             break;
@@ -539,9 +545,9 @@ int master::request(int reqcode, void* ptr) {
                         desc->bit_length        = slv->eeprom.txpdos[i].bit_len;
                         desc->obj_access        = 7;
 
-                        size_t name_len = min(
-                                strlen(slv->eeprom.strings[slv->eeprom.txpdos[i].name_idx-1]), CANOPEN_MAXNAME - 1);
-                        memcpy(desc->name, slv->eeprom.strings[slv->eeprom.txpdos[i].name_idx-1], name_len);
+                        char *tmp = slv->eeprom.strings[slv->eeprom.txpdos[i].name_idx-1];
+                        size_t name_len = min(strlen(tmp), CANOPEN_MAXNAME - 1);
+                        memcpy(desc->name, tmp, name_len);
                         desc->name[name_len] = '\0';
                     }
                 }
@@ -558,9 +564,9 @@ int master::request(int reqcode, void* ptr) {
                         desc->bit_length        = slv->eeprom.rxpdos[i].bit_len;
                         desc->obj_access        = 7;
 
-                        size_t name_len = min(
-                                strlen(slv->eeprom.strings[slv->eeprom.rxpdos[i].name_idx-1]), CANOPEN_MAXNAME - 1);
-                        memcpy(desc->name, slv->eeprom.strings[slv->eeprom.rxpdos[i].name_idx-1], name_len);
+                        char *tmp = slv->eeprom.strings[slv->eeprom.rxpdos[i].name_idx-1];
+                        size_t name_len = min(strlen(tmp), CANOPEN_MAXNAME -1);
+                        memcpy(desc->name, tmp, name_len);
                         desc->name[name_len] = '\0';
                     }
                 }
@@ -572,7 +578,7 @@ int master::request(int reqcode, void* ptr) {
             size_t size = value->value_len;
             uint32_t abort_code = 0;
 
-            log(module_verbose, "CANOPEN_READ_ELEMENT slave %d: index 0x%X, "
+            log(verbose, "CANOPEN_READ_ELEMENT slave %d: index 0x%X, "
                     "sub_index %d, want to read %d bytes\n", value->slave_id, value->index,
                     value->sub_index, value->value_len);
 
@@ -601,7 +607,7 @@ int master::request(int reqcode, void* ptr) {
             size_t size = value->value_len;
             uint32_t abort_code = 0;
 
-            log(module_verbose, "CANOPEN_WRITE_ELEMENT slave %d: index 0x%X, "
+            log(verbose, "CANOPEN_WRITE_ELEMENT slave %d: index 0x%X, "
                     "sub_index %d, want to write %d bytes\n", value->slave_id, value->index,
                     value->sub_index, value->value_len);
 
@@ -621,14 +627,17 @@ int master::request(int reqcode, void* ptr) {
         }
         case MOD_REQUEST_SERCOS_SERVICE_TRANSFER: {
             sercos_service_transfer *t = (sercos_service_transfer *)ptr;
+                
+            int atn = ECAT_SLAVE_ID_GET_SUB(t->slave_id),
+                slave_id = ECAT_SLAVE_ID_GET_SLAVE(t->slave_id);
 
             if (t->direction == SSD_MASTER_TO_DRIVE) {
-                if (ec_soe_write(_pec, t->slave_id >> 16, t->slave_id & 0x0000FFFFF,
-                            t->idn, t->element >> 1, (uint8_t *)t->buf, t->buflen) == 1)
+                if (ec_soe_write(_pec, slave_id, atn, t->idn, 
+                            t->element >> 1, (uint8_t *)t->buf, t->buflen) == 1)
                     ret = 0; 
             } else {
-                if (ec_soe_read(_pec, t->slave_id >> 16, t->slave_id & 0x0000FFFFF,
-                            t->idn, t->element >> 1, (uint8_t *)t->buf, &t->buflen) == 1) {
+                if (ec_soe_read(_pec, slave_id, atn, t->idn, 
+                            t->element >> 1, (uint8_t *)t->buf, &t->buflen) == 1) {
                     ret = 0; 
                 }
             }
@@ -701,7 +710,7 @@ void master::trigger() {
 
 //! async handler thread
 void master::run() {
-    log(module_info, "async handler thread running\n");
+    log(info, "async handler thread running\n");
 
     pthread_mutex_lock(&async_lock);
 
@@ -724,7 +733,7 @@ void master::run() {
                     continue;
 
                 if (((*slv->mbx_read.sm_state) & 0x08) == 0x08) {
-                    log(module_verbose, "async worker: slave %d read mailbox is full\n", slave);
+                    log(verbose, "async worker: slave %d read mailbox is full\n", slave);
 
                     char buf[1024];
                     int wkc = ec_mbx_receive(_pec, slave, EC_DEFAULT_TIMEOUT_MBX);
@@ -735,7 +744,7 @@ void master::run() {
                         for (unsigned z = 0; z < mbx_hdr->length + sizeof(ec_mbx_header_t); ++z)
                             cnt += snprintf(buf+cnt, 1024 - cnt, "%02X ", slv->mbx_read.buf[z]);
                     
-                        log(module_info, "async worker %s\n", buf);
+                        log(info, "async worker %s\n", buf);
                     }
                 }
 
@@ -746,7 +755,7 @@ void master::run() {
 
     pthread_mutex_unlock(&async_lock);
 
-    log(module_info, "async handler thread stopped\n");
+    log(info, "async handler thread stopped\n");
 }
 
 //! set new pdout pointers
@@ -773,7 +782,7 @@ int master::set_pdout(set_pd_t *pdout) {
 
         _cmd_delay += difference - _cmd_delay;
 
-        log(module_warning, "you are commanding to SLOW! Increased cmd_delay to %d!!!\n", 
+        log(warning, "you are commanding to SLOW! Increased cmd_delay to %d!!!\n", 
                 (unsigned int)_cmd_delay);
     }
 

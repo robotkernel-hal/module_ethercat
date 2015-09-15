@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.63])
-AC_INIT([module_ethercat], [3.1.12], [robert.burger@dlr.de])
+AC_INIT([module_ethercat], [4.0.0], [robert.burger@dlr.de])
 AM_INIT_AUTOMAKE([-Wall -Werror foreign subdir-objects])
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_MACRO_DIR([m4])
@@ -62,6 +62,9 @@ PKG_CHECK_MODULES([INTERFACE_CANOPEN_PROTOCOL], [interface_canopen_protocol], []
 PKG_CHECK_MODULES([INTERFACE_SERCOS_PROTOCOL], [interface_sercos_protocol], [], [
                     RMPM_CHECK_MODULES([INTERFACE_SERCOS_PROTOCOL], [robotkernel.interface_sercos_protocol])
                    ])
+PKG_CHECK_MODULES([INTERFACE_PROCESS_DATA_INSPECTION], [interface_process_data_inspection], [], [
+                    RMPM_CHECK_MODULES([INTERFACE_PROCESS_DATA_INSPECTION], [robotkernel.interface_process_data_inspection])
+                   ])
 
 # try to automatically find ln
 LN_GENERATE_ARGS='-md_dir $(srcdir)/share/ln/message_definitions'
@@ -72,7 +75,6 @@ if test "${LN_LIBS}" == ""; then
                 LN_LIBS="-L${LN_BASE}/lib/$rmpm_host -lln"
                 LN_CFLAGS="-I${LN_BASE}/include/"
                 LN_GENERATE="env -i ${LN_BASE}/scripts/ln_generate $LN_GENERATE_ARGS"
-                LN_YAMLCPP_LIBS="-L${LN_BASE}/lib/$rmpm_host -lyaml-cpp"
                 STRING_UTILS_LIBS="-L$LN_BASE/lib/$rmpm_host -lstring_util"
             ], [
                 # not found...
@@ -82,8 +84,6 @@ if test "${LN_LIBS}" == ""; then
                         LN_LIBS="-L${LN_BASE}/library/obj/$rmpm_host -lln"
                         LN_CFLAGS="-I${LN_BASE}/library/include/ -I${LN_BASE}/contrib/libstring_util/include"
                         LN_GENERATE="env -i ${LN_BASE}/library/tools/ln_generate $LN_GENERATE_ARGS"
-                        LN_YAMLCPP_CFLAGS="-I${LN_BASE}/contrib/libyaml/include"
-                        LN_YAMLCPP_LIBS="-L${LN_BASE}/contrib/libyaml/lib/$rmpm_host -lyaml-cpp"
                         STRING_UTILS_LIBS="-L$LN_BASE/contrib/libstring_util/obj/$rmpm_host -lstring_util"
                     ])
             ])

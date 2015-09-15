@@ -75,7 +75,8 @@ class master :  public robotkernel::module_base,
              * \param ctx ethercat context
              * \return N/A
              */
-            void register_interfaces(std::string name);
+            void register_interfaces(std::string name, 
+                    const robotkernel::loglevel& ll);
 
             //! unregister interfaces of slave
             /*!

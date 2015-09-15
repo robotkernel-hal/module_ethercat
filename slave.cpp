@@ -61,7 +61,7 @@ slave::coe_init_cmd::coe_init_cmd(const YAML::Node& node) {
     subindex   = get_as<int>(node, "subindex", 0);
     ca         = get_as<int>(node, "ca", 0);
     transition = (transition_t)get_as<int>(node, "transition", 0x24);
-    convert_string_to_hex(node["data"].to<string>(), &data, &datalen);
+    convert_string_to_hex(get_as<string>(node, "data"), &data, &datalen);
 }
 
 //! destruction
@@ -108,11 +108,11 @@ slave::slave_dc::slave_dc() {
 slave::slave_dc::slave_dc(const YAML::Node& node) {
     has_dc = true;
     
-    type             = node["type"].to<int>();
-    cycle_time_0     = node["cycle_time_0"].to<uint32_t>();
+    type             = get_as<int>(node, "type");
+    cycle_time_0     = get_as<uint32_t>(node, "cycle_time_0");
     if (type == 1)
-        cycle_time_1 = node["cycle_time_1"].to<uint32_t>();
-    cycle_shift      = node["cycle_shift"].to<uint32_t>();
+        cycle_time_1 = get_as<uint32_t>(node, "cycle_time_1");
+    cycle_shift      = get_as<uint32_t>(node, "cycle_shift");
 }
 
 //! construction
@@ -120,9 +120,9 @@ slave::slave_dc::slave_dc(const YAML::Node& node) {
  * \param node yaml intialization node
  */
 slave::sync_manager_settings::sync_manager_settings(const YAML::Node& node) {
-    _address = node["address"].to<int>();
-    _flags   = node["flags"].to<unsigned>();
-    _length  = node["length"].to<unsigned>();
+    _address = get_as<int>(node, "address");
+    _flags   = get_as<unsigned>(node, "flags");
+    _length  = get_as<unsigned>(node, "length");
 }
 
 //! construction
@@ -134,7 +134,7 @@ slave::slave(int index, master *master_dev)
     : index(index),
     master_dev(master_dev) {
                 
-    master_dev->log(module_verbose, "default slave index %d created\n", index);
+    master_dev->log(verbose, "default slave index %d created\n", index);
 };
 
 //! construction
@@ -144,36 +144,33 @@ slave::slave(int index, master *master_dev)
  */
 slave::slave(const YAML::Node& node, master *master_dev)
     : master_dev(master_dev) {
-    name  = node["name"].to<string>();
-    index = node["index"].to<int>();
+    name  = get_as<string>(node, "name");
+    index = get_as<int>(node, "index");
 
     // sync manager settings
-    const YAML::Node *sm_node = node.FindValue("sm");
-    if (sm_node) {
-        master_dev->log(module_verbose,
+    if (node["sm"]) {
+        master_dev->log(verbose,
                 "slave %s parsing sm settings\n", name.c_str());
 
-        for (YAML::Iterator it = sm_node->begin();
-                it != sm_node->end(); ++it) {
+        for (YAML::const_iterator it = node["sm"].begin();
+                it != node["sm"].end(); ++it) {
         
-            int sm_nr = it.first().to<int>();
-            _sm_map[sm_nr] = new sync_manager_settings(it.second());
+            int sm_nr = it->first.as<int>();
+            _sm_map[sm_nr] = new sync_manager_settings(it->second);
         }
     }
     
-    if (node.FindValue("dc") != NULL) {
+    if (node["dc"])
         dc = slave_dc(node["dc"]);
-    }
 
-    if (node.FindValue("init_cmds") != NULL) {
-        master_dev->log(module_verbose,
+    if (node["init_cmds"]) {
+        master_dev->log(verbose,
                 "slave %s parsing init commands\n", name.c_str());
 
         // parsing slave configurations
-        const YAML::Node& init_cmds = node["init_cmds"];
-        for (YAML::Iterator it = init_cmds.begin();
-                it != init_cmds.end(); ++it) {
-            string type = (*it)["type"].to<string>();
+        for (YAML::const_iterator it = node["init_cmds"].begin();
+                it != node["init_cmds"].end(); ++it) {
+            string type = get_as<string>(*it, "type");
 
             if (type == "coe")
                 coe_init_cmds.push_back(new coe_init_cmd_t(*it));
@@ -192,7 +189,7 @@ slave::slave(const YAML::Node& node, master *master_dev)
         register_get_ec_state(k.clnt, base.str() + ".get_ec_state");
     }
 
-    master_dev->log(module_verbose,
+    master_dev->log(verbose,
             "slave %s index %d created\n", name.c_str(), index);
 }
 
@@ -221,13 +218,13 @@ bool slave::prepare_state_transition(transition_t transition) {
         // configure distributed clocks if needed 
         if (dc.has_dc) {
             if (dc.type == 1) {
-                master_dev->log(module_verbose, "slave %2d configuring dc sync 01, "
+                master_dev->log(verbose, "slave %2d configuring dc sync 01, "
                         "cycle_times %d/%d, cycle_shift %d\n",
                         index, dc.cycle_time_0, dc.cycle_time_1, dc.cycle_shift);
 
                 ec_dc_sync01(master_dev->_pec, index, 1, dc.cycle_time_0, dc.cycle_time_1, dc.cycle_shift);
             } else {
-                master_dev->log(module_verbose, "slave %2d configuring dc sync 0, "
+                master_dev->log(verbose, "slave %2d configuring dc sync 0, "
                         "cycle_time %d, cycle_shift %d\n",
                         index, dc.cycle_time_0, dc.cycle_shift);
 
@@ -237,7 +234,7 @@ bool slave::prepare_state_transition(transition_t transition) {
             ec_dc_sync0(master_dev->_pec, index, 0, 0, 0);
     }
 
-    master_dev->log(module_verbose,
+    master_dev->log(verbose,
             "slave %2d prepare state transition from 0x%x/%s to 0x%x/%s\n",
             index, state_from, state_strings[state_from].c_str(),
             state_to, state_strings[state_to].c_str());
@@ -248,7 +245,7 @@ bool slave::prepare_state_transition(transition_t transition) {
         coe_init_cmd_t *cmd = *it;
 
         if (cmd->transition == transition) {
-            master_dev->log(module_verbose, "sending coe init "
+            master_dev->log(verbose, "sending coe init "
                     "command slave %d, index %X\n", index, cmd->index);
 
             uint8_t *buf = (uint8_t *)cmd->data;
@@ -258,7 +255,7 @@ bool slave::prepare_state_transition(transition_t transition) {
             int wkc = ec_coe_sdo_write(master_dev->_pec, index, cmd->index, 
                     cmd->subindex, cmd->ca, buf, &buf_len, &abort_code);
             if (!wkc) {
-                master_dev->log(module_info, "writing sdo, %s\n",
+                master_dev->log(info, "writing sdo, %s\n",
                      "todo");//ecx_elist2string(ctx));
             }
         } 
@@ -270,13 +267,13 @@ bool slave::prepare_state_transition(transition_t transition) {
         soe_init_cmd_t *cmd = *it;
 
         if (cmd->transition == transition) {
-            master_dev->log(module_verbose, "sending soe init "
+            master_dev->log(verbose, "sending soe init "
                     "command slave %d, idn %d, atn %d\n", index, cmd->idn, cmd->atn);
 
             int wkc = ec_soe_write(master_dev->_pec, index, cmd->atn, cmd->idn, 
                     cmd->element, (uint8_t *)cmd->data, cmd->datalen/2);
             if (!wkc) {
-                master_dev->log(module_info, "writing sdo, %s\n",
+                master_dev->log(info, "writing sdo, %s\n",
                      "todo");//ecx_elist2string(ctx));
             }
         } 
@@ -293,7 +290,7 @@ bool slave::prepare_state_transition(transition_t transition) {
  *                       above    0x00010000              eeprom memory
  */
 void slave::memory_request(int code, memory_t *memreq) {
-    master_dev->log(module_verbose, "slave %d: incoming memory request\n", index);
+    master_dev->log(verbose, "slave %d: incoming memory request\n", index);
     
     switch (code) {
         case MOD_REQUEST_MEMORY_READ: {
@@ -301,14 +298,14 @@ void slave::memory_request(int code, memory_t *memreq) {
 
             switch (memreq->address & MEM_TYPE_MASK) {
                 case MEM_TYPE_SLAVE_EEPROM:
-                    master_dev->log(module_verbose, "slave %d: reading eeprom address 0x%X\n", 
+                    master_dev->log(verbose, "slave %d: reading eeprom address 0x%X\n", 
                             index, address);
                     ec_eepromread_len(master_dev->_pec, index, address, memreq->data, memreq->length);
                     break;
                 case MEM_TYPE_SLAVE_MEM:
                     {
                         uint16_t wkc;
-                        master_dev->log(module_verbose, "slave %d: reading esc memory address 0x%X\n", 
+                        master_dev->log(verbose, "slave %d: reading esc memory address 0x%X\n", 
                                 index, address);
 
                         for (unsigned offset = 0; offset < memreq->length; offset+=100) {
@@ -339,24 +336,33 @@ void slave::memory_request(int code, memory_t *memreq) {
 void slave::register_interfaces() {
     std::stringstream slave_name; 
     slave_name << "slave_" << index;
+    
+    YAML::Node node;
+    node["mod_name"] = name;
+    node["dev_name"] = slave_name.str();
+    node["slave_id"] = index;
+    node["loglevel"] = (string)master_dev->ll;
 
-    ifaces.push_back(robotkernel::kernel::register_interface_cb(master_dev->name.c_str(), 
-            "libinterface_canopen_protocol.so", slave_name.str().c_str(), index));
-    ifaces.push_back(robotkernel::kernel::register_interface_cb(master_dev->name.c_str(), 
-            "libinterface_process_data_inspection.so", slave_name.str().c_str(), index));
-    ifaces.push_back(robotkernel::kernel::register_interface_cb(master_dev->name.c_str(),
-            "libinterface_memory_inspection.so", slave_name.str().c_str(), index));
+    ifaces.push_back(robotkernel::kernel::register_interface_cb(
+            "libinterface_canopen_protocol.so", node));
+    ifaces.push_back(robotkernel::kernel::register_interface_cb( 
+            "libinterface_process_data_inspection.so", node));
+    ifaces.push_back(robotkernel::kernel::register_interface_cb(
+            "libinterface_memory_inspection.so", node));
     
     if (master_dev->_pec->slaves[index].eeprom.mbx_supported & EC_EEPROM_MBX_SOE) {
         int atn;
         for (atn = 0; atn < master_dev->_pec->slaves[index].eeprom.general.soe_channels; ++atn) {
             std::stringstream atn_name;
             atn_name << "slave_" << index << ".atn_" << atn;
-            ifaces.push_back(robotkernel::kernel::register_interface_cb(master_dev->name.c_str(), 
-                "libinterface_sercos_protocol.so", atn_name.str().c_str(), (index << 16) | atn));
-            ifaces.push_back(robotkernel::kernel::register_interface_cb(master_dev->name.c_str(), 
-                "libinterface_process_data_inspection.so", atn_name.str().c_str(), 
-                ECAT_SLAVE_ID_SUB | (atn << 16) | index));
+
+            node["dev_name"] = atn_name.str();
+            node["slave_id"] = ECAT_SLAVE_ID_SUB | (atn << 16) | index;
+
+            ifaces.push_back(robotkernel::kernel::register_interface_cb(
+                "libinterface_sercos_protocol.so", node));
+            ifaces.push_back(robotkernel::kernel::register_interface_cb(
+                "libinterface_process_data_inspection.so", node));
         }
     }
 }
