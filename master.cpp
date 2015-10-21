@@ -58,8 +58,12 @@ void log_func(int lvl, void *user, const char *format, ...) {
     if (lvl < 1)
         loglvl = error;
 
-    e->log(loglvl, format, ap);
+    char buf[1024];
+    vsnprintf(buf, sizeof(buf), format, ap);
+//    e->log(loglvl, format, ap);
     va_end(ap);
+
+    e->log(loglvl, buf);
 }
 
 master::group::group(int index, const YAML::Node& node) {
@@ -84,7 +88,7 @@ void master::group::register_interfaces(std::string name, const loglevel& ll) {
     YAML::Node node;
     node["mod_name"] = name;
     node["dev_name"] = group_name.str();
-    node["slave_id"] = _index | ECAT_SLAVE_ID_GROUP;
+    node["slave_id"] = (signed int)(_index | ECAT_SLAVE_ID_GROUP);
     node["loglevel"] = (string)ll;
 
     _pd_intf = kernel::register_interface_cb(
@@ -152,6 +156,8 @@ master::master(const std::string& name, const YAML::Node& node)
     dc_node["slave_id"] = ECAT_SLAVE_ID_DC;
     dc_node["loglevel"] = (string)ll;
 
+    log(info, "adding process data inspection for dc info\n");
+
     dc_pd_intf = kernel::register_interface_cb(
             "libinterface_process_data_inspection.so", dc_node);
 
@@ -187,6 +193,9 @@ master::~master() {
  */
 int master::set_state(module_state_t new_state) {
     int ret = 0, nr;
+
+    log(info, "setting state from %s to %s\n", 
+            state_to_string(state), state_to_string(new_state));
 
     switch (new_state) {
         case module_state_init: {
@@ -631,13 +640,15 @@ int master::request(int reqcode, void* ptr) {
             int atn = ECAT_SLAVE_ID_GET_SUB(t->slave_id),
                 slave_id = ECAT_SLAVE_ID_GET_SLAVE(t->slave_id);
 
+            size_t byte_len = t->buflen * 2;
+
             if (t->direction == SSD_MASTER_TO_DRIVE) {
                 if (ec_soe_write(_pec, slave_id, atn, t->idn, 
-                            t->element >> 1, (uint8_t *)t->buf, t->buflen) == 1)
+                            t->element >> 1, (uint8_t *)t->buf, byte_len) == 1)
                     ret = 0; 
             } else {
                 if (ec_soe_read(_pec, slave_id, atn, t->idn, 
-                            t->element >> 1, (uint8_t *)t->buf, &t->buflen) == 1) {
+                            t->element >> 1, (uint8_t *)t->buf, &byte_len) == 1) {
                     ret = 0; 
                 }
             }

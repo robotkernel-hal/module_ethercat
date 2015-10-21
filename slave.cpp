@@ -271,7 +271,7 @@ bool slave::prepare_state_transition(transition_t transition) {
                     "command slave %d, idn %d, atn %d\n", index, cmd->idn, cmd->atn);
 
             int wkc = ec_soe_write(master_dev->_pec, index, cmd->atn, cmd->idn, 
-                    cmd->element, (uint8_t *)cmd->data, cmd->datalen/2);
+                    cmd->element, (uint8_t *)cmd->data, cmd->datalen);
             if (!wkc) {
                 master_dev->log(info, "writing sdo, %s\n",
                      "todo");//ecx_elist2string(ctx));
@@ -338,7 +338,7 @@ void slave::register_interfaces() {
     slave_name << "slave_" << index;
     
     YAML::Node node;
-    node["mod_name"] = name;
+    node["mod_name"] = master_dev->name;
     node["dev_name"] = slave_name.str();
     node["slave_id"] = index;
     node["loglevel"] = (string)master_dev->ll;

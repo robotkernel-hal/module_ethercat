@@ -294,6 +294,8 @@ int ec_slave_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
                 }
             }
 
+            ec_eeprom_to_pdi(pec, slave);
+
             // write state to slave
             wkc = ec_slave_set_state(pec, slave, EC_STATE_PREOP);
 

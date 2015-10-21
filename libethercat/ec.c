@@ -36,6 +36,7 @@
 #include "libethercat/mbx.h"
 #include "libethercat/coe.h"
 #include "libethercat/dc.h"
+#include "libethercat/eeprom.h"
 
 #define DC_DCSOFF_SAMPLES 1000
 
@@ -193,6 +194,11 @@ int ec_set_state(ec_t *pec, ec_state_t state) {
                 if (wkc == 1)
                     ec_log(100, get_state_string(state), "fixed address %d successfully "
                             "written to slave %d\n", fixed, auto_inc);
+                
+                // set eeprom to pdi, some slaves need this
+                ec_eeprom_to_pdi(pec, i);
+                init_state = EC_STATE_INIT | EC_STATE_RESET;
+                ec_fpwr(pec, fixed, EC_REG_ALCTL, &init_state, sizeof(init_state), &wkc); 
 
                 fixed++;
             }
@@ -271,8 +277,12 @@ int ec_set_state(ec_t *pec, ec_state_t state) {
             break;
         case EC_STATE_SAFEOP: {
             int i, j, k;
-            for (int slave = 0; slave < pec->slave_cnt; ++slave)
+            for (int slave = 0; slave < pec->slave_cnt; ++slave) {
+                if (pec->slaves[i].assigned_pd_group == -1)
+                    continue;
+
                 ec_slave_generate_mapping(pec, slave);
+            }
 
             for (j = 0; j < pec->pd_group_cnt; ++j) {
                 ec_pd_group_t *pd = &pec->pd_groups[j];
@@ -414,14 +424,21 @@ int ec_set_state(ec_t *pec, ec_state_t state) {
                 }
             }
             
-            for (i = 0; i < pec->slave_cnt; ++i)
+            for (i = 0; i < pec->slave_cnt; ++i) {
+                if (pec->slaves[i].assigned_pd_group == -1)
+                    continue;
+
                 ec_slave_state_transition(pec, i, state);
+            }
             break;
         }
         default:
-            for (i = 0; i < pec->slave_cnt; ++i)
-                ec_slave_state_transition(pec, i, state);
+            for (i = 0; i < pec->slave_cnt; ++i) {
+                if (pec->slaves[i].assigned_pd_group == -1)
+                    continue;
 
+                ec_slave_state_transition(pec, i, state);
+            }
             break;
     }
 

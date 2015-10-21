@@ -32,12 +32,12 @@
 //! mailbox types
 enum {
     EC_MBX_ERR = 0x00,   //!< error mailbox
-    EC_MBX_AOE,          //!< ADS over EtherCAT mailbox
-    EC_MBX_EOE,          //!< Ethernet over EtherCAT mailbox
-    EC_MBX_COE,          //!< CANopen over EtherCAT mailbox
-    EC_MBX_FOE,          //!< File over EtherCAT mailbox
-    EC_MBX_SOE,          //!< Servo over EtherCAT mailbox
-    EC_MBX_VOE = 0x0f    //!< Vendor over EtherCAT mailbox
+    EC_MBX_AOE,          //!< ADS       over EtherCAT mailbox
+    EC_MBX_EOE,          //!< Ethernet  over EtherCAT mailbox
+    EC_MBX_COE,          //!< CANopen   over EtherCAT mailbox
+    EC_MBX_FOE,          //!< File      over EtherCAT mailbox
+    EC_MBX_SOE,          //!< Servo     over EtherCAT mailbox
+    EC_MBX_VOE = 0x0f    //!< Vendor    over EtherCAT mailbox
 };
 
 //! ethercat mailbox header

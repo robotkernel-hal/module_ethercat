@@ -88,7 +88,7 @@ int ec_soe_read(ec_t *pec, uint16_t slave, uint8_t atn, uint16_t idn,
     }
 
     uint8_t *to = buf;
-    ssize_t left_len = (*len) * 2;
+    ssize_t left_len = *len;
     ec_soe_request_t *read_buf  = 
         (ec_soe_request_t *)(slv->mbx_read.buf); 
 
@@ -157,7 +157,7 @@ int ec_soe_write(ec_t *pec, uint16_t slave, uint8_t atn, uint16_t idn,
     write_buf->soe_hdr.idn        = idn;
 
     uint8_t *from = buf;
-    size_t left_len = len * 2;
+    size_t left_len = len;
     size_t mbx_len = slv->sm[0].len 
         - sizeof(ec_mbx_header_t) - sizeof(ec_soe_header_t);
     ec_soe_request_t *read_buf  = 
@@ -215,6 +215,7 @@ exit:
 int ec_soe_generate_mapping_local(ec_t *pec, uint16_t slave, uint8_t atn, 
         uint16_t idn, int *bitsize) {
     int ret = 0, i;
+    uint16_t *idn_value = NULL;
 
     *bitsize = 16; // control and status word are always present
 
@@ -228,8 +229,8 @@ int ec_soe_generate_mapping_local(ec_t *pec, uint16_t slave, uint8_t atn,
     }
 
     // read mapping idn
-    size_t idn_size = (idn_len[0] + 4) / 2;
-    uint16_t *idn_value = malloc(idn_size);
+    size_t idn_size = (idn_len[0] + 4);// / 2;
+    idn_value = malloc(idn_size);
     if (ec_soe_read(pec, slave, atn, idn, EC_SOE_VALUE, 
                 (uint8_t *)idn_value, &idn_size) != 1) {
         ret = -1;
@@ -243,6 +244,8 @@ int ec_soe_generate_mapping_local(ec_t *pec, uint16_t slave, uint8_t atn,
         ec_soe_idn_attribute_t sub_idn_attr;
         size_t sub_idn_attr_size = sizeof(sub_idn_attr);
 
+        ec_log(100, __func__, "atn %d, read mapped idn %d\n", atn, sub_idn);
+
         if (ec_soe_read(pec, slave, atn, sub_idn, EC_SOE_ATTRIBUTE, 
                     (uint8_t*)&sub_idn_attr, &sub_idn_attr_size) != 1)
             continue;
@@ -252,6 +255,9 @@ int ec_soe_generate_mapping_local(ec_t *pec, uint16_t slave, uint8_t atn,
     }
 
 exit:
+    if (idn_value)
+        free(idn_value);
+
     ec_log(10, __func__, "soe mapping for idn %d, bitsize %d\n", idn, *bitsize);
     return ret;
 }
@@ -266,6 +272,9 @@ int ec_soe_generate_mapping(ec_t *pec, uint16_t slave) {
     // at mapping is stored at idn 16 and should be written in preop
     // state by user
     for (atn = 0; atn < slv->eeprom.general.soe_channels; ++atn) {
+        ec_log(100, __func__, "slave %2d: getting at pd len channel %d\n", 
+                slave, atn);
+
         int bits = 0;
         if (ec_soe_generate_mapping_local(pec, slave, atn, 
                     idn_at, &bits) != 0)
@@ -291,6 +300,9 @@ int ec_soe_generate_mapping(ec_t *pec, uint16_t slave) {
     // mdt mapping is stored at idn 24 and should be written in preop
     // state by user
     for (atn = 0; atn < slv->eeprom.general.soe_channels; ++atn) {
+        ec_log(100, __func__, "slave %2d: getting mdt pd len channel %d\n", 
+                slave, atn);
+    
         int bits = 0;
         if (ec_soe_generate_mapping_local(pec, slave, atn, 
                     idn_mdt, &bits) != 0)

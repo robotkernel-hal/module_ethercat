@@ -144,6 +144,22 @@ extern "C" {
 // forward decl
 struct ec;
 
+//! set eeprom control to pdi
+/*!
+ * \param pec pointer to ethercat master
+ * \param slave ethercat slave number
+ * \return 0 on success
+ */
+int ec_eeprom_to_pdi(struct ec *pec, uint16_t slave);
+
+//! set eeprom control to ec
+/*!
+ * \param pec pointer to ethercat master
+ * \param slave ethercat slave number
+ * \return 0 on success
+ */
+int ec_eeprom_to_ec(struct ec *pec, uint16_t slave);
+
 //! read 32-bit word of eeprom
 /*!
  * \param pec pointer to ethercat master

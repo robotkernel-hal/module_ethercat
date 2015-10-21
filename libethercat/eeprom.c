@@ -28,14 +28,48 @@
 
 #include <string.h>
 
-//! set eeprom control to ethercat master
+//! set eeprom control to pdi
 /*!
  * \param pec pointer to ethercat master
  * \param slave ethercat slave number
  * \return 0 on success
  */
-int ec_eepromconfig(ec_t *pec, uint16_t slave) {
-    uint16_t wkc, eepctl = 2, cnt = 10;
+int ec_eeprom_to_pdi(ec_t *pec, uint16_t slave) {
+    uint16_t wkc, cnt = 10;
+    uint8_t eepctl = 2;
+
+    do {
+        ec_fpwr(pec, pec->slaves[slave].fixed_address, EC_REG_EEPCFG, 
+                (uint8_t *)&eepctl, sizeof(eepctl), &wkc);
+    } while (--cnt > 0 && wkc != 1);
+    if (wkc != 1)
+        ec_log(10, __func__, "slave %2d did not accept forcing eeprom to pdi\n", slave);
+    
+    eepctl = 1; cnt = 10;
+    do {
+        ec_fpwr(pec, pec->slaves[slave].fixed_address, EC_REG_EEPCFG, 
+                (uint8_t *)&eepctl, sizeof(eepctl), &wkc);
+    } while (--cnt > 0 && wkc != 1);
+    if (wkc != 1)
+        ec_log(10, __func__, "slave %2d did not accept setting eeprom to pdi\n", slave);
+    
+    ec_fprd(pec, pec->slaves[slave].fixed_address, EC_REG_EEPCFG, 
+            (uint8_t *)&eepctl, sizeof(eepctl), &wkc);
+
+    ec_log(100, __func__, "slave %2d eeprom control set to pdi (eepctl 0x%X)\n", 
+            slave, eepctl);
+    return 0;
+}
+
+//! set eeprom control to ec
+/*!
+ * \param pec pointer to ethercat master
+ * \param slave ethercat slave number
+ * \return 0 on success
+ */
+int ec_eeprom_to_ec(struct ec *pec, uint16_t slave) {
+    uint16_t wkc, cnt = 10;
+    uint8_t eepctl = 2;
 
     do {
         ec_fpwr(pec, pec->slaves[slave].fixed_address, EC_REG_EEPCFG, 
@@ -55,6 +89,8 @@ int ec_eepromconfig(ec_t *pec, uint16_t slave) {
     ec_fprd(pec, pec->slaves[slave].fixed_address, EC_REG_EEPCFG, 
             (uint8_t *)&eepctl, sizeof(eepctl), &wkc);
 
+    ec_log(100, __func__, "slave %2d eeprom control set to ec (eepctl 0x%X)\n", 
+            slave, eepctl);
     return 0;
 }
 
@@ -67,7 +103,7 @@ int ec_eepromconfig(ec_t *pec, uint16_t slave) {
  * \return 0 on success
  */
 int ec_eepromread(ec_t *pec, uint16_t slave, uint32_t eepadr, uint32_t *data) {
-    ec_eepromconfig(pec, slave);
+    ec_eeprom_to_ec(pec, slave);
     
     int ret = 0, retry_cnt = 100;
     uint16_t wkc = 0, eepcsr = 0x0100; // read access
@@ -123,6 +159,7 @@ int ec_eepromread(ec_t *pec, uint16_t slave, uint32_t eepadr, uint32_t *data) {
     }
 
 func_exit:
+    ec_eeprom_to_pdi(pec, slave);
 
     return ret;
 }
