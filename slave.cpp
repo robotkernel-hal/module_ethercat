@@ -343,6 +343,9 @@ void slave::register_interfaces() {
     node["slave_id"] = index;
     node["loglevel"] = (string)master_dev->ll;
 
+    if (ifaces.size() != 0)
+        return;
+
     ifaces.push_back(robotkernel::kernel::register_interface_cb(
             "libinterface_canopen_protocol.so", node));
     ifaces.push_back(robotkernel::kernel::register_interface_cb( 

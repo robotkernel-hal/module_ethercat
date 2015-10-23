@@ -82,6 +82,9 @@ master::group::group(int index, const YAML::Node& node) {
  * \return N/A
  */
 void master::group::register_interfaces(std::string name, const loglevel& ll) {
+    if (_pd_intf)
+        return;
+
     std::stringstream group_name; 
     group_name << "group_" << _index;
 
@@ -482,7 +485,12 @@ int master::request(int reqcode, void* ptr) {
                         desc->data_type         = slv->eeprom.txpdos[i].data_type;
                         desc->object_code       = 7;
                         desc->max_subindices    = slv->eeprom.txpdos[i].n_entry;
-                        strcpy(desc->name, slv->eeprom.strings[slv->eeprom.txpdos[i].name_idx-1]);
+
+                        if ((slv->eeprom.txpdos[i].name_idx > 0) && 
+                                (slv->eeprom.txpdos[i].name_idx <= slv->eeprom.strings_cnt))
+                            strcpy(desc->name, slv->eeprom.strings[slv->eeprom.txpdos[i].name_idx-1]);
+                        else
+                            desc->name[0] = '\0';
                     }
                 }
 
@@ -496,7 +504,11 @@ int master::request(int reqcode, void* ptr) {
                         desc->data_type         = slv->eeprom.rxpdos[i].data_type;
                         desc->object_code       = 7;
                         desc->max_subindices    = slv->eeprom.rxpdos[i].n_entry;
-                        strcpy(desc->name, slv->eeprom.strings[slv->eeprom.rxpdos[i].name_idx-1]);
+                        if ((slv->eeprom.rxpdos[i].name_idx > 0) && 
+                                (slv->eeprom.rxpdos[i].name_idx <= slv->eeprom.strings_cnt))
+                            strcpy(desc->name, slv->eeprom.strings[slv->eeprom.rxpdos[i].name_idx-1]);
+                        else
+                            desc->name[0] = '\0';
                     }
                 }
             }
@@ -537,10 +549,16 @@ int master::request(int reqcode, void* ptr) {
 
                 // device name
                 if (desc->index == 0x1008) {
-                    if (slv->eeprom.general.name_idx <= slv->eeprom.strings_cnt) {
+                    if ((slv->eeprom.strings_cnt > 0) && 
+                            (slv->eeprom.general.name_idx <= slv->eeprom.strings_cnt)) {
                         desc->value_info = 0x7F;
                         desc->data_type = 0x0009;
                         desc->bit_length = strlen(slv->eeprom.strings[slv->eeprom.general.name_idx-1]) * 8;
+                        desc->obj_access = 7;
+                    } else {
+                        desc->value_info = 0x7F;
+                        desc->data_type = 0x0009;
+                        desc->bit_length = 7*8;
                         desc->obj_access = 7;
                     }
                 }
@@ -554,10 +572,14 @@ int master::request(int reqcode, void* ptr) {
                         desc->bit_length        = slv->eeprom.txpdos[i].bit_len;
                         desc->obj_access        = 7;
 
-                        char *tmp = slv->eeprom.strings[slv->eeprom.txpdos[i].name_idx-1];
-                        size_t name_len = min(strlen(tmp), CANOPEN_MAXNAME - 1);
-                        memcpy(desc->name, tmp, name_len);
-                        desc->name[name_len] = '\0';
+                        if ((slv->eeprom.txpdos[i].name_idx > 0) &&
+                                (slv->eeprom.txpdos[i].name_idx <= slv->eeprom.strings_cnt)) {
+                            char *tmp = slv->eeprom.strings[slv->eeprom.txpdos[i].name_idx-1];
+                            size_t name_len = min(strlen(tmp), CANOPEN_MAXNAME - 1);
+                            memcpy(desc->name, tmp, name_len);
+                            desc->name[name_len] = '\0';
+                        } else
+                            desc->name[0] = '\0';
                     }
                 }
 
@@ -573,10 +595,14 @@ int master::request(int reqcode, void* ptr) {
                         desc->bit_length        = slv->eeprom.rxpdos[i].bit_len;
                         desc->obj_access        = 7;
 
-                        char *tmp = slv->eeprom.strings[slv->eeprom.rxpdos[i].name_idx-1];
-                        size_t name_len = min(strlen(tmp), CANOPEN_MAXNAME -1);
-                        memcpy(desc->name, tmp, name_len);
-                        desc->name[name_len] = '\0';
+                        if ((slv->eeprom.rxpdos[i].name_idx > 0) &&
+                                (slv->eeprom.rxpdos[i].name_idx <= slv->eeprom.strings_cnt)) {
+                            char *tmp = slv->eeprom.strings[slv->eeprom.rxpdos[i].name_idx-1];
+                            size_t name_len = min(strlen(tmp), CANOPEN_MAXNAME -1);
+                            memcpy(desc->name, tmp, name_len);
+                            desc->name[name_len] = '\0';
+                        } else
+                            desc->name[0] = '\0';
                     }
                 }
             }
@@ -587,9 +613,9 @@ int master::request(int reqcode, void* ptr) {
             size_t size = value->value_len;
             uint32_t abort_code = 0;
 
-            log(verbose, "CANOPEN_READ_ELEMENT slave %d: index 0x%X, "
-                    "sub_index %d, want to read %d bytes\n", value->slave_id, value->index,
-                    value->sub_index, value->value_len);
+//            log(verbose, "CANOPEN_READ_ELEMENT slave %d: index 0x%X, "
+//                    "sub_index %d, want to read %d bytes\n", value->slave_id, value->index,
+//                    value->sub_index, value->value_len);
 
             if (_pec->slaves[value->slave_id].eeprom.mbx_supported & EC_EEPROM_MBX_COE) {
                 ec_coe_sdo_read(_pec, value->slave_id, value->index, value->sub_index, 
@@ -601,10 +627,15 @@ int master::request(int reqcode, void* ptr) {
 
                 if (value->index == 0x1008) {
                     ec_slave_t *slv = &_pec->slaves[value->slave_id];
-                    if (slv->eeprom.general.name_idx <= slv->eeprom.strings_cnt) {
+                    if ((slv->eeprom.strings_cnt > 0) &&
+                            (slv->eeprom.general.name_idx <= slv->eeprom.strings_cnt)) {
                         value->value_len = strlen(slv->eeprom.strings[slv->eeprom.general.name_idx-1]);
                         memcpy(value->value, slv->eeprom.strings[slv->eeprom.general.name_idx-1], 
                                 value->value_len);
+                    } else {
+                        char buf[] = "unknown";
+                        value->value_len = 7;
+                        memcpy(value->value, buf, strlen(buf));
                     }
                 }
 
@@ -743,7 +774,7 @@ void master::run() {
                 if (pthread_mutex_trylock(&slv->mbx_lock) != 0)
                     continue;
 
-                if (((*slv->mbx_read.sm_state) & 0x08) == 0x08) {
+                if (slv->mbx_read.sm_state && ((*slv->mbx_read.sm_state) & 0x08) == 0x08) {
                     log(verbose, "async worker: slave %d read mailbox is full\n", slave);
 
                     char buf[1024];

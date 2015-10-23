@@ -56,8 +56,8 @@ int ec_eeprom_to_pdi(ec_t *pec, uint16_t slave) {
     ec_fprd(pec, pec->slaves[slave].fixed_address, EC_REG_EEPCFG, 
             (uint8_t *)&eepctl, sizeof(eepctl), &wkc);
 
-    ec_log(100, __func__, "slave %2d eeprom control set to pdi (eepctl 0x%X)\n", 
-            slave, eepctl);
+//    ec_log(100, __func__, "slave %2d eeprom control set to pdi (eepctl 0x%X)\n", 
+//            slave, eepctl);
     return 0;
 }
 
@@ -89,8 +89,8 @@ int ec_eeprom_to_ec(struct ec *pec, uint16_t slave) {
     ec_fprd(pec, pec->slaves[slave].fixed_address, EC_REG_EEPCFG, 
             (uint8_t *)&eepctl, sizeof(eepctl), &wkc);
 
-    ec_log(100, __func__, "slave %2d eeprom control set to ec (eepctl 0x%X)\n", 
-            slave, eepctl);
+//    ec_log(100, __func__, "slave %2d eeprom control set to ec (eepctl 0x%X)\n", 
+//            slave, eepctl);
     return 0;
 }
 

@@ -55,7 +55,7 @@ int ec_mbx_is_full(ec_t *pec, uint16_t slave, uint8_t mbx_nr, uint32_t nsec) {
             return 1;
 
         ec_sleep(EC_DEFAULT_DELAY);
-    } while (ec_timer_expired(&timer));
+    } while (!ec_timer_expired(&timer));
 
 //    if (nsec)
 //        ec_log(100, "MAILBOX", "timeout waiting for full mailbox %d\n", mbx_nr);
@@ -86,7 +86,7 @@ int ec_mbx_is_empty(ec_t *pec, uint16_t slave, uint8_t mbx_nr, uint32_t nsec) {
             return 1;
 
         ec_sleep(EC_DEFAULT_DELAY);
-    } while (ec_timer_expired(&timer));
+    } while (!ec_timer_expired(&timer));
 
 //    if (nsec)
 //        ec_log(100, "MAILBOX", "timeout waiting for empty mailbox %d\n", mbx_nr);
@@ -202,7 +202,7 @@ int ec_mbx_receive(ec_t *pec, uint16_t slave, uint32_t nsec) {
 
                 if (wkc && ((sm_control & 0x02) == ((sm_status & 0x0200) >> 8)))
                     break;
-            } while (ec_timer_expired(&timer) && !wkc);
+            } while (!ec_timer_expired(&timer) && !wkc);
 
             if (ec_timer_expired(&timer))
                 return 0;

@@ -119,6 +119,10 @@ int ec_soe_read(ec_t *pec, uint16_t slave, uint8_t atn, uint16_t idn,
     }
     
 exit:
+    // reset mailbox state 
+    if (slv->mbx_read.sm_state)
+        *slv->mbx_read.sm_state = 0;
+
     pthread_mutex_unlock(&slv->mbx_lock);
     
     return wkc;
@@ -207,6 +211,10 @@ int ec_soe_write(ec_t *pec, uint16_t slave, uint8_t atn, uint16_t idn,
     }
 
 exit:
+    // reset mailbox state 
+    if (slv->mbx_read.sm_state)
+        *slv->mbx_read.sm_state = 0;
+
     pthread_mutex_unlock(&slv->mbx_lock);
 
     return wkc;

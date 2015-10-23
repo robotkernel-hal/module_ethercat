@@ -104,8 +104,8 @@ void ec_timer_init(ec_timer_t *timer, uint64_t timeout) {
  */
 int ec_timer_expired(ec_timer_t *timer) {
     ec_timer_t act;
-    ec_timer_init(&act, 0);    
+    ec_timer_gettime(&act);    
 
-    return timer_cmp(&act, timer, <);
+    return !timer_cmp(&act, timer, <);
 }
 

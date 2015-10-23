@@ -131,7 +131,7 @@ void ec_dc_sync01(ec_t *pec, uint16_t slave, int active,
 }
 
 /* latched port time of slave */
-inline int32_t ec_dc_porttime(ec_t *pec, uint16_t slave, uint8_t port) {
+/*inline*/ int32_t ec_dc_porttime(ec_t *pec, uint16_t slave, uint8_t port) {
     if (port < 4)
         return pec->slaves[slave].dc.receive_times[port].time;
 
@@ -139,7 +139,7 @@ inline int32_t ec_dc_porttime(ec_t *pec, uint16_t slave, uint8_t port) {
 }
 
 /* calculate previous active port of a slave */
-inline uint8_t ec_dc_prevport(ec_t *pec, uint16_t slave, uint8_t port) {
+/*inline*/ uint8_t ec_dc_prevport(ec_t *pec, uint16_t slave, uint8_t port) {
     switch(port) {
 #define eval_port(...) { \
             int port_idx[] = { __VA_ARGS__ }; \
@@ -164,7 +164,7 @@ inline uint8_t ec_dc_prevport(ec_t *pec, uint16_t slave, uint8_t port) {
 }
 
 /* search unconsumed ports in parent, consume and return first open port */
-inline uint8_t ec_dc_parentport(ec_t *pec, uint16_t parent) {
+/*inline*/ uint8_t ec_dc_parentport(ec_t *pec, uint16_t parent) {
     /* search order is important, here 3 - 1 - 2 - 0 */
     int port_idx[] = { 3, 1, 2, 0 };
     uint8_t parentport = 0;
