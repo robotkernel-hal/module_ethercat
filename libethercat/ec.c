@@ -273,7 +273,6 @@ int ec_set_state(ec_t *pec, ec_state_t state) {
                 ec_slave_state_transition(pec, i, state);
 
             ec_dc_config(pec);
-
             break;
         case EC_STATE_SAFEOP: {
             int i, j, k;
@@ -843,6 +842,14 @@ int ec_send_distributed_clocks_sync(ec_t *pec) {
         }
     }
 
+    if (pec->dc.timer_override > 0) {
+        if (pec->dc.timer_prev == 0)
+            pec->dc.timer_prev = act_rtc_time;
+        else
+            pec->dc.timer_prev += 
+                (pec->dc.timer_override);// * pec->dc.offset_compensation);
+    }
+
     pec->dc.rtc_time = act_rtc_time;
 
     if (ec_index_get(pec, &pec->dc.p_idx_dc) != 0) {
@@ -900,10 +907,17 @@ int ec_receive_distributed_clocks_sync(ec_t *pec, ec_timer_t *timeout) {
                         % pec->dc.offset_compensation) == 0) {
                 // doing offset compensation in dc master clock
                 // getting current system time first
-                ec_timer_t tmr;
-                ec_timer_gettime(&tmr);
+                uint64_t act_time;
 
-                uint64_t act_time = tmr.sec * 1E9 + tmr.nsec;
+                if (pec->dc.timer_override > 0)
+                    act_time = pec->dc.timer_prev;
+                else {
+                    ec_timer_t tmr;
+                    ec_timer_gettime(&tmr);
+
+                    act_time = tmr.sec * 1E9 + tmr.nsec;
+                }
+
                 uint64_t diff_time = act_time - pec->dc.rtc_sto;
 
                 int64_t rtc_temp = diff_time%UINT_MAX;
@@ -914,6 +928,11 @@ int ec_receive_distributed_clocks_sync(ec_t *pec, ec_timer_t *timeout) {
                     pec->dc.act_diff = rtc_temp - (UINT_MAX + dc_temp);
                 else if ((pec->dc.prev_rtc > rtc_temp) && (pec->dc.prev_dc < dc_temp))
                     pec->dc.act_diff = UINT_MAX + rtc_temp - dc_temp;
+
+                if (pec->dc.act_diff > pec->dc.offset_compensation_max)
+                    pec->dc.act_diff = pec->dc.offset_compensation_max;
+                else if (pec->dc.act_diff < (-1 * pec->dc.offset_compensation_max))
+                    pec->dc.act_diff = -1 * pec->dc.offset_compensation_max;
 
                 pec->dc.prev_rtc = rtc_temp;
                 pec->dc.prev_dc  = dc_temp;
@@ -933,6 +952,8 @@ int ec_receive_distributed_clocks_sync(ec_t *pec, ec_timer_t *timeout) {
                     ec_log(5, __func__, "error getting datagram from pool\n");
                     goto sto_exit;
                 }
+
+                ec_log(100, __func__, "dc_sto adding %d [ns]\n", pec->dc.act_diff);
 
                 pec->dc.dc_sto += pec->dc.act_diff;
                 memset(&p_de_dc_sto->datagram, 0, sizeof(ec_datagram_t) + 8 + 2);

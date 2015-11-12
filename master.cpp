@@ -121,6 +121,13 @@ master::master(const std::string& name, const YAML::Node& node)
     _recv_prio  = get_as<int>(node, "recv_prio");
     _recv_mask  = get_as<int>(node, "recv_mask");
     _pec        = NULL;
+            
+    dc_offset_compensation_cycles 
+                = get_as<int>(node, "dc_offset_compensation_cycles", 250);
+    dc_timer_override 
+                = get_as<int>(node, "dc_timer_override", -1);
+    dc_offset_compensation_max 
+                = get_as<uint64_t>(node, "dc_offset_compensation_max", 1000000);
 
     ec_log_func_user = this;
     ec_log_func = log_func;
@@ -230,6 +237,13 @@ int master::set_state(module_state_t new_state) {
             _pec->tx_sync = 1;
             
             ec_set_state(_pec, EC_STATE_PREOP);
+
+            if (dc_offset_compensation_cycles > 0)
+                _pec->dc.offset_compensation = dc_offset_compensation_cycles;
+            if (dc_timer_override > 0)
+                _pec->dc.timer_override = dc_timer_override;
+            if (dc_offset_compensation_max > 0)
+                _pec->dc.offset_compensation_max = dc_offset_compensation_max;
 
             for (nr = 0; nr < _pec->slave_cnt; ++nr) {
                 // apply sm and fmmu config
@@ -684,6 +698,35 @@ int master::request(int reqcode, void* ptr) {
                 }
             }
             break;
+        }
+        case MOD_REQUEST_SERCOS_SET_COMMAND: {
+            sercos_set_command_t *cmd = (sercos_set_command_t *)ptr;
+            int atn = ECAT_SLAVE_ID_GET_SUB(cmd->slave_id),
+                slave_id = ECAT_SLAVE_ID_GET_SLAVE(cmd->slave_id);
+
+            uint16_t val = 1;
+            size_t val_len = sizeof(val);
+            ret = ec_soe_write(_pec, slave_id, atn, cmd->cmd, 0x80 >> 1, 
+                    (uint8_t *)&val, val_len);
+            if (ret != 0)
+                log(warning, "setting command %d returned %d\n", cmd->cmd, ret);
+
+            val = 3;
+            val_len = sizeof(val);
+            ret = ec_soe_write(_pec, slave_id, atn, cmd->cmd, 0x80 >> 1, 
+                    (uint8_t *)&val, val_len);
+            if (ret != 0)
+                log(warning, "exec command %d returned %d\n", cmd->cmd, ret);
+            
+            val = 0;
+            val_len = sizeof(val);
+            ret = ec_soe_write(_pec, slave_id, atn, cmd->cmd, 0x80 >> 1, 
+                    (uint8_t *)&val, val_len);
+            if (ret != 0)
+                log(warning, "resetting command %d returned %d\n", cmd->cmd, ret);
+
+            ret = 0;
+            break;            
         }
         default:
             ret = -1;

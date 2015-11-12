@@ -216,6 +216,10 @@ int ec_dc_config(ec_t *pec) {
                 pec->dc.have_dc = 1;
                 pec->dc.offset_compensation = 250;
                 pec->dc.offset_compensation_cnt = 0;
+                pec->dc.offset_compensation_max = 1000000;
+
+                pec->dc.timer_override = -1;
+                pec->dc.timer_prev = 0;
     
                 pec->dc.prev_rtc = 0;
                 pec->dc.prev_dc = 0;

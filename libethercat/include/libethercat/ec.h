@@ -182,6 +182,10 @@ typedef struct PACKED ec_dc_info {
 
     int offset_compensation;
     int offset_compensation_cnt;
+    int offset_compensation_max;
+
+    int timer_override;
+    int64_t timer_prev;
 
     datagram_entry_t *p_de_dc;
     idx_entry_t *p_idx_dc;
