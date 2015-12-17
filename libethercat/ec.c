@@ -277,7 +277,7 @@ int ec_set_state(ec_t *pec, ec_state_t state) {
         case EC_STATE_SAFEOP: {
             int i, j, k;
             for (int slave = 0; slave < pec->slave_cnt; ++slave) {
-                if (pec->slaves[i].assigned_pd_group == -1)
+                if (pec->slaves[slave].assigned_pd_group == -1)
                     continue;
 
                 ec_slave_generate_mapping(pec, slave);

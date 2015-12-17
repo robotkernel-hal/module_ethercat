@@ -70,6 +70,7 @@ master::group::group(int index, const YAML::Node& node) {
     _index          = index;
     _divisor        = get_as<int>(node, "divisor");
     _divisor_cnt    = 0;
+    _pd_intf        = NULL;
 
     for (YAML::const_iterator it = node["slaves"].begin(); 
             it != node["slaves"].end(); ++it)

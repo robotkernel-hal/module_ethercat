@@ -332,12 +332,13 @@ void ec_eeprom_dump(ec_t *pec, uint16_t slave) {
 
                         ec_log(100, "EEPROM_SM", "slave %d, sm%d adr 0x%X, len %d, flags 0x%X\n", 
                                 slave, j, slv->sm[j].adr, slv->sm[j].len, slv->sm[j].flags);
-                    } else
+                    } else {
                         ec_log(100, "EEPROM_SM", "slave %d, sm%d adr 0x%X, len %d, flags 0x%X\n", 
                                 slave, j, slv->eeprom.sms[j].adr, slv->eeprom.sms[j].len,
                                 (slv->eeprom.sms[j].activate << 16) | slv->eeprom.sms[j].ctrl_reg);
                                 
                         ec_log(100, "EEPROM_SM", "slave %d, sm%d already set by user\n", slave, j);
+                    }
 
                     j++;
                 }
