@@ -742,7 +742,7 @@ int master::request(int reqcode, void* ptr) {
 void master::trigger() {
     int i = 0;
     ec_timer_t timeout;
-    ec_timer_init(&timeout, 10000000);
+    ec_timer_init(&timeout, 250000);
 
     if (state >= module_state_safeop) {
         for (i = 0; i < _pec->pd_group_cnt; ++i) {

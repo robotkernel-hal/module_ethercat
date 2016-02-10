@@ -112,7 +112,7 @@ int ec_slave_set_state(ec_t *pec, uint16_t slave, ec_state_t state) {
                 EC_REG_ALCTL, &state, sizeof(state), &wkc); 
 
         act_state = 0;
-        wkc = ec_slave_get_state(pec, slave, &act_state);
+        wkc = ec_slave_get_state(pec, slave, &act_state, NULL);
 
         ec_log(100, "EC_STATE_SET", "slave %d, state %X, act_state %X, wkc %d\n", 
                 slave, state, act_state, wkc);
@@ -145,9 +145,11 @@ int ec_slave_set_state(ec_t *pec, uint16_t slave, ec_state_t state) {
  * \param pec ethercat master pointer
  * \param slave number
  * \param state return ethercat state
+ * \param alstatcode return alstatcode (maybe NULL)
  * \return wkc
  */
-int ec_slave_get_state(ec_t *pec, uint16_t slave, ec_state_t *state) {
+int ec_slave_get_state(ec_t *pec, uint16_t slave, ec_state_t *state, 
+        uint16_t *alstatcode) {
     uint16_t wkc = 0, value = 0;
     ec_fprd(pec, pec->slaves[slave].fixed_address, 
             EC_REG_ALSTAT, &value, sizeof(value), &wkc);
@@ -155,9 +157,13 @@ int ec_slave_get_state(ec_t *pec, uint16_t slave, ec_state_t *state) {
     if (wkc)
         *state = (ec_state_t)value;
 
-    if (*state & 0x10)
+    if (alstatcode && (*state & 0x10)) {
         ec_fprd(pec, pec->slaves[slave].fixed_address, 
                 EC_REG_ALSTATCODE, &value, sizeof(value), &wkc);
+
+        if (wkc)
+            *alstatcode = value;
+    }
 
     return wkc;
 }
@@ -235,7 +241,7 @@ int ec_slave_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
     if (!wkc) ec_log(10, __func__, "reading reg 0x%X : no answer from slave %d\n", slave); }
 
     // check error state
-    wkc = ec_slave_get_state(pec, slave, &act_state);
+    wkc = ec_slave_get_state(pec, slave, &act_state, NULL);
     if (act_state & EC_STATE_ERROR) // reset error state first
         ec_slave_set_state(pec, slave, (act_state & EC_STATE_MASK) | EC_STATE_RESET);
 

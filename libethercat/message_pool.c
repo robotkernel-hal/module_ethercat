@@ -101,14 +101,16 @@ int ec_async_message_loop_put(ec_message_pool_t *ppool,
  */
 void ec_async_checK_slave(ec_async_message_loop_t *paml, uint16_t slave) {
     ec_state_t state;
-    int wkc = ec_slave_get_state(paml->pec, slave, &state);
+    uint16_t alstatcode;
+    int wkc = ec_slave_get_state(paml->pec, slave, &state, &alstatcode);
 
     if (!wkc)
         ec_log(100, "ec_async_thread", "slave %2d: wkc error on "
                 "getting slave state\n", slave);
     else {
         ec_log(100, "ec_async_thread", "slave %2d: is "
-                "in state 0x%04X\n", slave, state);
+                "in state 0x%04X, alstatcode 0x%04X\n", 
+                slave, state, alstatcode);
 
         // if state != expected_state -> repair
         if (state != paml->pec->slaves[slave].expected_state) {

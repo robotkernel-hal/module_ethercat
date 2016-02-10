@@ -72,9 +72,11 @@ int ec_slave_set_state(struct ec *pec, uint16_t slave, ec_state_t state);
  * \param pec ethercat master pointer
  * \param slave number
  * \param state return ethercat state
+ * \param alstatcode return alstatcode (maybe NULL)
  * \return wkc
  */
-int ec_slave_get_state(struct ec *pec, uint16_t slave, ec_state_t *state);
+int ec_slave_get_state(struct ec *pec, uint16_t slave, 
+        ec_state_t *state, uint16_t *alstatcode);
 
 //! generate pd mapping
 /*!

@@ -789,6 +789,8 @@ int ec_send_process_data_group(ec_t *pec, int group) {
  * \return 0 on success
  */
 int ec_receive_process_data_group(ec_t *pec, int group, ec_timer_t *timeout) {
+    static int wkc_mismatch_cnt = 0;
+
     uint16_t wkc = 0;
     ec_pd_group_t *pd = &pec->pd_groups[group];
     if (!pd->p_idx)
@@ -806,9 +808,15 @@ int ec_receive_process_data_group(ec_t *pec, int group, ec_timer_t *timeout) {
                 pd->pdout_len, pd->pdin_len);
         
         if (wkc != pd->wkc_expected) {
-            ec_log(10, __func__, "group %2d: working counter mismatch got %u, expected %u, "
-                    "slave_cnt %d\n", group, wkc, pd->wkc_expected, pec->slave_cnt);
+            if ((wkc_mismatch_cnt++%1000) == 0) {
+                ec_log(10, __func__, "group %2d: working counter mismatch got %u, expected %u, "
+                        "slave_cnt %d, mismatch_cnt %d\n", group, wkc, pd->wkc_expected, 
+                        pec->slave_cnt, wkc_mismatch_cnt);
+            }
+            
             ec_async_check_group(pec->async_loop, group);
+        } else {
+            wkc_mismatch_cnt = 0;
         }
     }
 
@@ -953,7 +961,7 @@ int ec_receive_distributed_clocks_sync(ec_t *pec, ec_timer_t *timeout) {
                     goto sto_exit;
                 }
 
-                ec_log(100, __func__, "dc_sto adding %d [ns]\n", pec->dc.act_diff);
+//                ec_log(100, __func__, "dc_sto adding %d [ns]\n", pec->dc.act_diff);
 
                 pec->dc.dc_sto += pec->dc.act_diff;
                 memset(&p_de_dc_sto->datagram, 0, sizeof(ec_datagram_t) + 8 + 2);

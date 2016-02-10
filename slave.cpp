@@ -399,7 +399,7 @@ int slave::on_get_ec_state(ln::service_request& req, ln_service_module_ethercat_
     ec_state_t state;
     string state_string;
     int wkc = ec_slave_get_state(master_dev->_pec,
-            index, &state);
+            index, &state, NULL);
 
     if (wkc > 0) {
         if ((state & 0x000F) == EC_STATE_INIT)
