@@ -204,6 +204,9 @@ class slave : public ln_service_set_ec_state_base,
         int on_get_ec_state(ln::service_request& req, ln_service_module_ethercat_get_ec_state& svc);
 
     private:
+        //! initialize common stuff
+        void _init();
+
         typedef std::list<robotkernel::kernel::interface_id_t> iface_list_t;
         iface_list_t ifaces;
 

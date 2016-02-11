@@ -135,6 +135,8 @@ slave::slave(int index, master *master_dev)
     master_dev(master_dev) {
                 
     master_dev->log(verbose, "default slave index %d created\n", index);
+    
+    _init();
 };
 
 //! construction
@@ -178,16 +180,8 @@ slave::slave(const YAML::Node& node, master *master_dev)
                 soe_init_cmds.push_back(new soe_init_cmd_t(*it));
         }
     }
-	
-    kernel& k = *kernel::get_instance();
-    if (k.clnt) {
-        stringstream base;
-        base << k.clnt->name << "." << master_dev->name <<
-            ".slave_" << index;
 
-        register_set_ec_state(k.clnt, base.str() + ".set_ec_state");
-        register_get_ec_state(k.clnt, base.str() + ".get_ec_state");
-    }
+    _init();
 
     master_dev->log(verbose,
             "slave %s index %d created\n", name.c_str(), index);
@@ -203,6 +197,19 @@ slave::~slave() {
             it != soe_init_cmds.end(); ++it)
         delete(*it);
     
+}
+        
+//! initialize common stuff
+void slave::_init() {
+    kernel& k = *kernel::get_instance();
+    if (k.clnt) {
+        stringstream base;
+        base << k.clnt->name << "." << master_dev->name <<
+            ".slave_" << index;
+
+        register_set_ec_state(k.clnt, base.str() + ".set_ec_state");
+        register_get_ec_state(k.clnt, base.str() + ".get_ec_state");
+    }
 }
 
 //! prepare state transitions
@@ -375,8 +382,12 @@ void slave::register_interfaces() {
  * \return N/A
  */
 void slave::unregister_interfaces() {
-    for (iface_list_t::iterator it = ifaces.begin(); it != ifaces.end(); ++it)
-        kernel::unregister_interface_cb(*it);
+    while(!ifaces.empty()) {
+        kernel::interface_id_t id = ifaces.front();
+        ifaces.pop_front();
+
+        kernel::unregister_interface_cb(id);
+    }
 }
 
 int slave::on_set_ec_state(ln::service_request& req, ln_service_module_ethercat_set_ec_state& svc) {
