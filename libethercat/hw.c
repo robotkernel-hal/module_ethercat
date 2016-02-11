@@ -114,7 +114,7 @@ int hw_open(hw_t **pphw, const char *devname, int prio, int cpumask) {
     strncpy(ifr.ifr_name, devname, sizeof(ifr.ifr_name));
     ioctl((*pphw)->sockfd, SIOCGIFMTU, &ifr);
     (*pphw)->mtu_size = ifr.ifr_mtu;
-    ec_log(5, "hw_open", "got mtu size %d\n", (*pphw)->mtu_size);
+    ec_log(10, "hw_open", "got mtu size %d\n", (*pphw)->mtu_size);
 
     // bind socket to protocol, in this case RAW EtherCAT */
     sll.sll_family = AF_PACKET;
