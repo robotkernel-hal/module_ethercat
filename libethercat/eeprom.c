@@ -200,6 +200,8 @@ void ec_eeprom_dump(ec_t *pec, uint16_t slave) {
 
 #define eeprom(adr, mem) \
     ec_eepromread_len(pec, slave, (adr), (uint8_t *)&(mem), sizeof(mem));
+#define eeprom_log(...) \
+    if (pec->eeprom_log) ec_log(__VA_ARGS__)
 
     // read soem eeprom values
     eeprom(EC_EEPROM_ADR_VENDOR_ID,     slv->eeprom.vendor_id);
@@ -224,7 +226,7 @@ void ec_eeprom_dump(ec_t *pec, uint16_t slave) {
             case EC_EEPROM_CAT_NOP:
                 break;
             case EC_EEPROM_CAT_STRINGS: {
-                ec_log(100, "EEPROM_STRINGS", "slave %d, cat_len %d\n", 
+                eeprom_log(100, "EEPROM_STRINGS", "slave %d, cat_len %d\n", 
                         slave, cat_len);
                 
                 uint8_t *buf = malloc(cat_len*2);
@@ -233,7 +235,7 @@ void ec_eeprom_dump(ec_t *pec, uint16_t slave) {
                 int local_offset = 0, i;
                 slv->eeprom.strings_cnt = buf[local_offset++];
 
-                ec_log(100, "EEPROM_STRINGS", "slave %d, stored strings %d\n", 
+                eeprom_log(100, "EEPROM_STRINGS", "slave %d, stored strings %d\n", 
                         slave, slv->eeprom.strings_cnt);
 
                 if (!slv->eeprom.strings_cnt) {
@@ -252,10 +254,10 @@ void ec_eeprom_dump(ec_t *pec, uint16_t slave) {
 
                     slv->eeprom.strings[i][string_len] = '\0';
                     
-                    ec_log(100, "EEPROM_STRINGS", "slave %d, string %d, length %d : %s\n", 
+                    eeprom_log(100, "EEPROM_STRINGS", "slave %d, string %d, length %d : %s\n", 
                             slave, i, string_len, slv->eeprom.strings[i]);
                     if (local_offset > cat_len*2) {
-                        ec_log(5, "EEPROM_STRINGS", "slave %d, something wrong in eeprom string section\n",
+                        eeprom_log(5, "EEPROM_STRINGS", "slave %d, something wrong in eeprom string section\n",
                                 slave);
                         break;
                     }
@@ -265,15 +267,15 @@ void ec_eeprom_dump(ec_t *pec, uint16_t slave) {
                 break;
             }
             case EC_EEPROM_CAT_DATATYPES:
-                ec_log(100, "EEPROM_DATATYPES", "slave %d:\n", slave);
+                eeprom_log(100, "EEPROM_DATATYPES", "slave %d:\n", slave);
 
                 break;
             case EC_EEPROM_CAT_GENERAL: {
-                ec_log(100, "EEPROM_GENERAL", "slave %d:\n", slave);
+                eeprom_log(100, "EEPROM_GENERAL", "slave %d:\n", slave);
 
                 eeprom(cat_offset+2, slv->eeprom.general);
 
-                ec_log(100, "EEPROM_GENERAL", "slave %d: group_idx %d, img_idx %d, order_idx %d, name_idx %d\n", 
+                eeprom_log(100, "EEPROM_GENERAL", "slave %d: group_idx %d, img_idx %d, order_idx %d, name_idx %d\n", 
                         slave, slv->eeprom.general.group_idx,
                         slv->eeprom.general.img_idx,
                         slv->eeprom.general.order_idx,
@@ -281,7 +283,7 @@ void ec_eeprom_dump(ec_t *pec, uint16_t slave) {
                 break;
             }
             case EC_EEPROM_CAT_FMMU: {
-                ec_log(100, "EEPROM_FMMU", "slave %d:\n", slave);
+                eeprom_log(100, "EEPROM_FMMU", "slave %d:\n", slave);
 
                 // skip cat type and len
                 int local_offset = cat_offset + 2;
@@ -298,7 +300,7 @@ void ec_eeprom_dump(ec_t *pec, uint16_t slave) {
                 break;
             }
             case EC_EEPROM_CAT_SM: {
-                ec_log(100, "EEPROM_SM", "slave %d:\n", slave);
+                eeprom_log(100, "EEPROM_SM", "slave %d:\n", slave);
 
                 // skip cat type and len
                 int j = 0, local_offset = cat_offset + 2;
@@ -330,14 +332,14 @@ void ec_eeprom_dump(ec_t *pec, uint16_t slave) {
                         slv->sm[j].len = slv->eeprom.sms[j].len;
                         slv->sm[j].flags = (slv->eeprom.sms[j].activate << 16) | slv->eeprom.sms[j].ctrl_reg;
 
-                        ec_log(100, "EEPROM_SM", "slave %d, sm%d adr 0x%X, len %d, flags 0x%X\n", 
+                        eeprom_log(100, "EEPROM_SM", "slave %d, sm%d adr 0x%X, len %d, flags 0x%X\n", 
                                 slave, j, slv->sm[j].adr, slv->sm[j].len, slv->sm[j].flags);
                     } else {
-                        ec_log(100, "EEPROM_SM", "slave %d, sm%d adr 0x%X, len %d, flags 0x%X\n", 
+                        eeprom_log(100, "EEPROM_SM", "slave %d, sm%d adr 0x%X, len %d, flags 0x%X\n", 
                                 slave, j, slv->eeprom.sms[j].adr, slv->eeprom.sms[j].len,
                                 (slv->eeprom.sms[j].activate << 16) | slv->eeprom.sms[j].ctrl_reg);
                                 
-                        ec_log(100, "EEPROM_SM", "slave %d, sm%d already set by user\n", slave, j);
+                        eeprom_log(100, "EEPROM_SM", "slave %d, sm%d already set by user\n", slave, j);
                     }
 
                     j++;
@@ -345,7 +347,7 @@ void ec_eeprom_dump(ec_t *pec, uint16_t slave) {
                 break;
             }
             case EC_EEPROM_CAT_TXPDO: {
-                ec_log(100, "EEPROM_TXPDO", "slave %d:\n", slave);
+                eeprom_log(100, "EEPROM_TXPDO", "slave %d:\n", slave);
 
                 // skip cat type and len
                 int j = 0, local_offset = cat_offset + 2;
@@ -369,7 +371,7 @@ void ec_eeprom_dump(ec_t *pec, uint16_t slave) {
                 break;
             }
             case EC_EEPROM_CAT_RXPDO: {
-                ec_log(100, "EEPROM_RXPDO", "slave %d:\n", slave);
+                eeprom_log(100, "EEPROM_RXPDO", "slave %d:\n", slave);
 
                 // skip cat type and len
                 int j = 0, local_offset = cat_offset + 2;
@@ -393,7 +395,7 @@ void ec_eeprom_dump(ec_t *pec, uint16_t slave) {
                 break;
             }
             case EC_EEPROM_CAT_DC:
-                ec_log(100, "EEPROM_DC", "slave %d:\n", slave);
+                eeprom_log(100, "EEPROM_DC", "slave %d:\n", slave);
                 break;
         }
 

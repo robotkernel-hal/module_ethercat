@@ -108,10 +108,6 @@ void ec_async_checK_slave(ec_async_message_loop_t *paml, uint16_t slave) {
         ec_log(100, "ec_async_thread", "slave %2d: wkc error on "
                 "getting slave state\n", slave);
     else {
-        ec_log(100, "ec_async_thread", "slave %2d: is "
-                "in state 0x%04X, alstatcode 0x%04X\n", 
-                slave, state, alstatcode);
-
         // if state != expected_state -> repair
         if (state != paml->pec->slaves[slave].expected_state) {
             wkc = ec_slave_state_transition(paml->pec, slave, paml->pec->slaves[slave].expected_state);
@@ -138,11 +134,8 @@ void *ec_async_message_loop_thread(void *arg) {
                 // do something
                 int slave;
                 for (slave = 0; slave < paml->pec->slave_cnt; ++slave) {
-                    if (paml->pec->slaves[slave].assigned_pd_group != me->msg.payload.group_id) {
-                        ec_log(100, "ec_async_thread", "group %2d, slave %2d: other group %2d\n",
-                            me->msg.payload.group_id, slave, paml->pec->slaves[slave].assigned_pd_group);
+                    if (paml->pec->slaves[slave].assigned_pd_group != me->msg.payload.group_id)
                         continue;
-                    }
 
                     ec_async_checK_slave(paml, slave);
                 }

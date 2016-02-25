@@ -118,10 +118,11 @@ master::master(const std::string& name, const YAML::Node& node)
     : module_base("module_ethercat", name, node), 
       cmd_delay(node),
       runnable(node) {
-    _ifname     = get_as<string>(node, "ifname");
-    _recv_prio  = get_as<int>(node, "recv_prio");
-    _recv_mask  = get_as<int>(node, "recv_mask");
-    _pec        = NULL;
+    _ifname          = get_as<string>(node, "ifname");
+    _recv_prio       = get_as<int>(node, "recv_prio");
+    _recv_mask       = get_as<int>(node, "recv_mask");
+    _log_eeprom_data = get_as<bool>(node, "log_eeprom_data");
+    _pec             = NULL;
             
     dc_offset_compensation_cycles 
                 = get_as<int>(node, "dc_offset_compensation_cycles", 250);
@@ -154,6 +155,9 @@ master::master(const std::string& name, const YAML::Node& node)
     int ret = ec_open(&_pec, _ifname.c_str(), _recv_prio, _recv_mask);
     if (ret != 0) 
         throw str_exception("ec_open failed: %s!\n", strerror(ret));
+
+    // assing eeprom log level 
+    _pec->eeprom_log = _log_eeprom_data;
 
     pthread_mutex_init(&pd_lock, NULL);
     pthread_cond_init(&pd_cond, NULL);
@@ -273,6 +277,11 @@ int master::set_state(module_state_t new_state) {
         }
         case module_state_safeop:            
             ec_create_pd_groups(_pec, _group_info.size());
+            
+            // start cyclic operation via trigger
+            _pec->tx_sync = 0;
+            state = module_state_safeop;
+
             for (group_map_t::iterator it = _group_info.begin(); it != _group_info.end(); ++it) {
                 int g_nr = it->first;
 
@@ -294,10 +303,21 @@ int master::set_state(module_state_t new_state) {
             }
 
             ec_set_state(_pec, EC_STATE_SAFEOP);
+            
             start();
-            _pec->tx_sync = 0;
             break;
         case module_state_op:
+            for (group_map_t::iterator it = _group_info.begin(); it != _group_info.end(); ++it) {
+                int g_nr = it->first;
+
+                for (std::list<int>::iterator it2 = it->second->_slaves.begin();
+                        it2 != it->second->_slaves.end(); ++it2) {
+
+                    int s_nr = *it2;
+                    _slave_info[s_nr]->prepare_state_transition(safeop_to_op);
+                }
+            }
+
             start();
             _pec->tx_sync = 0;
 

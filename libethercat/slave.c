@@ -368,7 +368,11 @@ int ec_slave_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
         }
         case OP_2_INIT:
         case SAFEOP_2_INIT:
-        case PREOP_2_INIT:
+        case PREOP_2_INIT: {
+            uint8_t dc_active = 0;
+            ec_fpwr(pec, pec->slaves[slave].fixed_address, EC_REG_DCSYNCACT, 
+                    &dc_active, sizeof(dc_active), &wkc);
+
             // write state to slave
             wkc = ec_slave_set_state(pec, slave, state);
 
@@ -376,8 +380,12 @@ int ec_slave_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
                 free(slv->subdevs);
                 slv->subdev_cnt = 0;
             }
-
+        }
         case INIT_2_INIT: {
+            uint8_t dc_active = 0;
+            ec_fpwr(pec, pec->slaves[slave].fixed_address, EC_REG_DCSYNCACT, 
+                    &dc_active, sizeof(dc_active), &wkc);
+
             // free resources
             free_resource(slv->mbx_read.buf);
             free_resource(slv->mbx_write.buf);

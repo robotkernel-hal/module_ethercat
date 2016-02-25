@@ -102,6 +102,7 @@ class master :  public robotkernel::module_base,
         int _recv_prio;
         int _recv_mask;
         std::string _ifname;
+        bool _log_eeprom_data;
 
         int dc_offset_compensation_cycles;
         int dc_offset_compensation_max;

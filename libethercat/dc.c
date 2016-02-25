@@ -52,17 +52,12 @@ void ec_dc_sync0(ec_t *pec, uint16_t slave, int active, uint32_t cycle_time, int
     uint8_t dc_cuc = 0;
     ec_fpwr(pec, slv->fixed_address, EC_REG_DCCUC, &dc_cuc, sizeof(dc_cuc), &wkc);
 
-    // get dc system time
-    int64_t dc_systime = 0;
-    ec_fprd(pec, slv->fixed_address, EC_REG_DCSYSTIME, &dc_systime, sizeof(dc_systime), &wkc);
-
     /* Calculate first trigger time, always a whole multiple of CyclTime rounded up
        plus the shifttime (can be negative)
        This insures best sychronisation between slaves, slaves with the same CyclTime
        will sync at the same moment (you can use CyclShift to shift the sync) */
-    int64_t dc_start = dc_systime + SYNC_DELAY + cycle_shift;
-    if (cycle_time > 0)
-        dc_start = ((dc_systime + SYNC_DELAY) / cycle_time) * cycle_time + cycle_time + cycle_shift;
+    uint64_t rel_rtc_time = (pec->dc.rtc_time - pec->dc.rtc_sto);
+    int64_t dc_start = rel_rtc_time + SYNC_DELAY + cycle_shift;
    
     // program first trigger time and cycle time
     ec_fpwr(pec, slv->fixed_address, EC_REG_DCSTART0, &dc_start, sizeof(dc_start), &wkc);
@@ -75,7 +70,7 @@ void ec_dc_sync0(ec_t *pec, uint16_t slave, int active, uint32_t cycle_time, int
     }
     
     ec_log(10, "DISTRIBUTED_CLOCK", "slave %2d: dc_systime %lld, dc_start %lld, cycletime %d, dc_active %X\n", 
-            slave, dc_systime, dc_start, cycle_time, dc_active);
+            slave, rel_rtc_time, dc_start, cycle_time, dc_active);
 }
 
 //! configure slave for distributed clock sync 0 and sync 1 pulse
@@ -102,17 +97,12 @@ void ec_dc_sync01(ec_t *pec, uint16_t slave, int active,
     uint8_t dc_cuc = 0;
     ec_fpwr(pec, slv->fixed_address, EC_REG_DCCUC, &dc_cuc, sizeof(dc_cuc), &wkc);
 
-    // get dc system time
-    int64_t dc_systime = 0;
-    ec_fprd(pec, slv->fixed_address, EC_REG_DCSYSTIME, &dc_systime, sizeof(dc_systime), &wkc);
-
     /* Calculate first trigger time, always a whole multiple of CyclTime rounded up
        plus the shifttime (can be negative)
        This insures best sychronisation between slaves, slaves with the same CyclTime
        will sync at the same moment (you can use CyclShift to shift the sync) */
-    int64_t dc_start = dc_systime + SYNC_DELAY + cycle_shift;
-    if (cycle_time_0 > 0)
-        dc_start = ((dc_systime + SYNC_DELAY) / cycle_time_0) * cycle_time_0 + cycle_time_0 + cycle_shift;
+    uint64_t rel_rtc_time = (pec->dc.rtc_time - pec->dc.rtc_sto);
+    int64_t dc_start = rel_rtc_time + SYNC_DELAY + cycle_shift;
    
     // program first trigger time and cycle time
     ec_fpwr(pec, slv->fixed_address, EC_REG_DCSTART0, &dc_start, sizeof(dc_start), &wkc);
@@ -127,7 +117,7 @@ void ec_dc_sync01(ec_t *pec, uint16_t slave, int active,
     
     ec_log(10, "DISTRIBUTED_CLOCK", "slave %2d: dc_systime %lld, dc_start %lld, "
             "cycletime_0 %d, cycletime_1 %d, dc_active %X\n", 
-            slave, dc_systime, dc_start, cycle_time_0, cycle_time_1, dc_active);
+            slave, rel_rtc_time, dc_start, cycle_time_0, cycle_time_1, dc_active);
 }
 
 /* latched port time of slave */
@@ -298,6 +288,11 @@ int ec_dc_config(ec_t *pec) {
                 dt3 = ec_dc_porttime(pec, parent, slv->parentport) -
                     ec_dc_porttime(pec, parent, ec_dc_prevport(pec, parent, slv->parentport));
 
+                int p1 = ec_dc_porttime(pec, parent, slv->parentport);
+                int p2 = ec_dc_porttime(pec, parent, ec_dc_prevport(pec, parent, slv->parentport));
+                ec_log(10, "DISTRIBUTED_CLOCK", "ports %d, %d, times %d, %d\n", 
+                    slv->parentport, ec_dc_prevport(pec, parent, slv->parentport), p1, p2);
+
                 /* current slave has children */
                 /* those childrens delays need to be substacted */
                 if (slv->link_cnt > 1)
@@ -317,6 +312,9 @@ int ec_dc_config(ec_t *pec) {
                 /* calculate current slave delay from delta times */
                 /* assumption : forward delay equals return delay */
                 slv->pdelay = ((dt3 - dt1) / 2) + dt2 + pec->slaves[parent].pdelay;
+
+                ec_log(10, "DISTRIBUTED_CLOCK", "slave %d, dt1 %d, dt2 %d, dt3 %d\n", 
+                        slave, dt1, dt2, dt3);
 
                 ec_log(10, "DISTRIBUTED_CLOCK", "slave %d, sysdelay %d\n", slave, slv->pdelay);
                 /* write propagation delay*/
@@ -338,6 +336,10 @@ int ec_dc_config(ec_t *pec) {
             }
         }
     }
+
+    uint64_t temp_dc;
+    ec_frmw(pec, pec->dc.master_address, EC_REG_DCSYSTIME,
+            &temp_dc, 8, &wkc);
 
     return 1;
 }

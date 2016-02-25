@@ -500,6 +500,8 @@ int ec_open(ec_t **ppec, const char *ifname, int prio, int cpumask) {
     (*ppec)->dc.rtc_cycle = 0;
     (*ppec)->dc.rtc_count = 0;
 
+    (*ppec)->eeprom_log = 1;
+
     datagram_pool_open(&(*ppec)->pool, 1000);
         
     if (hw_open(&(*ppec)->phw, ifname, prio, cpumask) == -1) {
@@ -961,7 +963,7 @@ int ec_receive_distributed_clocks_sync(ec_t *pec, ec_timer_t *timeout) {
                     goto sto_exit;
                 }
 
-//                ec_log(100, __func__, "dc_sto adding %d [ns]\n", pec->dc.act_diff);
+//                ec_log(100, __func__, "dc_sto adding %d [ns]\n", pec->dc.act_diff);                                
 
                 pec->dc.dc_sto += pec->dc.act_diff;
                 memset(&p_de_dc_sto->datagram, 0, sizeof(ec_datagram_t) + 8 + 2);

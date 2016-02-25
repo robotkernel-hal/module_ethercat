@@ -206,8 +206,9 @@ typedef struct ec {
     ec_pd_group_t *pd_groups;
 
     ec_dc_info_t dc;
-
     ec_async_message_loop_t *async_loop;
+    
+    int eeprom_log;
 } ec_t;
 
 #ifdef __cplusplus
@@ -366,8 +367,9 @@ int ec_receive_distributed_clocks_sync(ec_t *pec, ec_timer_t *timeout);
     ec_transceive((pec), EC_CMD_FPRW, ((uint32_t)(ado) << 16) | ((adp) & 0xFFFF), \
             (uint8_t *)(data), (datalen), (wkc))
 
-#define ec_frmw(pec, ado, data, datalen, wkc) \
-    ec_transceive((pec), EC_CMD_FRMW, ((uint32_t)(ado) << 16), (uint8_t *)(data), (datalen), (wkc))
+#define ec_frmw(pec, adp, ado, data, datalen, wkc) \
+    ec_transceive((pec), EC_CMD_FRMW, ((uint32_t)(ado) << 16) | ((adp) & 0xFFFF), \
+            (uint8_t *)(data), (datalen), (wkc))
 
 #endif // __LIBETHERCAT_EC_H__
 
