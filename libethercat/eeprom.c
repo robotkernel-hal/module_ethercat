@@ -164,6 +164,76 @@ func_exit:
     return ret;
 }
 
+//! write 32-bit word of eeprom
+/*!
+ * \param pec pointer to ethercat master
+ * \param slave ethercat slave number
+ * \param eepadr address in eeprom
+ * \param returns data value
+ * \return 0 on success
+ */
+int ec_eepromwrite(ec_t *pec, uint16_t slave, uint32_t eepadr, uint32_t *data) {
+    ec_eeprom_to_ec(pec, slave);
+    
+    int ret = 0, retry_cnt = 100;
+    uint16_t wkc = 0, eepcsr = 0x0100; // write access
+   
+    ec_log(10, "EEPROM_WRITE", "writing %X\n", eepadr);
+    do {
+        eepcsr = 0;
+        ec_fprd(pec, pec->slaves[slave].fixed_address, EC_REG_EEPCTL,
+                (uint8_t *)&eepcsr, sizeof(eepcsr), &wkc);
+        if (--retry_cnt == 0) {
+            ec_log(10, "EEPROM_WRITE", "reading eepctl failed, wkc %d\n", wkc);
+            ret = -1;
+            goto func_exit;
+        }
+    } while (eepcsr & 0x0100);
+
+    ec_fpwr(pec, pec->slaves[slave].fixed_address, EC_REG_EEPADR,
+            (uint8_t *)&eepadr, sizeof(eepadr), &wkc);
+    if (wkc != 1) {
+        ec_log(10, "EEPROM_WRITE", "writing eepadr failed\n");
+        ret = -1;
+        goto func_exit;
+    }
+    
+    ec_fpwr(pec, pec->slaves[slave].fixed_address, EC_REG_EEPDAT,
+            (uint8_t *)data, sizeof(*data), &wkc);
+    if (wkc != 1) {
+        ec_log(10, "EEPROM_WRITE", "writing data failed\n");
+        ret = -1;
+        goto func_exit;
+    }
+
+    eepcsr = 0x0201;
+    ec_fpwr(pec, pec->slaves[slave].fixed_address, EC_REG_EEPCTL,
+            (uint8_t *)&eepcsr, sizeof(eepcsr), &wkc);
+    if (wkc != 1) {
+        ec_log(10, "EEPROM_WRITE", "wirting eepctl failed\n");
+        ret = -1;
+        goto func_exit;
+    }
+
+    retry_cnt = 100;
+
+    do {
+        eepcsr = 0;
+        ec_fprd(pec, pec->slaves[slave].fixed_address, EC_REG_EEPCTL,
+                (uint8_t *)&eepcsr, sizeof(eepcsr), &wkc);
+        if (--retry_cnt == 0) {
+            ec_log(10, "EEPROM_WRITE", "reading eepctl failed, wkc %d\n", wkc);
+            ret = -1;
+            goto func_exit;
+        }
+    } while (eepcsr & 0x0100);
+
+func_exit:
+    ec_eeprom_to_pdi(pec, slave);
+
+    return ret;
+}
+
 //! read a burst of eeprom
 /*!
  * \param pec pointer to ethercat master
@@ -187,6 +257,31 @@ int ec_eepromread_len(ec_t *pec, uint16_t slave, uint32_t eepadr, uint8_t *buf, 
     return 0;
 };
 
+//! write a burst of eeprom
+/*!
+ * \param pec pointer to ethercat master
+ * \param slave ethercat slave number
+ * \param eepadr address in eeprom
+ * \param buf return buffer
+ * \param buflen length in bytes to return
+ * \return 0 on success
+ */
+int ec_eepromwrite_len(ec_t *pec, uint16_t slave, uint32_t eepadr, uint8_t *buf, size_t buflen) {
+    unsigned offset = 0, i;
+
+    while (offset < buflen) {
+        uint32_t val;
+        for (i = 0; (offset < buflen) && (i < 4); ++i)
+            ((uint8_t *)&val)[i] = buf[offset+i];
+
+        ec_eepromwrite(pec, slave, eepadr+(offset/2), &val);
+
+        ++offset;
+    }
+
+    return 0;
+};
+
 //! read out whole eeprom and categories
 /*!
  * \param pec pointer to ethercat master
@@ -195,7 +290,7 @@ int ec_eepromread_len(ec_t *pec, uint16_t slave, uint32_t eepadr, uint8_t *buf, 
 void ec_eeprom_dump(ec_t *pec, uint16_t slave) {
     int cat_offset = EC_EEPROM_ADR_CAT_OFFSET;
     uint16_t size, cat_len, cat_type = 0;
-    uint32_t value32;
+    uint32_t value32 = 0;
     ec_slave_t *slv = &pec->slaves[slave];
 
 #define eeprom(adr, mem) \
@@ -229,7 +324,8 @@ void ec_eeprom_dump(ec_t *pec, uint16_t slave) {
                 eeprom_log(100, "EEPROM_STRINGS", "slave %d, cat_len %d\n", 
                         slave, cat_len);
                 
-                uint8_t *buf = malloc(cat_len*2);
+                uint8_t *buf = malloc(cat_len*2 + 1);
+                buf[cat_len*2] = 0;
                 ec_eepromread_len(pec, slave, cat_offset+2, buf, cat_len*2);
 
                 int local_offset = 0, i;

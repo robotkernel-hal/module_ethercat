@@ -171,6 +171,17 @@ int ec_eeprom_to_ec(struct ec *pec, uint16_t slave);
 int ec_eepromread(struct ec *pec, uint16_t slave, 
         uint32_t eepadr, uint32_t *data);
 
+//! write 32-bit word to eeprom
+/*!
+ * \param pec pointer to ethercat master
+ * \param slave ethercat slave number
+ * \param eepadr address in eeprom
+ * \param data data to write
+ * \return 0 on success
+ */
+int ec_eepromwrite(struct ec *pec, uint16_t slave, 
+        uint32_t eepadr, uint32_t *data);
+
 //! read a burst of eeprom
 /*!
  * \param pec pointer to ethercat master
@@ -181,6 +192,18 @@ int ec_eepromread(struct ec *pec, uint16_t slave,
  * \return 0 on success
  */
 int ec_eepromread_len(struct ec *pec, uint16_t slave, 
+        uint32_t eepadr, uint8_t *buf, size_t buflen);
+
+//! write a burst of eeprom
+/*!
+ * \param pec pointer to ethercat master
+ * \param slave ethercat slave number
+ * \param eepadr address in eeprom
+ * \param buf return buffer
+ * \param buflen length in bytes to return
+ * \return 0 on success
+ */
+int ec_eepromwrite_len(struct ec *pec, uint16_t slave, 
         uint32_t eepadr, uint8_t *buf, size_t buflen);
 
 //! read out whole eeprom and categories
