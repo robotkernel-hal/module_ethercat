@@ -108,6 +108,9 @@ void ec_async_checK_slave(ec_async_message_loop_t *paml, uint16_t slave) {
         ec_log(100, "ec_async_thread", "slave %2d: wkc error on "
                 "getting slave state\n", slave);
     else {
+        ec_log(10, "ec_async_thread", "slave %2d: state 0x%02X, al statuscode 0x%02X\n", 
+                slave, state, alstatcode);
+
         // if state != expected_state -> repair
         if (state != paml->pec->slaves[slave].expected_state) {
             wkc = ec_slave_state_transition(paml->pec, slave, paml->pec->slaves[slave].expected_state);
