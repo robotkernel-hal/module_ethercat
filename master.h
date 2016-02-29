@@ -84,11 +84,14 @@ class master :  public robotkernel::module_base,
              */
             void unregister_interfaces();
 
+            int _recv_timeout;
             int _index;
             int _divisor;
             int _divisor_cnt;
             std::list<int> _slaves;
             robotkernel::kernel::interface_id_t _pd_intf;
+            
+            ec_timer_t timeout;
         } group_t;
 
         typedef std::map<int, group *> group_map_t;

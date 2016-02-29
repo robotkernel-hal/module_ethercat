@@ -70,6 +70,7 @@ master::group::group(int index, const YAML::Node& node) {
     _index          = index;
     _divisor        = get_as<int>(node, "divisor");
     _divisor_cnt    = 0;
+    _recv_timeout   = get_as<int>(node, "recv_timeout", 1000000);
     _pd_intf        = NULL;
 
     for (YAML::const_iterator it = node["slaves"].begin(); 
@@ -308,8 +309,6 @@ int master::set_state(module_state_t new_state) {
             break;
         case module_state_op:
             for (group_map_t::iterator it = _group_info.begin(); it != _group_info.end(); ++it) {
-                int g_nr = it->first;
-
                 for (std::list<int>::iterator it2 = it->second->_slaves.begin();
                         it2 != it->second->_slaves.end(); ++it2) {
 
@@ -761,9 +760,8 @@ int master::request(int reqcode, void* ptr) {
 //! module trigger callback
 void master::trigger() {
     int i = 0;
-    ec_timer_t timeout;
-    ec_timer_init(&timeout, 250000);
-
+    ec_timer_t dc_timeout;
+    
     if (state >= module_state_safeop) {
         for (i = 0; i < _pec->pd_group_cnt; ++i) {
             group *g = _group_info[i];
@@ -773,10 +771,13 @@ void master::trigger() {
             // reset divisor cnt and queue datagram
             g->_divisor_cnt = 0;
             ec_send_process_data_group(_pec, i);
+            ec_timer_init(&g->timeout, g->_recv_timeout);
         }
 
-        if (_pec->dc.have_dc) 
+        if (_pec->dc.have_dc) {
             ec_send_distributed_clocks_sync(_pec);
+            ec_timer_init(&dc_timeout, 1E6);
+        }
     }
 
     hw_tx(_pec->phw);
@@ -788,7 +789,7 @@ void master::trigger() {
             if (g->_divisor_cnt != 0)
                 continue; 
 
-            ec_receive_process_data_group(_pec, i, &timeout);
+            ec_receive_process_data_group(_pec, i, &g->timeout);
 
             for (std::list<int>::iterator it = g->_slaves.begin(); it != g->_slaves.end(); ++it)
                 trigger_modules(*it);
@@ -807,7 +808,7 @@ void master::trigger() {
         }
 
         if (_pec->dc.have_dc)
-            ec_receive_distributed_clocks_sync(_pec, &timeout);
+            ec_receive_distributed_clocks_sync(_pec, &dc_timeout);
     }
 
     pd_cookie++;
