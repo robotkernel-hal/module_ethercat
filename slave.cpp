@@ -26,6 +26,7 @@
 #include "master.h"
 #include "robotkernel/kernel.h"
 #include "robotkernel/helpers.h"
+#include "string_util/string_util.h"
 #include <iomanip>
 #include <stdio.h>
 
@@ -61,7 +62,13 @@ slave::coe_init_cmd::coe_init_cmd(const YAML::Node& node) {
     subindex   = get_as<int>(node, "subindex", 0);
     ca         = get_as<int>(node, "ca", 0);
     transition = (transition_t)get_as<int>(node, "transition", 0x24);
-    convert_string_to_hex(get_as<string>(node, "data"), &data, &datalen);
+    data       = NULL;
+    value      = "";
+
+    if (node["data"]) 
+        convert_string_to_hex(get_as<string>(node, "data"), &data, &datalen);
+    if (node["value"])
+        value = get_as<string>(node, "value");
 }
 
 //! destruction
@@ -255,15 +262,162 @@ bool slave::prepare_state_transition(transition_t transition) {
             master_dev->log(verbose, "sending coe init "
                     "command slave %d, index %X\n", index, cmd->index);
 
-            uint8_t *buf = (uint8_t *)cmd->data;
-            size_t buf_len = cmd->datalen;
-            uint32_t abort_code = 0;
+            if (cmd->data) {
+                uint8_t *buf = (uint8_t *)cmd->data;
+                size_t buf_len = cmd->datalen;
+                uint32_t abort_code = 0;
 
-            int wkc = ec_coe_sdo_write(master_dev->_pec, index, cmd->index, 
-                    cmd->subindex, cmd->ca, buf, &buf_len, &abort_code);
-            if (!wkc) {
-                master_dev->log(info, "writing sdo, %s\n",
-                     "todo");//ecx_elist2string(ctx));
+                int wkc = ec_coe_sdo_write(master_dev->_pec, index, cmd->index, 
+                        cmd->subindex, cmd->ca, buf, &buf_len, &abort_code);
+                if (!wkc) {
+                    master_dev->log(info, "writing sdo, %s\n",
+                            "todo");//ecx_elist2string(ctx));
+                }
+            } else {
+                // get description
+                ec_coe_sdo_entry_desc_t entry_desc;
+                entry_desc.data = NULL;
+                int ret2 = ec_coe_sdo_entry_desc_read(master_dev->_pec, index, 
+                        cmd->index, cmd->subindex, 0x7F, &entry_desc);
+
+                master_dev->log(warning, "desc returned %d, data_len %d\n", ret2, entry_desc.data_len);
+                if (ret2 > 0) {
+                    py_value *pval      = eval_full(cmd->value);
+                    py_int *pintval     = dynamic_cast<py_int *>(pval);
+                    py_long *plongval   = dynamic_cast<py_long *>(pval);
+                    py_float *pfloatval = dynamic_cast<py_float *>(pval);
+                    py_special *pspval  = dynamic_cast<py_special *>(pval);
+                
+                    size_t data_len = (entry_desc.bit_length+7)/8;
+                    uint8_t *data = new uint8_t[data_len];
+
+                    switch (entry_desc.data_type) {
+                        case ECT_BOOLEAN:
+                            if (!pspval)
+                                break;
+
+                            (*(uint8_t *)data) = (bool)*pspval;
+                            break;
+                        case ECT_INTEGER8:
+                            if (!pintval) 
+                                break;
+
+                            (*(int8_t *)data) = (int)*pintval;
+                            break;
+                        case ECT_INTEGER16:
+                            if (!pintval)
+                                break;
+
+                            (*(int16_t *)data) = (int)*pintval;
+                            break;
+                        case ECT_INTEGER32:
+                        case ECT_INTEGER24:
+                            if (!pintval)
+                                break;
+
+                            (*(int32_t *)data) = (int)*pintval;
+                            break;
+                        case ECT_INTEGER64: {
+                            if (!pintval)
+                                break;
+
+                            if (plongval) 
+                                (*(int64_t *)data) = (int64_t)*plongval;
+                            else
+                                (*(int64_t *)data) = (int)*pintval;
+                            break;
+                        }
+                        case ECT_UNSIGNED8:
+                            if (!pintval)
+                                break;
+
+                            (*(uint8_t *)data) = (unsigned int)*pintval;
+                            break;
+                        case ECT_UNSIGNED16:
+                            master_dev->log(warning, "this case unsigned 16\n");
+                            if (!pintval)
+                                break;
+
+                            (*(uint16_t *)data) = (unsigned int)*pintval;
+                            break;
+                        case ECT_UNSIGNED32:
+                        case ECT_UNSIGNED24:
+                            if (!pintval)
+                                break;
+
+                            (*(uint32_t *)data) = (unsigned int)*pintval;
+                            break;
+                        case ECT_UNSIGNED64: {
+                            if (!pintval)
+                                break;
+
+                            if (plongval) 
+                                (*(uint64_t *)data) = (int64_t)*plongval;
+                            else
+                                (*(uint64_t *)data) = (unsigned int)*pintval;
+                            break;
+                        }
+                        case ECT_REAL32:
+                            if (pfloatval)
+                                (*(float *)data) = (float)*pfloatval;
+                            else if (pintval)
+                                (*(float *)data) = (float)*pintval;
+                            else if (plongval)
+                                (*(float *)data) = (float)*plongval;
+                            break;
+                        case ECT_REAL64:
+                            if (pfloatval) 
+                                (*(float *)data) = (float)*pfloatval;
+                            else if (pintval)
+                                (*(float *)data) = (float)*pintval;
+                            else if (plongval)
+                                (*(float *)data) = (float)*plongval;
+                            break;
+                        case ECT_BIT1:
+                        case ECT_BIT2:
+                        case ECT_BIT3:
+                        case ECT_BIT4:
+                        case ECT_BIT5:
+                        case ECT_BIT6:
+                        case ECT_BIT7:
+                        case ECT_BIT8:
+                        case ECT_VISIBLE_STRING:
+                            break;
+                        case ECT_OCTET_STRING: {
+                            py_list *plist  = dynamic_cast<py_list *>(pval);
+                            if (!plist)
+                                break;
+
+                            int num = 0;
+                            for (py_list_value_t::iterator it = plist->value.begin();
+                                    it != plist->value.end(); ++it) {
+                                //py_long *plongval2     = dynamic_cast<py_long *>(*it);
+                                py_int *pintval2     = dynamic_cast<py_int *>(*it);
+                                data[num++] = (int)*pintval2;
+                            }
+                            break;
+                        }
+                        default:
+                            break;
+                    }
+
+                    printf("data: ");
+                    for (int q = 0; q < data_len; ++q)
+                        printf("%02X ", data[q]);
+                    printf("\n");
+                    uint32_t abort_code = 0;
+                    int wkc = ec_coe_sdo_write(master_dev->_pec, index, cmd->index, 
+                            cmd->subindex, cmd->ca, data, &data_len, &abort_code);
+                    if (!wkc) {
+                        master_dev->log(info, "writing sdo, %s\n",
+                                "todo");//ecx_elist2string(ctx));
+                    }
+
+                    if (pval)
+                        delete pval;
+                    if (data)
+                        delete data;
+                }
             }
         } 
     }
@@ -327,6 +481,27 @@ void slave::memory_request(int code, memory_t *memreq) {
             break;
         }
         case MOD_REQUEST_MEMORY_WRITE: {
+            uint16_t address = MEM_ADDRESS(memreq->address);
+            switch (memreq->address & MEM_TYPE_MASK) {
+                case MEM_TYPE_SLAVE_EEPROM:
+                    master_dev->log(verbose, "slave %d: writing eeprom address 0x%X\n", 
+                            index, address);
+                    ec_eepromwrite_len(master_dev->_pec, index, address, memreq->data, memreq->length);
+                    break;
+                case MEM_TYPE_SLAVE_MEM:
+                    {
+                        uint16_t wkc;
+                        master_dev->log(verbose, "slave %d: writing esc memory address 0x%X, len %d\n", 
+                                index, address, memreq->length);
+
+                        for (unsigned offset = 0; offset < memreq->length; offset+=100) {
+                            uint32_t act_len = min(100, memreq->length - offset);
+
+                            ec_fpwr(master_dev->_pec, master_dev->_pec->slaves[index].fixed_address, 
+                                    address + offset, memreq->data + offset, act_len, &wkc);
+                        }
+                    }
+            }
             break;
         }
         case MOD_REQUEST_MEMORY_GET_INFO: {
