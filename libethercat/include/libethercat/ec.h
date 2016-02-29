@@ -209,6 +209,7 @@ typedef struct ec {
     ec_async_message_loop_t *async_loop;
     
     int eeprom_log;
+    ec_state_t master_state;
 } ec_t;
 
 #ifdef __cplusplus

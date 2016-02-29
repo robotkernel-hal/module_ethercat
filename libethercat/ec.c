@@ -441,6 +441,9 @@ int ec_set_state(ec_t *pec, ec_state_t state) {
             break;
     }
 
+    if (ret == 0)
+        pec->master_state = state;
+
     return ret;
 }
 
@@ -772,7 +775,8 @@ int ec_send_process_data_group(ec_t *pec, int group) {
     pd->p_de->datagram.adr = pd->log;
     pd->p_de->datagram.len = pd->log_len;
     pd->p_de->datagram.irq = 0;
-    memcpy(ec_datagram_payload(&pd->p_de->datagram), pd->pd, pd->pdout_len);
+    if (pd->pd)
+        memcpy(ec_datagram_payload(&pd->p_de->datagram), pd->pd, pd->pdout_len);
 
     pd->p_de->user_cb = cb_block;
     pd->p_de->user_arg = pd->p_idx;
@@ -806,10 +810,12 @@ int ec_receive_process_data_group(ec_t *pec, int group, ec_timer_t *timeout) {
                 group, strerror(errno));
     } else {
         wkc = ec_datagram_wkc(&pd->p_de->datagram);
-        memcpy(pd->pd + pd->pdout_len, ec_datagram_payload(&pd->p_de->datagram) + 
-                pd->pdout_len, pd->pdin_len);
+        if (pd->pd)
+            memcpy(pd->pd + pd->pdout_len, ec_datagram_payload(&pd->p_de->datagram) + 
+                    pd->pdout_len, pd->pdin_len);
         
-        if (wkc != pd->wkc_expected) {
+        if ((pec->master_state == EC_STATE_SAFEOP || pec->master_state == EC_STATE_OP) 
+            && wkc != pd->wkc_expected) {
             if ((wkc_mismatch_cnt++%1000) == 0) {
                 ec_log(10, __func__, "group %2d: working counter mismatch got %u, expected %u, "
                         "slave_cnt %d, mismatch_cnt %d\n", group, wkc, pd->wkc_expected, 
