@@ -56,7 +56,7 @@ void ec_dc_sync0(ec_t *pec, uint16_t slave, int active, uint32_t cycle_time, int
        plus the shifttime (can be negative)
        This insures best sychronisation between slaves, slaves with the same CyclTime
        will sync at the same moment (you can use CyclShift to shift the sync) */
-    uint64_t rel_rtc_time = (pec->dc.rtc_time - pec->dc.rtc_sto);
+    uint64_t rel_rtc_time = (pec->dc.timer_prev - pec->dc.rtc_sto);
     int64_t dc_start = rel_rtc_time + SYNC_DELAY + cycle_shift;
    
     // program first trigger time and cycle time
@@ -101,7 +101,7 @@ void ec_dc_sync01(ec_t *pec, uint16_t slave, int active,
        plus the shifttime (can be negative)
        This insures best sychronisation between slaves, slaves with the same CyclTime
        will sync at the same moment (you can use CyclShift to shift the sync) */
-    uint64_t rel_rtc_time = (pec->dc.rtc_time - pec->dc.rtc_sto);
+    uint64_t rel_rtc_time = (pec->dc.timer_prev - pec->dc.rtc_sto);
     int64_t dc_start = rel_rtc_time + SYNC_DELAY + cycle_shift;
    
     // program first trigger time and cycle time
