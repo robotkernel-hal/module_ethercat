@@ -887,7 +887,7 @@ int master::set_pdout(set_pd_t *pdout) {
                     name.c_str(), difference, _cmd_delay);
         }
 
-        _cmd_delay += difference - _cmd_delay;
+        _cmd_delay = difference;
 
         log(warning, "you are commanding to SLOW! Increased cmd_delay to %d!!!\n", 
                 (unsigned int)_cmd_delay);
