@@ -124,6 +124,7 @@ master::master(const std::string& name, const YAML::Node& node)
     _recv_mask       = get_as<int>(node, "recv_mask");
     _log_eeprom_data = get_as<bool>(node, "log_eeprom_data");
     _pec             = NULL;
+    _trigger_interval= get_as<int>(node, "trigger_interval", 0);
             
     dc_offset_compensation_cycles 
                 = get_as<int>(node, "dc_offset_compensation_cycles", 250);
@@ -757,10 +758,23 @@ int master::request(int reqcode, void* ptr) {
     return ret;
 }
 
+ec_timer_t trigger_timer;
+ec_timer_t package_duration;
+
 //! module trigger callback
 void master::trigger() {
     int i = 0;
     ec_timer_t dc_timeout;
+
+    ec_timer_init(&package_duration, 200000);
+
+    if (_trigger_interval) {
+        if (ec_timer_expired(&trigger_timer))
+            log(warning, "last trigger timer was > %d us away!\n", _trigger_interval/1E3);
+
+        ec_timer_init(&trigger_timer, _trigger_interval);
+    }
+   
     
     if (state >= module_state_safeop) {
         for (i = 0; i < _pec->pd_group_cnt; ++i) {
@@ -810,6 +824,9 @@ void master::trigger() {
         if (_pec->dc.have_dc)
             ec_receive_distributed_clocks_sync(_pec, &dc_timeout);
     }
+    
+    if (ec_timer_expired(&package_duration))
+        log(warning, "package duration was longer than 200 us!\n");
 
     pd_cookie++;
     pthread_cond_signal(&pd_cond);

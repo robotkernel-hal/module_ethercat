@@ -110,6 +110,8 @@ class master :  public robotkernel::module_base,
         int dc_offset_compensation_cycles;
         int dc_offset_compensation_max;
         int dc_timer_override;
+
+        int _trigger_interval;
             
         robotkernel::kernel::interface_id_t dc_pd_intf;
 
