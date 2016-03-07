@@ -805,6 +805,9 @@ void master::trigger() {
 
             ec_receive_process_data_group(_pec, i, &g->timeout);
 
+            pd_cookie++;
+            pthread_cond_signal(&pd_cond);
+            
             for (std::list<int>::iterator it = g->_slaves.begin(); it != g->_slaves.end(); ++it)
                 trigger_modules(*it);
         }
@@ -904,7 +907,7 @@ int master::set_pdout(set_pd_t *pdout) {
                     name.c_str(), difference, _cmd_delay);
         }
 
-        _cmd_delay += difference - _cmd_delay;
+        _cmd_delay = difference;
 
         log(warning, "you are commanding to SLOW! Increased cmd_delay to %d!!!\n", 
                 (unsigned int)_cmd_delay);
