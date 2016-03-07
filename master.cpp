@@ -791,6 +791,9 @@ void master::trigger() {
 
             ec_receive_process_data_group(_pec, i, &g->timeout);
 
+	    pd_cookie++;
+	    pthread_cond_signal(&pd_cond);
+	    
             for (std::list<int>::iterator it = g->_slaves.begin(); it != g->_slaves.end(); ++it)
                 trigger_modules(*it);
         }
@@ -810,9 +813,6 @@ void master::trigger() {
         if (_pec->dc.have_dc)
             ec_receive_distributed_clocks_sync(_pec, &dc_timeout);
     }
-
-    pd_cookie++;
-    pthread_cond_signal(&pd_cond);
 }
 
 //! async handler thread
