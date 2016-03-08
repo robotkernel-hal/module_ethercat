@@ -122,7 +122,7 @@ master::master(const std::string& name, const YAML::Node& node)
     _ifname          = get_as<string>(node, "ifname");
     _recv_prio       = get_as<int>(node, "recv_prio");
     _recv_mask       = get_as<int>(node, "recv_mask");
-    _log_eeprom_data = get_as<bool>(node, "log_eeprom_data");
+    _log_eeprom_data = get_as<bool>(node, "log_eeprom_data", false);
     _pec             = NULL;
     _trigger_interval= get_as<int>(node, "trigger_interval", 0);
             
