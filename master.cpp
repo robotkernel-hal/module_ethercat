@@ -832,9 +832,6 @@ void master::trigger() {
     
     if (ec_timer_expired(&package_duration))
         log(warning, "package duration was longer than 200 us!\n");
-
-    pd_cookie++;
-    pthread_cond_signal(&pd_cond);
 }
 
 //! async handler thread
