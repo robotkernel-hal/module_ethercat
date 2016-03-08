@@ -808,6 +808,8 @@ void master::trigger() {
             pd_cookie++;
             pthread_cond_signal(&pd_cond);
             
+            trigger_modules(ECAT_SLAVE_ID_GROUP | g->_index);
+
             for (std::list<int>::iterator it = g->_slaves.begin(); it != g->_slaves.end(); ++it)
                 trigger_modules(*it);
         }
