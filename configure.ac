@@ -2,16 +2,13 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.63])
-AC_INIT([module_ethercat], [4.0.4], [robert.burger@dlr.de])
+AC_INIT([module_ethercat], [4.0.5], [robert.burger@dlr.de])
 AM_INIT_AUTOMAKE([-Wall -Werror foreign subdir-objects])
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_MACRO_DIR([m4])
 
-# load env-file with each make invocation
-if test -n "$SOURCE_ENV"; then
-   echo "loading $SOURCE_ENV"
-   source $SOURCE_ENV
-fi
+RMPM_ENV
+RMPM_ARCH
 
 m4_ifdef([AM_PROG_AR], [AM_PROG_AR])
 
@@ -21,34 +18,6 @@ AC_PROG_AWK
 AC_PROG_INSTALL
 AC_PROG_LIBTOOL
 AC_PROG_LN_S
-AC_PROG_MAKE_SET
-
-if test -z "$MAKE"; then
-   MAKE=make
-fi
-# expand path with each make invocation
-if test -n "$TOOLCHAIN"; then
-   MAKE="$MAKE PATH=$TOOLCHAIN:$PATH"
-   PATH=$TOOLCHAIN:$PATH
-fi
-# load env-file with each make invocation
-if test -n "$SOURCE_ENV"; then
-   echo "loading $SOURCE_ENV"
-   source $SOURCE_ENV
-   MAKE="source $SOURCE_ENV; $MAKE"
-fi
-if test -n "$MAKE"; then
-   SET_MAKE="MAKE := $MAKE"
-fi
-AC_SUBST(SET_MAKE)
-
-# setup rmpm
-RMPM_ARCH
-
-if test "$rmpm_host" == "arm-angstrom-linux-gnueabi"; then
-   ARCH_CFLAGS="-DNO_RDTSC"
-fi
-AC_SUBST(ARCH_CFLAGS)
 
 PKG_CHECK_MODULES([ROBOTKERNEL], [robotkernel], [], [
                     RMPM_CHECK_MODULES([ROBOTKERNEL], [robotkernel.robotkernel])
@@ -66,43 +35,7 @@ PKG_CHECK_MODULES([INTERFACE_PROCESS_DATA_INSPECTION], [interface_process_data_i
                     RMPM_CHECK_MODULES([INTERFACE_PROCESS_DATA_INSPECTION], [robotkernel.interface_process_data_inspection])
                    ])
 
-# try to automatically find ln
-LN_GENERATE_ARGS='-md_dir $(srcdir)/share/ln/message_definitions'
-if test "${LN_LIBS}" == ""; then
-    if test -n "${LN_BASE}"; then
-        AC_CHECK_HEADER(${LN_BASE}/include/ln.h, [ 
-                # found it in release dir!
-                LN_LIBS="-L${LN_BASE}/lib/$rmpm_host -lln"
-                LN_CFLAGS="-I${LN_BASE}/include/"
-                LN_GENERATE="env -i ${LN_BASE}/scripts/ln_generate $LN_GENERATE_ARGS"
-                STRING_UTILS_LIBS="-L$LN_BASE/lib/$rmpm_host -lstring_util"
-            ], [
-                # not found...
-                AC_CHECK_HEADER(${LN_BASE}/library/include/ln.h, [
-                        # found it in source dir!
-			echo "found LN in source dir!"
-                        LN_LIBS="-L${LN_BASE}/library/obj/$rmpm_host -lln"
-                        LN_CFLAGS="-I${LN_BASE}/library/include/ -I${LN_BASE}/contrib/libstring_util/include"
-                        LN_GENERATE="env -i ${LN_BASE}/library/tools/ln_generate $LN_GENERATE_ARGS"
-                        STRING_UTILS_LIBS="-L$LN_BASE/contrib/libstring_util/obj/$rmpm_host -lstring_util"
-                    ])
-            ])
-    fi
-fi
-
-# try to find ln via pkg-config and rmpm, if not already done in above step
-PKG_CHECK_MODULES([LN], [libln], [], [
-                    RMPM_CHECK_MODULES([LN], [software.links_and_nodes])
-                    LN_GENERATE="env -i $LN_BASE/scripts/ln_generate $LN_GENERATE_ARGS"
-                    STRING_UTILS_LIBS="-L$LN_BASE/lib/$rmpm_host -lstring_util"
-                   ])
-AM_CONDITIONAL([HAVE_LN], [test -n "$LN_LIBS"])
-AC_SUBST(LN_GENERATE)
-AC_DEFINE_UNQUOTED(LN_LIBS, "$LN_LIBS", [linked links and nodes library])
-AC_SUBST(LN_LIBS)
-AC_SUBST(LN_VERSION)
-AC_SUBST(YAML_VERSION)
-AC_SUBST(STRING_UTILS_LIBS)
+RM_FIND_LN_FROM_ENV
 
 AC_DEFINE_UNQUOTED(BUILD_DATE,"`date -u`",[Date (usually date of extraction from SVN).])
 AC_DEFINE_UNQUOTED(BUILD_USER,"`whoami`",[User (usually user logged in on shell).])
