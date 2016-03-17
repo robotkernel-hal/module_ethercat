@@ -187,6 +187,8 @@ typedef struct PACKED ec_dc_info {
     int timer_override;
     int64_t timer_prev;
 
+    int mode;
+
     datagram_entry_t *p_de_dc;
     idx_entry_t *p_idx_dc;
 } PACKED ec_dc_info_t;

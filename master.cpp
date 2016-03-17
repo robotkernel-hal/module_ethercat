@@ -154,6 +154,12 @@ master::master(const std::string& name, const YAML::Node& node)
         }
     }
 
+    string dc_mode_string = get_as<string>(node, "dc_mode", "master_clock");
+    if (dc_mode_string == "ref_clock")
+        _dc_mode = dc_mode_ref_clock;
+    else 
+        _dc_mode = dc_mode_master_clock;
+
     int ret = ec_open(&_pec, _ifname.c_str(), _recv_prio, _recv_mask);
     if (ret != 0) 
         throw str_exception("ec_open failed: %s!\n", strerror(ret));
@@ -242,6 +248,7 @@ int master::set_state(module_state_t new_state) {
         case module_state_preop: {
             stop();
             _pec->tx_sync = 1;
+            _pec->dc.mode = (int)_dc_mode;
             
             ec_set_state(_pec, EC_STATE_PREOP);
 
@@ -278,6 +285,16 @@ int master::set_state(module_state_t new_state) {
             break;
         }
         case module_state_safeop:            
+            if (dc_timer_override == -1 && trigger_mod_name != "") {
+                double tmp;
+                kernel::request_cb(trigger_mod_name.c_str(), 
+                        MOD_REQUEST_GET_TRIGGER_INTERVAL, &tmp);
+
+                log(info, "got trigger interval from our trigger module: %+17.13f\n", 
+                        tmp);
+
+                _pec->dc.timer_override = tmp * 1E9;
+            }
             ec_create_pd_groups(_pec, _group_info.size());
             
             // start cyclic operation via trigger
@@ -446,6 +463,13 @@ int master::request(int reqcode, void* ptr) {
             }
 
             remove_trigger_module(*cb);
+            break;
+        }
+        case MOD_REQUEST_TRIGGERED_BY: {
+            char **mdl_name = (char **)ptr;
+
+            log(info, "our trigger module is %s\n", *mdl_name);
+            trigger_mod_name = *mdl_name;
             break;
         }
         case MOD_REQUEST_CANOPEN_OBJECT_DICTIONARY_LIST: {
@@ -758,22 +782,22 @@ int master::request(int reqcode, void* ptr) {
     return ret;
 }
 
-ec_timer_t trigger_timer;
-ec_timer_t package_duration;
+//ec_timer_t trigger_timer;
+//ec_timer_t package_duration;
 
 //! module trigger callback
 void master::trigger() {
     int i = 0;
     ec_timer_t dc_timeout;
 
-    ec_timer_init(&package_duration, 200000);
+//    ec_timer_init(&package_duration, 200000);
 
-    if (_trigger_interval) {
-        if (ec_timer_expired(&trigger_timer))
-            log(warning, "last trigger timer was > %d us away!\n", _trigger_interval/1E3);
+//    if (_trigger_interval) {
+//        if (ec_timer_expired(&trigger_timer))
+//            log(warning, "last trigger timer was > %d us away!\n", _trigger_interval/1E3);
 
-        ec_timer_init(&trigger_timer, _trigger_interval);
-    }
+//        ec_timer_init(&trigger_timer, _trigger_interval);
+//    }
    
     
     if (state >= module_state_safeop) {
@@ -797,6 +821,10 @@ void master::trigger() {
     hw_tx(_pec->phw);
 
     if (state >= module_state_safeop) {
+
+        pd_cookie++;
+        pthread_cond_signal(&pd_cond);
+
         for (i = 0; i < _pec->pd_group_cnt; ++i) {
             group *g = _group_info[i];
 
@@ -805,9 +833,6 @@ void master::trigger() {
 
             ec_receive_process_data_group(_pec, i, &g->timeout);
 
-            pd_cookie++;
-            pthread_cond_signal(&pd_cond);
-            
             trigger_modules(ECAT_SLAVE_ID_GROUP | g->_index);
 
             for (std::list<int>::iterator it = g->_slaves.begin(); it != g->_slaves.end(); ++it)
@@ -826,15 +851,38 @@ void master::trigger() {
             }
         }
 
-        if (_pec->dc.have_dc)
+        if (_pec->dc.have_dc) {
             ec_receive_distributed_clocks_sync(_pec, &dc_timeout);
+
+            if (_pec->dc.mode == 0 && _pec->dc.act_diff != 0) {
+                int64_t int_diff = _pec->dc.act_diff;
+                static bool first_run = true;
+                static double last_diff = 0;
+                double diff = (int_diff / 1E9);
+
+                if (first_run) {
+                    kernel::request_cb(trigger_mod_name.c_str(),
+                            MOD_REQUEST_SHIFT_NEXT_TRIGGER, &diff);
+                    last_diff = 0;
+                    first_run = false;
+                } else {
+                    double tmp;
+                    kernel::request_cb(trigger_mod_name.c_str(), 
+                            MOD_REQUEST_GET_TRIGGER_INTERVAL, &tmp);
+
+                    tmp -= (last_diff-diff)/(_pec->dc.offset_compensation_cnt / 2);
+                    kernel::request_cb(trigger_mod_name.c_str(), 
+                            MOD_REQUEST_SET_TRIGGER_INTERVAL, &tmp);
+                    last_diff = diff;
+                    first_run = true;
+                }
+                _pec->dc.act_diff = 0;
+            }
+        }
     }
     
-    if (ec_timer_expired(&package_duration))
-        log(warning, "package duration was longer than 200 us!\n");
-
-    pd_cookie++;
-    pthread_cond_signal(&pd_cond);
+//    if (ec_timer_expired(&package_duration))
+//        log(warning, "package duration was longer than 200 us!\n");
 }
 
 //! async handler thread

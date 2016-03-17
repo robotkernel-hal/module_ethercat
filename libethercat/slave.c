@@ -105,7 +105,7 @@ int ec_slave_set_state(ec_t *pec, uint16_t slave, ec_state_t state) {
     pec->slaves[slave].expected_state = state;
 
     ec_timer_t timeout;
-    ec_timer_init(&timeout, 5000000000); // 5 second timeout
+    ec_timer_init(&timeout, 500000000); // 5 second timeout
 
     do {
         ec_fpwr(pec, pec->slaves[slave].fixed_address, 

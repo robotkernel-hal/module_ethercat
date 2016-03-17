@@ -953,40 +953,44 @@ int ec_receive_distributed_clocks_sync(ec_t *pec, ec_timer_t *timeout) {
                 pec->dc.prev_rtc = rtc_temp;
                 pec->dc.prev_dc  = dc_temp;
 
-                // sending offset compensation value to dc master clock
-                datagram_entry_t *p_de_dc_sto;
-                idx_entry_t *p_idx_dc_sto;
+                // dc_mode 1 is sync ref_clock to master_clock
+                if (pec->dc.mode == 1) {
+                    // sending offset compensation value to dc master clock
+                    datagram_entry_t *p_de_dc_sto;
+                    idx_entry_t *p_idx_dc_sto;
 
-                // dc system time offset frame
-                if (ec_index_get(pec, &p_idx_dc_sto) != 0) {
-                    ec_log(5, __func__, "error getting ethercat index\n");
-                    goto sto_exit;
+                    // dc system time offset frame
+                    if (ec_index_get(pec, &p_idx_dc_sto) != 0) {
+                        ec_log(5, __func__, "error getting ethercat index\n");
+                        goto sto_exit;
+                    }
+
+                    if (datagram_pool_get(pec->pool, &p_de_dc_sto, NULL) != 0) {
+                        ec_index_put(pec, p_idx_dc_sto);
+                        ec_log(5, __func__, "error getting datagram from pool\n");
+                        goto sto_exit;
+                    }
+
+                    // ec_log(100, __func__, "dc_sto adding %d [ns]\n", pec->dc.act_diff);                                
+
+                    // correct system time offset, sync ref_clock to master_clock
+                    pec->dc.dc_sto += pec->dc.act_diff;
+                    memset(&p_de_dc_sto->datagram, 0, sizeof(ec_datagram_t) + 8 + 2);
+                    p_de_dc_sto->datagram.cmd = EC_CMD_FPWR;
+                    p_de_dc_sto->datagram.idx = p_idx_dc_sto->idx;
+                    p_de_dc_sto->datagram.adr = (EC_REG_DCSYSOFFSET << 16) | pec->dc.master_address;
+                    p_de_dc_sto->datagram.len = sizeof(pec->dc.dc_sto);
+                    p_de_dc_sto->datagram.irq = 0;
+                    memcpy(ec_datagram_payload(&p_de_dc_sto->datagram), &pec->dc.dc_sto, sizeof(pec->dc.dc_sto));
+
+                    // we don't care about the answer, cb_no_reply frees datagram and index
+                    p_idx_dc_sto->pec = pec;
+                    p_de_dc_sto->user_cb = cb_no_reply;
+                    p_de_dc_sto->user_arg = p_idx_dc_sto;
+
+                    // queue frame and trigger tx
+                    datagram_pool_put(pec->phw->tx_low, p_de_dc_sto);
                 }
-
-                if (datagram_pool_get(pec->pool, &p_de_dc_sto, NULL) != 0) {
-                    ec_index_put(pec, p_idx_dc_sto);
-                    ec_log(5, __func__, "error getting datagram from pool\n");
-                    goto sto_exit;
-                }
-
-//                ec_log(100, __func__, "dc_sto adding %d [ns]\n", pec->dc.act_diff);                                
-
-                pec->dc.dc_sto += pec->dc.act_diff;
-                memset(&p_de_dc_sto->datagram, 0, sizeof(ec_datagram_t) + 8 + 2);
-                p_de_dc_sto->datagram.cmd = EC_CMD_FPWR;
-                p_de_dc_sto->datagram.idx = p_idx_dc_sto->idx;
-                p_de_dc_sto->datagram.adr = (EC_REG_DCSYSOFFSET << 16) | pec->dc.master_address;
-                p_de_dc_sto->datagram.len = sizeof(pec->dc.dc_sto);
-                p_de_dc_sto->datagram.irq = 0;
-                memcpy(ec_datagram_payload(&p_de_dc_sto->datagram), &pec->dc.dc_sto, sizeof(pec->dc.dc_sto));
-
-                // we don't care about the answer, cb_no_reply frees datagram and index
-                p_idx_dc_sto->pec = pec;
-                p_de_dc_sto->user_cb = cb_no_reply;
-                p_de_dc_sto->user_arg = p_idx_dc_sto;
-
-                // queue frame and trigger tx
-                datagram_pool_put(pec->phw->tx_low, p_de_dc_sto);
             }
 
 sto_exit:

@@ -116,10 +116,10 @@ slave::slave_dc::slave_dc(const YAML::Node& node) {
     has_dc = true;
     
     type             = get_as<int>(node, "type");
-    cycle_time_0     = get_as<uint32_t>(node, "cycle_time_0");
+    cycle_time_0     = get_as<uint32_t>(node, "cycle_time_0", 0);
     if (type == 1)
-        cycle_time_1 = get_as<uint32_t>(node, "cycle_time_1");
-    cycle_shift      = get_as<uint32_t>(node, "cycle_shift");
+        cycle_time_1 = get_as<uint32_t>(node, "cycle_time_1", 0);
+    cycle_shift      = get_as<uint32_t>(node, "cycle_shift", 0);
 }
 
 //! construction
@@ -231,6 +231,11 @@ bool slave::prepare_state_transition(transition_t transition) {
     if (state_to == 4) {
         // configure distributed clocks if needed 
         if (dc.has_dc) {
+            if (dc.cycle_time_0 == 0)
+                dc.cycle_time_0 = master_dev->_pec->dc.timer_override; 
+            if (dc.cycle_time_1 == 0)
+                dc.cycle_time_1 = master_dev->_pec->dc.timer_override; 
+
             if (dc.type == 1) {
                 master_dev->log(verbose, "slave %2d configuring dc sync 01, "
                         "cycle_times %d/%d, cycle_shift %d\n",

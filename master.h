@@ -100,6 +100,11 @@ class master :  public robotkernel::module_base,
         typedef std::map<int, slave *> slave_map_t;
         slave_map_t _slave_info;
 
+        enum {
+            dc_mode_ref_clock = 0,
+            dc_mode_master_clock = 1
+        } _dc_mode;
+
         ec_t *_pec;
 
         int _recv_prio;
@@ -122,6 +127,7 @@ class master :  public robotkernel::module_base,
         pthread_mutex_t async_lock;
         pthread_cond_t async_cond;
 
+        std::string trigger_mod_name;
     public:
         //! construction
         /*!

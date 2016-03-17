@@ -57,6 +57,8 @@ void ec_dc_sync0(ec_t *pec, uint16_t slave, int active, uint32_t cycle_time, int
        This insures best sychronisation between slaves, slaves with the same CyclTime
        will sync at the same moment (you can use CyclShift to shift the sync) */
     uint64_t rel_rtc_time = (pec->dc.timer_prev - pec->dc.rtc_sto);
+    if (pec->dc.mode == 0) 
+        rel_rtc_time -= pec->dc.act_diff;
     int64_t dc_start = rel_rtc_time + SYNC_DELAY + cycle_shift;
    
     // program first trigger time and cycle time
