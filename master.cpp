@@ -159,6 +159,9 @@ master::master(const std::string& name, const YAML::Node& node)
         _dc_mode = dc_mode_ref_clock;
     else 
         _dc_mode = dc_mode_master_clock;
+    
+    _dc_sync.first_run = true;
+    _dc_sync.last_diff = 0.;
 
     int ret = ec_open(&_pec, _ifname.c_str(), _recv_prio, _recv_mask);
     if (ret != 0) 
@@ -854,29 +857,27 @@ void master::trigger() {
         if (_pec->dc.have_dc) {
             ec_receive_distributed_clocks_sync(_pec, &dc_timeout);
 
-            if (_pec->dc.mode == 0 && _pec->dc.act_diff != 0) {
-                int64_t int_diff = _pec->dc.act_diff;
-                static bool first_run = true;
-                static double last_diff = 0;
-                double diff = (int_diff / 1E9);
+            if (_pec->dc.mode == 00 && (_pec->dc.offset_compensation_cnt == 0)) {
+                double diff = (_pec->dc.act_diff / 1E9);
 
-                if (first_run) {
-                    kernel::request_cb(trigger_mod_name.c_str(),
-                            MOD_REQUEST_SHIFT_NEXT_TRIGGER, &diff);
-                    last_diff = 0;
-                    first_run = false;
-                } else {
+                if (!_dc_sync.first_run) {
                     double tmp;
                     kernel::request_cb(trigger_mod_name.c_str(), 
                             MOD_REQUEST_GET_TRIGGER_INTERVAL, &tmp);
 
-                    tmp -= (last_diff-diff)/(_pec->dc.offset_compensation_cnt / 2);
+                    tmp -= (_dc_sync.last_diff-diff)/(_pec->dc.offset_compensation);
                     kernel::request_cb(trigger_mod_name.c_str(), 
                             MOD_REQUEST_SET_TRIGGER_INTERVAL, &tmp);
-                    last_diff = diff;
-                    first_run = true;
+                   
+                    // shift correction if difference is too big
+                    if (abs(diff) > 0.000005) {
+                        kernel::request_cb(trigger_mod_name.c_str(),
+                                MOD_REQUEST_SHIFT_NEXT_TRIGGER, &diff);
+                        diff = 0;
+                   }
                 }
-                _pec->dc.act_diff = 0;
+                _dc_sync.first_run = false;
+                _dc_sync.last_diff = diff;
             }
         }
     }
@@ -906,6 +907,11 @@ void master::run() {
             ec_slave_t *slv = &_pec->slaves[slave];
 
             if (slv->eeprom.mbx_supported && slv->mbx_read.sm_state) {
+                if (slv->mbx_read.skip_next == 1) {
+                    slv->mbx_read.skip_next = 0;
+                    continue;
+                }
+
                 if (pthread_mutex_trylock(&slv->mbx_lock) != 0)
                     continue;
 

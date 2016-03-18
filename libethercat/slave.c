@@ -268,6 +268,7 @@ int ec_slave_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
                 free_resource(slv->mbx_read.buf);
                 alloc_resource(slv->mbx_read.buf, uint8_t, slv->sm[1].len);
                 slv->mbx_read.sm_state = NULL;
+                slv->mbx_read.skip_next = 0;
 
                 // write mailbox
                 slv->sm[0].adr = slv->eeprom.mbx_receive_offset;
@@ -277,6 +278,7 @@ int ec_slave_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
                 free_resource(slv->mbx_write.buf);
                 alloc_resource(slv->mbx_write.buf, uint8_t, slv->sm[0].len);
                 slv->mbx_write.sm_state = NULL;
+                slv->mbx_read.skip_next = 0;
 
                 for (int sm_idx = 0; sm_idx < 2; ++sm_idx) {
                     ec_log(10, get_transition_string(transition), "slave %2d: sm%d, adr 0x%04X, len %3d, flags 0x%08X\n",

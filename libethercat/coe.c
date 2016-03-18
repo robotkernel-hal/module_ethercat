@@ -207,7 +207,7 @@ int ec_coe_sdo_read(ec_t *pec, uint16_t slave, uint16_t index, uint8_t sub_index
         if (read_buf->sdo_hdr.transfer_type)
             *len = 4 - read_buf->sdo_hdr.data_set_size;
         else 
-            *len = read_buf->complete_size;
+            *len = read_buf->complete_size;        
     } else {
         size_t sdo_len = min(*len, read_buf->complete_size);
         if (read_buf->sdo_hdr.transfer_type) {
@@ -223,8 +223,10 @@ int ec_coe_sdo_read(ec_t *pec, uint16_t slave, uint16_t index, uint8_t sub_index
 
 exit:
     // reset mailbox state 
-    if (slv->mbx_read.sm_state)
+    if (slv->mbx_read.sm_state) {
         *slv->mbx_read.sm_state = 0;
+        slv->mbx_read.skip_next = 1;
+    }
 
     pthread_mutex_unlock(&slv->mbx_lock);
     return wkc;
@@ -398,8 +400,10 @@ int ec_coe_sdo_write(ec_t *pec, uint16_t slave, uint16_t index,
 
 exit:
     // reset mailbox state 
-    if (slv->mbx_read.sm_state)
+    if (slv->mbx_read.sm_state) {
         *slv->mbx_read.sm_state = 0;
+        slv->mbx_read.skip_next = 1;
+    }
 
     pthread_mutex_unlock(&slv->mbx_lock);
     return wkc;
@@ -501,8 +505,10 @@ int ec_coe_odlist_read(ec_t *pec, uint16_t slave, uint8_t *buf, size_t *len) {
     *len = val;
 
     // reset mailbox state 
-    if (slv->mbx_read.sm_state)
+    if (slv->mbx_read.sm_state) {
         *slv->mbx_read.sm_state = 0;
+        slv->mbx_read.skip_next = 1;
+    }
 
     pthread_mutex_unlock(&slv->mbx_lock);
     return wkc;
@@ -594,8 +600,10 @@ int ec_coe_sdo_desc_read(ec_t *pec, uint16_t slave, uint16_t index,
     }
 
     // reset mailbox state 
-    if (slv->mbx_read.sm_state)
+    if (slv->mbx_read.sm_state) {
         *slv->mbx_read.sm_state = 0;
+        slv->mbx_read.skip_next = 1;
+    }
 
     pthread_mutex_unlock(&slv->mbx_lock);
     return wkc;
@@ -703,8 +711,10 @@ int ec_coe_sdo_entry_desc_read(ec_t *pec, uint16_t slave, uint16_t index, uint8_
     }
 
     // reset mailbox state 
-    if (slv->mbx_read.sm_state)
+    if (slv->mbx_read.sm_state) {
         *slv->mbx_read.sm_state = 0;
+        slv->mbx_read.skip_next = 1;
+    }
 
     pthread_mutex_unlock(&slv->mbx_lock);
     return wkc;

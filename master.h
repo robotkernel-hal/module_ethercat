@@ -105,6 +105,11 @@ class master :  public robotkernel::module_base,
             dc_mode_master_clock = 1
         } _dc_mode;
 
+        struct {
+            bool first_run;
+            double last_diff;
+        } _dc_sync;
+
         ec_t *_pec;
 
         int _recv_prio;

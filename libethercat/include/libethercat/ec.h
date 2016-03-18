@@ -61,6 +61,7 @@ typedef struct ec_slave_mbx {
     uint8_t  sm_nr;
     uint8_t *sm_state;
     uint8_t *buf;
+    uint8_t  skip_next;
 } ec_slave_mbx_t;
 
 typedef struct PACKED ec_slave_sm {

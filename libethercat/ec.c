@@ -921,6 +921,8 @@ int ec_receive_distributed_clocks_sync(ec_t *pec, ec_timer_t *timeout) {
 
             if (((pec->dc.offset_compensation_cnt++) 
                         % pec->dc.offset_compensation) == 0) {
+                pec->dc.offset_compensation_cnt = 0;
+
                 // doing offset compensation in dc master clock
                 // getting current system time first
                 uint64_t act_time;
