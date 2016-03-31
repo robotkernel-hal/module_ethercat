@@ -503,6 +503,8 @@ int ec_open(ec_t **ppec, const char *ifname, int prio, int cpumask) {
     (*ppec)->dc.rtc_cycle = 0;
     (*ppec)->dc.rtc_count = 0;
 
+    (*ppec)->dc.act_diff = 0;
+
     (*ppec)->eeprom_log = 1;
 
     datagram_pool_open(&(*ppec)->pool, 1000);
@@ -919,7 +921,7 @@ int ec_receive_distributed_clocks_sync(ec_t *pec, ec_timer_t *timeout) {
             uint64_t act_dc_time; 
             memcpy(&act_dc_time, ec_datagram_payload(&pec->dc.p_de_dc->datagram), 8);
 
-            if (((pec->dc.offset_compensation_cnt++) 
+            if (((++pec->dc.offset_compensation_cnt) 
                         % pec->dc.offset_compensation) == 0) {
                 pec->dc.offset_compensation_cnt = 0;
 
@@ -973,7 +975,7 @@ int ec_receive_distributed_clocks_sync(ec_t *pec, ec_timer_t *timeout) {
                         goto sto_exit;
                     }
 
-                    // ec_log(100, __func__, "dc_sto adding %d [ns]\n", pec->dc.act_diff);                                
+//                    ec_log(100, __func__, "dc_sto adding %d [ns]\n", pec->dc.act_diff);                                
 
                     // correct system time offset, sync ref_clock to master_clock
                     pec->dc.dc_sto += pec->dc.act_diff;

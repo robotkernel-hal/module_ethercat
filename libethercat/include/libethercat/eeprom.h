@@ -180,7 +180,7 @@ int ec_eepromread(struct ec *pec, uint16_t slave,
  * \return 0 on success
  */
 int ec_eepromwrite(struct ec *pec, uint16_t slave, 
-        uint32_t eepadr, uint32_t *data);
+        uint32_t eepadr, uint16_t *data);
 
 //! read a burst of eeprom
 /*!

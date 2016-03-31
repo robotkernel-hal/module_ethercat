@@ -722,7 +722,15 @@ int ec_coe_sdo_entry_desc_read(ec_t *pec, uint16_t slave, uint16_t index, uint8_
 
 int ec_coe_generate_mapping(ec_t *pec, uint16_t slave) {
     int ret = 0;
+    uint16_t start_adr; 
     ec_slave_t *slv = (ec_slave_t *)&pec->slaves[slave];
+
+    ec_log(10, __func__, "slave %d\n", slave);
+
+    if (slv->sm[0].adr > slv->sm[1].adr)
+        start_adr = slv->sm[0].adr + slv->sm[0].len;
+    else 
+        start_adr = slv->sm[1].adr + slv->sm[1].len;
 
     for (int sm_idx = 2; sm_idx <= 3; ++sm_idx) {
         int bit_len = 0, idx = 0x1c10 + sm_idx;
@@ -794,8 +802,13 @@ int ec_coe_generate_mapping(ec_t *pec, uint16_t slave) {
             ec_log(10, __func__, "slave %2d: sm%d length bits %d, bytes %d\n", 
                     slave, sm_idx, bit_len, (bit_len + 7) / 8);
 
-            if (slv->sm && slv->sm_ch > sm_idx)
+            if (slv->sm && slv->sm_ch > sm_idx) {
                 slv->sm[sm_idx].len = (bit_len + 7) / 8;
+                slv->sm[sm_idx].adr = start_adr;
+                slv->sm[sm_idx].flags = sm_idx == 2 ? 0x10064 : 0x10020;
+
+                start_adr += slv->sm[sm_idx].len * 3;
+            }
         }
     }
 

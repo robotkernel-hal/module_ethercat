@@ -28,6 +28,12 @@
 
 #include <string.h>
 
+#define SII_REG(ac, adr, val)                                          \
+    cnt = 100;                                                          \
+    do { ec_fp##ac(pec, pec->slaves[slave].fixed_address, (adr),          \
+                (uint8_t *)&(val), sizeof(val), &wkc);                  \
+    } while (--cnt > 0 && wkc != 1);                                    \
+
 //! set eeprom control to pdi
 /*!
  * \param pec pointer to ethercat master
@@ -38,26 +44,9 @@ int ec_eeprom_to_pdi(ec_t *pec, uint16_t slave) {
     uint16_t wkc, cnt = 10;
     uint8_t eepctl = 2;
 
-    do {
-        ec_fpwr(pec, pec->slaves[slave].fixed_address, EC_REG_EEPCFG, 
-                (uint8_t *)&eepctl, sizeof(eepctl), &wkc);
-    } while (--cnt > 0 && wkc != 1);
-    if (wkc != 1)
-        ec_log(10, __func__, "slave %2d did not accept forcing eeprom to pdi\n", slave);
-    
-    eepctl = 1; cnt = 10;
-    do {
-        ec_fpwr(pec, pec->slaves[slave].fixed_address, EC_REG_EEPCFG, 
-                (uint8_t *)&eepctl, sizeof(eepctl), &wkc);
-    } while (--cnt > 0 && wkc != 1);
-    if (wkc != 1)
-        ec_log(10, __func__, "slave %2d did not accept setting eeprom to pdi\n", slave);
-    
-    ec_fprd(pec, pec->slaves[slave].fixed_address, EC_REG_EEPCFG, 
-            (uint8_t *)&eepctl, sizeof(eepctl), &wkc);
+    eepctl = 1; 
+    SII_REG(wr, EC_REG_EEPCFG, eepctl);
 
-//    ec_log(100, __func__, "slave %2d eeprom control set to pdi (eepctl 0x%X)\n", 
-//            slave, eepctl);
     return 0;
 }
 
@@ -71,27 +60,33 @@ int ec_eeprom_to_ec(struct ec *pec, uint16_t slave) {
     uint16_t wkc, cnt = 10;
     uint8_t eepctl = 2;
 
-    do {
-        ec_fpwr(pec, pec->slaves[slave].fixed_address, EC_REG_EEPCFG, 
-                (uint8_t *)&eepctl, sizeof(eepctl), &wkc);
-    } while (--cnt > 0 && wkc != 1);
-    if (wkc != 1)
-        ec_log(10, __func__, "slave %d did not accept forcing eeprom to pdi\n", slave);
-    
-    eepctl = 0; cnt = 10;
-    do {
-        ec_fpwr(pec, pec->slaves[slave].fixed_address, EC_REG_EEPCFG, 
-                (uint8_t *)&eepctl, sizeof(eepctl), &wkc);
-    } while (--cnt > 0 && wkc != 1);
-    if (wkc != 1)
-        ec_log(10, __func__, "slave %d did not accept setting eeprom to ethercat\n", slave);
-    
-    ec_fprd(pec, pec->slaves[slave].fixed_address, EC_REG_EEPCFG, 
-            (uint8_t *)&eepctl, sizeof(eepctl), &wkc);
+    SII_REG(rd, EC_REG_EEPCFG, eepctl);
+    if (cnt == 0) {
+        ec_log(10, __func__, "slave %2d: unable to get eeprom config/control\n", slave);
+        return -1;
+    }
 
-//    ec_log(100, __func__, "slave %2d eeprom control set to ec (eepctl 0x%X)\n", 
-//            slave, eepctl);
-    return 0;
+    if (((eepctl & 0x0001) == 0x0000) && ((eepctl & 0x0100) == 0x0000))
+        return 0; // ECAT has alread EEPROM control
+
+    // ECAT assigns EEPROM interface to ECAT by writing 0x0500[0]=0
+    eepctl = 0;
+    SII_REG(wr, EC_REG_EEPCFG, eepctl);
+    if (cnt == 0) {
+        ec_log(10, __func__, "slave %d did not accept assigning EEPROM to PDI\n", slave);
+        return -1;
+    }
+
+    SII_REG(rd, EC_REG_EEPCFG, eepctl);
+    if (cnt == 0) {
+        ec_log(10, __func__, "slave %2d: unable to get eeprom config/control\n", slave);
+        return -1;
+    }
+
+    if (((eepctl & 0x0001) == 0x0000) && ((eepctl & 0x0100) == 0x0000))
+        return 0; // ECAT has EEPROM control
+    
+    return -1;
 }
 
 //! read 32-bit word of eeprom
@@ -136,18 +131,18 @@ int ec_eepromread(ec_t *pec, uint16_t slave, uint32_t eepadr, uint32_t *data) {
         goto func_exit;
     }
 
+    // 7. Wait until the Busy bit of the EEPROM Status register is cleared
     retry_cnt = 100;
-
     do {
         eepcsr = 0;
         ec_fprd(pec, pec->slaves[slave].fixed_address, EC_REG_EEPCTL,
                 (uint8_t *)&eepcsr, sizeof(eepcsr), &wkc);
         if (--retry_cnt == 0) {
-            ec_log(10, "EEPROM_READ", "reading eepctl failed, wkc %d\n", wkc);
+            ec_log(10, "EEPROM_WRITE", "reading eepctl failed, wkc %d\n", wkc);
             ret = -1;
             goto func_exit;
         }
-    } while (eepcsr & 0x0100);
+    } while (wkc == 0 || eepcsr & 0x8000);
 
     *data = 0;
     ec_fprd(pec, pec->slaves[slave].fixed_address, EC_REG_EEPDAT,
@@ -157,6 +152,21 @@ int ec_eepromread(ec_t *pec, uint16_t slave, uint32_t eepadr, uint32_t *data) {
         ret = -1;
         goto func_exit;
     }
+    
+    // 8. Check the Error bits of the EEPROM Status register. The Error bits 
+    // are cleared by clearing the command register. Retry command (back to step 5)
+    // if EEPROM acknowledge was missing. If necessary, wait some time before 
+    // retrying to allow slow EEPROMs to store the data internally
+    if (eepcsr & 0x0100)  
+        ec_log(10, "EEPROM_WRITE", "write in progress\n");
+    if (eepcsr & 0x4000)
+        ec_log(10, "EEPROM_WRITE", "error write enable\n");
+    if (eepcsr & 0x2000) {
+//        ec_log(10, "EEPROM_WRITE", "error acknowledge/command\n");
+        ret = -1;
+    }
+    if (eepcsr & 0x0800)
+        ec_log(10, "EEPROM_WRITE", "checksum error at in ESC configuration area\n");
 
 func_exit:
     ec_eeprom_to_pdi(pec, slave);
@@ -172,51 +182,96 @@ func_exit:
  * \param returns data value
  * \return 0 on success
  */
-int ec_eepromwrite(ec_t *pec, uint16_t slave, uint32_t eepadr, uint32_t *data) {
+int ec_eepromwrite(ec_t *pec, uint16_t slave, uint32_t eepadr, uint16_t *data) {
     ec_eeprom_to_ec(pec, slave);
     
     int ret = 0, retry_cnt = 100;
     uint16_t wkc = 0, eepcsr = 0x0100; // write access
-   
-    ec_log(10, "EEPROM_WRITE", "writing %X\n", eepadr);
-    do {
-        eepcsr = 0;
-        ec_fprd(pec, pec->slaves[slave].fixed_address, EC_REG_EEPCTL,
-                (uint8_t *)&eepcsr, sizeof(eepcsr), &wkc);
-        if (--retry_cnt == 0) {
-            ec_log(10, "EEPROM_WRITE", "reading eepctl failed, wkc %d\n", wkc);
-            ret = -1;
-            goto func_exit;
-        }
-    } while (eepcsr & 0x0100);
+    int word_cnt = 0;
 
-    ec_fpwr(pec, pec->slaves[slave].fixed_address, EC_REG_EEPADR,
-            (uint8_t *)&eepadr, sizeof(eepadr), &wkc);
-    if (wkc != 1) {
-        ec_log(10, "EEPROM_WRITE", "writing eepadr failed\n");
-        ret = -1;
-        goto func_exit;
-    }
-    
-    ec_fpwr(pec, pec->slaves[slave].fixed_address, EC_REG_EEPDAT,
-            (uint8_t *)data, sizeof(*data), &wkc);
-    if (wkc != 1) {
-        ec_log(10, "EEPROM_WRITE", "writing data failed\n");
-        ret = -1;
-        goto func_exit;
-    }
+//    ec_log(10, "EEPROM_WRITE", "writing %X: %04X\n", eepadr, *data);
 
-    eepcsr = 0x0201;
-    ec_fpwr(pec, pec->slaves[slave].fixed_address, EC_REG_EEPCTL,
-            (uint8_t *)&eepcsr, sizeof(eepcsr), &wkc);
-    if (wkc != 1) {
-        ec_log(10, "EEPROM_WRITE", "wirting eepctl failed\n");
-        ret = -1;
-        goto func_exit;
-    }
-
+    // 1. Check if the Busy bit of the EEPROM Status register is 
+    // cleared (0x0502[15]=0) and the EEPROM interface is not busy, 
+    // otherwise wait until the EEPROM interface is not busy anymore.
     retry_cnt = 100;
+    do {
+        eepcsr = 0;
+        ec_fprd(pec, pec->slaves[slave].fixed_address, EC_REG_EEPCTL,
+                (uint8_t *)&eepcsr, sizeof(eepcsr), &wkc);
+        if (--retry_cnt == 0) {
+            ec_log(10, "EEPROM_WRITE", "waiting for eeprom !busy failed, wkc %d\n", wkc);
+            ret = -1;
+            goto func_exit;
+        }
+    } while ((wkc == 0) || ((eepcsr & 0x8000) != 0x0000));
 
+    // 2. Check if the Error bits of the EEPROM Status register are 
+    // cleared. If not, write “000” to the command register (register 0x0502 bits [10:8]).
+    while (wkc == 0 || eepcsr & 0x6800) {
+        // error bits set, clear first
+        eepcsr = 0x0000;
+        do {
+            ec_fpwr(pec, pec->slaves[slave].fixed_address, EC_REG_EEPCTL,
+                    (uint8_t *)&eepcsr, sizeof(eepcsr), &wkc);
+        } while (wkc == 0);
+        
+        ec_fprd(pec, pec->slaves[slave].fixed_address, EC_REG_EEPCTL,
+                (uint8_t *)&eepcsr, sizeof(eepcsr), &wkc);
+    }
+
+    // 3. Write EEPROM word address to EEPROM Address register
+    retry_cnt = 100;
+    do {
+        ec_fpwr(pec, pec->slaves[slave].fixed_address, EC_REG_EEPADR,
+                (uint8_t *)&eepadr, sizeof(eepadr), &wkc);
+
+        if (--retry_cnt == 0) {
+            ec_log(10, "EEPROM_WRITE", "writing eepadr failed, wkc %d\n", wkc);
+            ret = -1;
+            goto func_exit;
+        }
+    } while (wkc == 0);
+
+    // 4. Write command only: put write data into EEPROM Data register 
+    // (1 word/2 byte only).
+    retry_cnt = 100;
+    do {
+        ec_fpwr(pec, pec->slaves[slave].fixed_address, EC_REG_EEPDAT,
+                (uint8_t *)data, sizeof(*data), &wkc);
+
+        if (--retry_cnt == 0) {
+            ec_log(10, "EEPROM_WRITE", "writing data failed\n");
+            ret = -1;
+            goto func_exit;
+        }
+    } while (wkc == 0);
+
+    // 5. Issue command by writing to Control register.  
+    // b) For a write command, write 1 into Write Enable bit 0x0502[0]
+    // and 010 into Command Register 0x0502[10:8]. Both bits have to be 
+    // written in one frame. The Write enable bit realizes a write protection 
+    // mechanism. It is valid for subsequent EEPROM commands issued in the 
+    // same frame and self-clearing afterwards. The Write enable bit needs 
+    // not to be written from PDI if it controls the EEPROM interface.
+    eepcsr = 0x0201;
+    retry_cnt = 100;
+    do {
+        ec_fpwr(pec, pec->slaves[slave].fixed_address, EC_REG_EEPCTL,
+                (uint8_t *)&eepcsr, sizeof(eepcsr), &wkc);
+
+        if (--retry_cnt == 0) {
+            ec_log(10, "EEPROM_WRITE", "wirting eepctl failed\n");
+            ret = -1;
+            goto func_exit;
+        }
+    } while (wkc == 0);
+
+    // 6. The command is executed after the EOF if the EtherCAT frame had 
+    // no errors. With PDI control, the command is executed immediately.
+
+    // 7. Wait until the Busy bit of the EEPROM Status register is cleared
+    retry_cnt = 100;
     do {
         eepcsr = 0;
         ec_fprd(pec, pec->slaves[slave].fixed_address, EC_REG_EEPCTL,
@@ -226,7 +281,22 @@ int ec_eepromwrite(ec_t *pec, uint16_t slave, uint32_t eepadr, uint32_t *data) {
             ret = -1;
             goto func_exit;
         }
-    } while (eepcsr & 0x0100);
+    } while (wkc == 0 || eepcsr & 0x8000);
+
+    // 8. Check the Error bits of the EEPROM Status register. The Error bits 
+    // are cleared by clearing the command register. Retry command (back to step 5)
+    // if EEPROM acknowledge was missing. If necessary, wait some time before 
+    // retrying to allow slow EEPROMs to store the data internally
+    if (eepcsr & 0x0100)  
+        ec_log(10, "EEPROM_WRITE", "write in progress\n");
+    if (eepcsr & 0x4000)
+        ec_log(10, "EEPROM_WRITE", "error write enable\n");
+    if (eepcsr & 0x2000) {
+//        ec_log(10, "EEPROM_WRITE", "error acknowledge/command\n");
+        ret = -1;
+    }
+    if (eepcsr & 0x0800)
+        ec_log(10, "EEPROM_WRITE", "checksum error at in ESC configuration area\n");
 
 func_exit:
     ec_eeprom_to_pdi(pec, slave);
@@ -244,11 +314,14 @@ func_exit:
  * \return 0 on success
  */
 int ec_eepromread_len(ec_t *pec, uint16_t slave, uint32_t eepadr, uint8_t *buf, size_t buflen) {
-    unsigned offset = 0, i;
+    unsigned offset = 0, i, ret;
 
     while (offset < buflen) {
         uint32_t val;
-        ec_eepromread(pec, slave, eepadr+(offset/2), &val);
+
+        do {
+            ret = ec_eepromread(pec, slave, eepadr+(offset/2), &val);
+        } while (ret != 0);
 
         for (i = 0; (offset < buflen) && (i < 4); ++i, ++offset)
             buf[offset] = ((uint8_t *)&val)[i];
@@ -267,16 +340,17 @@ int ec_eepromread_len(ec_t *pec, uint16_t slave, uint32_t eepadr, uint8_t *buf, 
  * \return 0 on success
  */
 int ec_eepromwrite_len(ec_t *pec, uint16_t slave, uint32_t eepadr, uint8_t *buf, size_t buflen) {
-    unsigned offset = 0, i;
+    unsigned offset = 0, i, ret;
 
     while (offset < buflen) {
-        uint32_t val;
-        for (i = 0; (offset < buflen) && (i < 4); ++i)
-            ((uint8_t *)&val)[i] = buf[offset+i];
+        uint16_t val;
+        for (i = 0; (offset < buflen/2) && (i < 2); ++i)
+            ((uint8_t *)&val)[i] = buf[(offset*2)+i];
+        do {
+            ret = ec_eepromwrite(pec, slave, eepadr+offset, &val);
+        } while (ret != 0);
 
-        ec_eepromwrite(pec, slave, eepadr+(offset/2), &val);
-
-        ++offset;
+        offset+=1;
     }
 
     return 0;
@@ -317,6 +391,7 @@ void ec_eeprom_dump(ec_t *pec, uint16_t slave) {
 
         switch (cat_type) {
             default: 
+                cat_type = EC_EEPROM_CAT_END;
             case EC_EEPROM_CAT_END:
             case EC_EEPROM_CAT_NOP:
                 break;
@@ -497,5 +572,7 @@ void ec_eeprom_dump(ec_t *pec, uint16_t slave) {
 
         cat_offset += cat_len + 2; 
     }
+
+    eeprom_log(100, "EEPROM", "dump slave %d finished\n", slave);
 }
 

@@ -52,6 +52,12 @@ void ec_dc_sync0(ec_t *pec, uint16_t slave, int active, uint32_t cycle_time, int
     uint8_t dc_cuc = 0;
     ec_fpwr(pec, slv->fixed_address, EC_REG_DCCUC, &dc_cuc, sizeof(dc_cuc), &wkc);
 
+    while (pec->dc.act_diff == 0) {
+        // wait until dc's are ready
+        struct timespec ts = { 0, 1000000 };
+        nanosleep(&ts, NULL);
+    }
+
     /* Calculate first trigger time, always a whole multiple of CyclTime rounded up
        plus the shifttime (can be negative)
        This insures best sychronisation between slaves, slaves with the same CyclTime

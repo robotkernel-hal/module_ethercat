@@ -781,28 +781,14 @@ int master::request(int reqcode, void* ptr) {
             break;
     }
 
-//    log(module_info, "returning %d\n", ret);
     return ret;
 }
-
-//ec_timer_t trigger_timer;
-//ec_timer_t package_duration;
 
 //! module trigger callback
 void master::trigger() {
     int i = 0;
     ec_timer_t dc_timeout;
 
-//    ec_timer_init(&package_duration, 200000);
-
-//    if (_trigger_interval) {
-//        if (ec_timer_expired(&trigger_timer))
-//            log(warning, "last trigger timer was > %d us away!\n", _trigger_interval/1E3);
-
-//        ec_timer_init(&trigger_timer, _trigger_interval);
-//    }
-   
-    
     if (state >= module_state_safeop) {
         for (i = 0; i < _pec->pd_group_cnt; ++i) {
             group *g = _group_info[i];
@@ -857,7 +843,7 @@ void master::trigger() {
         if (_pec->dc.have_dc) {
             ec_receive_distributed_clocks_sync(_pec, &dc_timeout);
 
-            if (_pec->dc.mode == 00 && (_pec->dc.offset_compensation_cnt == 0)) {
+            if (_pec->dc.mode == 0 && (_pec->dc.offset_compensation_cnt == 0)) {
                 double diff = (_pec->dc.act_diff / 1E9);
 
                 if (!_dc_sync.first_run) {
@@ -868,22 +854,13 @@ void master::trigger() {
                     tmp -= (_dc_sync.last_diff-diff)/(_pec->dc.offset_compensation);
                     kernel::request_cb(trigger_mod_name.c_str(), 
                             MOD_REQUEST_SET_TRIGGER_INTERVAL, &tmp);
-                   
-                    // shift correction if difference is too big
-                    if (abs(diff) > 0.000005) {
-                        kernel::request_cb(trigger_mod_name.c_str(),
-                                MOD_REQUEST_SHIFT_NEXT_TRIGGER, &diff);
-                        diff = 0;
-                   }
                 }
+
                 _dc_sync.first_run = false;
                 _dc_sync.last_diff = diff;
             }
         }
     }
-    
-//    if (ec_timer_expired(&package_duration))
-//        log(warning, "package duration was longer than 200 us!\n");
 }
 
 //! async handler thread
