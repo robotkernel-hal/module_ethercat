@@ -288,6 +288,8 @@ int master::set_state(module_state_t new_state) {
             break;
         }
         case module_state_safeop:            
+            _dc_sync.first_run = true;
+
             if (dc_timer_override == -1 && trigger_mod_name != "") {
                 double tmp;
                 kernel::request_cb(trigger_mod_name.c_str(), 
@@ -296,6 +298,7 @@ int master::set_state(module_state_t new_state) {
                 log(info, "got trigger interval from our trigger module: %+17.13f\n", 
                         tmp);
 
+                dc_timer_override = 
                 _pec->dc.timer_override = tmp * 1E9;
             }
             ec_create_pd_groups(_pec, _group_info.size());
