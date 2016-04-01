@@ -804,10 +804,11 @@ int ec_coe_generate_mapping(ec_t *pec, uint16_t slave) {
 
             if (slv->sm && slv->sm_ch > sm_idx) {
                 slv->sm[sm_idx].len = (bit_len + 7) / 8;
-                slv->sm[sm_idx].adr = start_adr;
+                if (!slv->sm[sm_idx].adr) {
+                    slv->sm[sm_idx].adr = start_adr;
+                    start_adr += slv->sm[sm_idx].len * 3;
+                }
                 slv->sm[sm_idx].flags = sm_idx == 2 ? 0x10064 : 0x10020;
-
-                start_adr += slv->sm[sm_idx].len * 3;
             }
         }
     }
