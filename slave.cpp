@@ -230,7 +230,7 @@ bool slave::prepare_state_transition(transition_t transition) {
 
     if (state_to == 4) {
         // configure distributed clocks if needed 
-        if (dc.has_dc) {
+        if (master_dev->_pec->dc.have_dc && dc.has_dc) {
             if (dc.cycle_time_0 == 0)
                 dc.cycle_time_0 = master_dev->_pec->dc.timer_override; 
             if (dc.cycle_time_1 == 0)
