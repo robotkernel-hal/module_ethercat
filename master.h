@@ -44,6 +44,7 @@
 #include "libethercat/mbx.h"
 #include "libethercat/dc.h"
 #include "libethercat/soe.h"
+#include "libethercat/foe.h"
 
 #define ECAT_SLAVE_ID_GROUP         (0x80000000)
 #define ECAT_SLAVE_ID_DC            (0x20000000)

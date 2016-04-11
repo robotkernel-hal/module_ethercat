@@ -1,0 +1,6 @@
+build*
+.rmpm_cache
+m4
+.sw*
+autom4te*
+*~
