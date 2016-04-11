@@ -586,9 +586,9 @@ int ec_coe_sdo_desc_read(ec_t *pec, uint16_t slave, uint16_t index,
             desc->max_subindices    = read_buf->sdo_info_data.bdata[4];
             desc->obj_code          = read_buf->sdo_info_data.bdata[5];
 
-            size_t name_len = min(read_buf->mbx_hdr.length - 6 - 6, CANOPEN_MAXNAME - 1);
-            memcpy(desc->name, &read_buf->sdo_info_data.bdata[6], name_len);
-            desc->name[name_len] = '\0';
+            desc->name_len = read_buf->mbx_hdr.length - 6 - 6;
+            desc->name = (char *)malloc(desc->name_len); // must be freed by caller
+            memcpy(desc->name, &read_buf->sdo_info_data.bdata[6], desc->name_len);
         }
     } else if (read_buf->coe_hdr.service == EC_COE_SDOREQ) {
         desc->data_type         = 0;

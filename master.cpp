@@ -530,7 +530,9 @@ int master::request(int reqcode, void* ptr) {
                 desc->data_type      = obj_desc.data_type;
                 desc->object_code    = obj_desc.obj_code;
                 desc->max_subindices = obj_desc.max_subindices;
-                strcpy(desc->name, obj_desc.name);          
+                desc->name_len       = obj_desc.name_len;                
+                desc->name           = obj_desc.name; // allocated by ec_coe_sdo_desc_read, 
+                                                      // freed by caller
             } else { // search in eeprom entries
                 bool found = false;
 
@@ -540,7 +542,9 @@ int master::request(int reqcode, void* ptr) {
                     desc->data_type         = 0x0009;
                     desc->object_code       = 7;
                     desc->max_subindices    = 0;
-                    strcpy(desc->name, "Device Name");
+                    desc->name_len          = strlen("Device Name");
+                    desc->name              = (char *)malloc(desc->name_len);
+                    strncpy(desc->name, "Device Name", desc->name_len);
                 }
                 
                 for (unsigned i = 0; i < slv->eeprom.txpdos_cnt; ++i) {
@@ -552,10 +556,13 @@ int master::request(int reqcode, void* ptr) {
                         desc->max_subindices    = slv->eeprom.txpdos[i].n_entry;
 
                         if ((slv->eeprom.txpdos[i].name_idx > 0) && 
-                                (slv->eeprom.txpdos[i].name_idx <= slv->eeprom.strings_cnt))
-                            strcpy(desc->name, slv->eeprom.strings[slv->eeprom.txpdos[i].name_idx-1]);
-                        else
-                            desc->name[0] = '\0';
+                                (slv->eeprom.txpdos[i].name_idx <= slv->eeprom.strings_cnt)) {
+                            desc->name_len      = strlen(slv->eeprom.strings[slv->eeprom.txpdos[i].name_idx-1]);
+                            desc->name          = (char *)malloc(desc->name_len);
+                            strncpy(desc->name, slv->eeprom.strings[slv->eeprom.txpdos[i].name_idx-1], desc->name_len);
+                        } else {
+                            desc->name_len = 0;
+                        }
                     }
                 }
 
@@ -570,10 +577,13 @@ int master::request(int reqcode, void* ptr) {
                         desc->object_code       = 7;
                         desc->max_subindices    = slv->eeprom.rxpdos[i].n_entry;
                         if ((slv->eeprom.rxpdos[i].name_idx > 0) && 
-                                (slv->eeprom.rxpdos[i].name_idx <= slv->eeprom.strings_cnt))
+                                (slv->eeprom.rxpdos[i].name_idx <= slv->eeprom.strings_cnt)) {
+                            desc->name_len      = strlen(slv->eeprom.strings[slv->eeprom.txpdos[i].name_idx-1]);
+                            desc->name          = (char *)malloc(desc->name_len);
                             strcpy(desc->name, slv->eeprom.strings[slv->eeprom.rxpdos[i].name_idx-1]);
-                        else
-                            desc->name[0] = '\0';
+                        } else {
+                            desc->name_len      = 0;
+                        }
                     }
                 }
             }
@@ -602,9 +612,13 @@ int master::request(int reqcode, void* ptr) {
                 desc->bit_length    = entry_desc.bit_length;
                 desc->obj_access    = entry_desc.obj_access;
 
-                size_t name_len = min(entry_desc.data_len, CANOPEN_MAXNAME - 1);
-                memcpy(desc->name, &entry_desc.data[0], name_len);
-                desc->name[name_len] = '\0';
+//                size_t name_len = min(entry_desc.data_len, CANOPEN_MAXNAME - 1);
+//                memcpy(desc->name, &entry_desc.data[0], name_len);
+//                desc->name[name_len] = '\0';
+                desc->name_len = entry_desc.data_len;                
+                desc->name = (char *)malloc(entry_desc.data_len + 1);
+                memcpy(desc->name, &entry_desc.data[0], desc->name_len);
+                desc->name[desc->name_len] = '\0';
 
                 free(entry_desc.data);
             } else { // search in eeprom entries

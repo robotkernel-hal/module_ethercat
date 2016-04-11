@@ -61,7 +61,8 @@ typedef struct PACKED ec_coe_sdo_desc {
     uint16_t data_type;             //!< element data type
     uint8_t  obj_code;              //!< object type
     uint8_t  max_subindices;        //!< maximum number of subindices
-    char     name[CANOPEN_MAXNAME]; //!< element name
+    char    *name;                  //!< element name (allocated by callee, freed by caller)
+    size_t   name_len;              //!< element name len
 } PACKED ec_coe_sdo_desc_t;
 
 typedef struct PACKED ec_coe_sdo_entry_desc {

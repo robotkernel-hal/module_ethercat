@@ -15,6 +15,7 @@ libmodule_ethercat_la_SOURCES  = master.cpp \
 								 libethercat/ec.c \
 								 libethercat/hw.c \
 								 libethercat/soe.c \
+								 libethercat/foe.c \
 								 libethercat/mbx.c \
 								 libethercat/eeprom.c \
 								 libethercat/dc.c \
@@ -48,7 +49,8 @@ libmodule_ethercat_la_LDFLAGS  = -Wall -release $(PACKAGE_VERSION)
 VPATH = $(srcdir):$(srcdir)/share/ln/message_definitions 
 
 LN_MESSAGES = 	module_ethercat/set_ec_state \
-				module_ethercat/get_ec_state 
+				module_ethercat/get_ec_state \
+				module_ethercat/file_read
 
 ln_messages.h: Makefile $(LN_MESSAGES)
 	@echo creating ln_messages.h
