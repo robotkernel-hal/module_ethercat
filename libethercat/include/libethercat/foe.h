@@ -34,6 +34,7 @@ typedef struct ec_foe_header {
 } ec_foe_header_t;
 
 #define MAX_FILE_NAME_SIZE 512
+#define MAX_ERROR_TEXT_SIZE 512
 
 typedef struct ec_foe_rw_request {
     ec_mbx_header_t mbx_hdr;
@@ -54,6 +55,13 @@ typedef struct ec_foe_ack_request {
     ec_foe_header_t foe_hdr;
     uint32_t        packet_nr;
 } ec_foe_ack_request_t;
+
+typedef struct ec_foe_error_request {
+    ec_mbx_header_t mbx_hdr;
+    ec_foe_header_t foe_hdr;
+    uint32_t        error_code;
+    char            error_text[MAX_ERROR_TEXT_SIZE];
+} ec_foe_error_request_t;
 
 enum {
     EC_FOE_OP_CODE_READ_REQUEST  = 0x01,
@@ -97,7 +105,7 @@ extern "C" {
  */
 int ec_foe_read(ec_t *pec, uint16_t slave, uint32_t password,
         char remote_file_name[MAX_FILE_NAME_SIZE], 
-        char *local_file_name);
+        const char *local_file_name);
 
 #ifdef __cplusplus
 }

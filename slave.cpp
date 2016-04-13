@@ -620,8 +620,14 @@ int slave::on_get_ec_state(ln::service_request& req, ln_service_module_ethercat_
 	    
 int slave::on_file_read(ln::service_request& req, ln_service_module_ethercat_file_read& svc) {
     char remote_file_name[MAX_FILE_NAME_SIZE];
-    strncpy(remote_file_name, svc.req.file_name, MAX_FILE_NAME_SIZE);
-    ec_foe_read(master_dev->_pec, index, svc.req.password, remote_file_name, svc.req.file_name);
+    ssize_t remote_file_name_len = min(MAX_FILE_NAME_SIZE-1, svc.req.file_name_len);
+    strncpy(remote_file_name, svc.req.file_name, remote_file_name_len);
+    remote_file_name[remote_file_name_len] = '\0';
+
+    string local_file_name(svc.req.file_name, svc.req.file_name_len);
+    
+    ec_foe_read(master_dev->_pec, index, svc.req.password, 
+            remote_file_name, local_file_name.c_str());
 
     req.respond();
     return 0;
