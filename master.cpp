@@ -224,6 +224,15 @@ int master::set_state(module_state_t new_state) {
             state_to_string(state), state_to_string(new_state));
 
     switch (new_state) {
+        case module_state_boot: {
+            if (state != module_state_init) {
+                ret = -1;
+                break;
+            }
+
+            ec_set_state(_pec, EC_STATE_BOOT);
+            break;
+        }
         case module_state_init: {
             stop();
             _pec->tx_sync = 1;

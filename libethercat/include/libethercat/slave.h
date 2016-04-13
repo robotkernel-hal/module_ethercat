@@ -33,6 +33,8 @@
 #include "libethercat/ec.h"
 
 typedef enum ec_state_transition {
+    BOOT_2_INIT      = 0x0301,
+    INIT_2_BOOT      = 0x0103,
     INIT_2_INIT      = 0x0101,
     INIT_2_PREOP     = 0x0102,
     INIT_2_SAFEOP    = 0x0104,

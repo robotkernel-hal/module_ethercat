@@ -40,6 +40,7 @@
 typedef uint16_t ec_state_t;
 #define EC_STATE_INIT        0x01
 #define EC_STATE_PREOP       0x02
+#define EC_STATE_BOOT        0x03
 #define EC_STATE_SAFEOP      0x04
 #define EC_STATE_OP          0x08
 #define EC_STATE_MASK        0x0F

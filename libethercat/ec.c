@@ -121,6 +121,7 @@ int ec_destroy_pd_groups(ec_t *pec) {
     return 0;
 }
 
+const char state_string_boot[]    = "EC_STATE_BOOT";
 const char state_string_init[]    = "EC_STATE_INIT";
 const char state_string_preop[]   = "EC_STATE_PREOP";
 const char state_string_safeop[]  = "EC_STATE_SAFEOP";
@@ -128,6 +129,8 @@ const char state_string_op[]      = "EC_STATE_OP";
 const char state_string_unknown[] = "EC_STATE_UNKNOWN";
 
 const char *get_state_string(ec_state_t state) {
+    if (state == EC_STATE_BOOT)
+        return state_string_boot;
     if (state == EC_STATE_INIT)
         return state_string_init;
     if (state == EC_STATE_PREOP)
@@ -152,6 +155,11 @@ int ec_set_state(ec_t *pec, ec_state_t state) {
     ec_log(10, "SET MASTER STATE", "switch to state %s\n", get_state_string(state));
 
     switch (state) {
+        case EC_STATE_BOOT: {
+            for (i = 0; i < pec->slave_cnt; ++i)
+                ec_slave_state_transition(pec, i, state);
+            break;
+        }
         case EC_STATE_INIT: {
             uint16_t fixed = 1000, wkc = 0, val = 0;
 

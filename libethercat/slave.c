@@ -28,6 +28,8 @@
 
 #include <string.h>
 
+const char transition_string_boot_to_init[]     = "BOOT_2_INIT";
+const char transition_string_init_to_boot[]     = "INIT_2_BOOT";
 const char transition_string_init_to_init[]     = "INIT_2_INIT";
 const char transition_string_init_to_preop[]    = "INIT_2_PREOP";
 const char transition_string_init_to_safeop[]   = "INIT_2_SAFEOP";
@@ -48,6 +50,10 @@ const char transition_string_unknown[]          = "UNKNOWN";
 
 const char *get_transition_string(ec_state_transition_t transition) {
     switch (transition) {
+        case BOOT_2_INIT:
+            return transition_string_boot_to_init;
+        case INIT_2_BOOT:
+            return transition_string_init_to_boot;
         case INIT_2_INIT:
             return transition_string_init_to_init;
         case INIT_2_PREOP:
@@ -249,6 +255,7 @@ int ec_slave_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
     ec_state_transition_t transition = ((act_state & EC_STATE_MASK) << 8) | (state & EC_STATE_MASK); 
 
     switch (transition) {
+        case INIT_2_BOOT:
         case INIT_2_PREOP:
         case INIT_2_SAFEOP:
         case INIT_2_OP: {
@@ -315,9 +322,12 @@ int ec_slave_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
             ec_eeprom_to_pdi(pec, slave);
 
             // write state to slave
-            wkc = ec_slave_set_state(pec, slave, EC_STATE_PREOP);
+            if (transition == INIT_2_BOOT)
+                wkc = ec_slave_set_state(pec, slave, EC_STATE_BOOT);
+            else
+                wkc = ec_slave_set_state(pec, slave, EC_STATE_PREOP);
 
-            if (transition == INIT_2_PREOP)
+            if (transition == INIT_2_PREOP || transition == INIT_2_BOOT)
                 break;
         }
         case PREOP_2_SAFEOP: 
@@ -383,6 +393,7 @@ int ec_slave_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
                 slv->subdev_cnt = 0;
             }
         }
+        case BOOT_2_INIT:
         case INIT_2_INIT: {
             uint8_t dc_active = 0;
             ec_fpwr(pec, pec->slaves[slave].fixed_address, EC_REG_DCSYNCACT, 
