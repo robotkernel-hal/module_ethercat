@@ -107,6 +107,19 @@ int ec_foe_read(ec_t *pec, uint16_t slave, uint32_t password,
         char remote_file_name[MAX_FILE_NAME_SIZE], 
         const char *local_file_name);
 
+//! write file over foe
+/*!
+ * \param pec pointer to ethercat master
+ * \param slave slave number
+ * \param password foe password
+ * \param remote_file_name file_name to read from
+ * \param local_file_name file_name to store file to
+ * \return working counter
+ */
+int ec_foe_write(ec_t *pec, uint16_t slave, uint32_t password,
+        char remote_file_name[MAX_FILE_NAME_SIZE], 
+        const char *local_file_name);
+
 #ifdef __cplusplus
 }
 #endif

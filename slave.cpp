@@ -217,6 +217,7 @@ void slave::_init() {
         register_set_ec_state(k.clnt, base.str() + ".set_ec_state");
         register_get_ec_state(k.clnt, base.str() + ".get_ec_state");
         register_file_read(k.clnt, base.str() + ".file_read");
+        register_file_write(k.clnt, base.str() + ".file_write");
     }
 }
 
@@ -627,6 +628,21 @@ int slave::on_file_read(ln::service_request& req, ln_service_module_ethercat_fil
     string local_file_name(svc.req.file_name, svc.req.file_name_len);
     
     ec_foe_read(master_dev->_pec, index, svc.req.password, 
+            remote_file_name, local_file_name.c_str());
+
+    req.respond();
+    return 0;
+}
+
+int slave::on_file_write(ln::service_request& req, ln_service_module_ethercat_file_write& svc) {
+    char remote_file_name[MAX_FILE_NAME_SIZE];
+    ssize_t remote_file_name_len = min(MAX_FILE_NAME_SIZE-1, svc.req.remote_file_name_len);
+    strncpy(remote_file_name, svc.req.remote_file_name, remote_file_name_len);
+    remote_file_name[remote_file_name_len] = '\0';
+
+    string local_file_name(svc.req.local_file_name, svc.req.local_file_name_len);
+    
+    ec_foe_write(master_dev->_pec, index, svc.req.password, 
             remote_file_name, local_file_name.c_str());
 
     req.respond();

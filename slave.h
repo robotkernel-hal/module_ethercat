@@ -102,7 +102,8 @@ typedef enum {
 
 class slave : public ln_service_set_ec_state_base,
               public ln_service_get_ec_state_base,
-              public ln_service_file_read_base {
+              public ln_service_file_read_base,
+              public ln_service_file_write_base {
     public:
         //! canopen over ethercat init cmd
         typedef struct coe_init_cmd {
@@ -235,6 +236,7 @@ class slave : public ln_service_set_ec_state_base,
         int on_set_ec_state(ln::service_request& req, ln_service_module_ethercat_set_ec_state& svc);
         int on_get_ec_state(ln::service_request& req, ln_service_module_ethercat_get_ec_state& svc);
 	    int on_file_read(ln::service_request& req, ln_service_module_ethercat_file_read& svc);
+	    int on_file_write(ln::service_request& req, ln_service_module_ethercat_file_write& svc);
 
     private:
         //! initialize common stuff
