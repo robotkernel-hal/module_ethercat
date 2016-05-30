@@ -1,0 +1,7 @@
+service
+request
+uint32_t password
+char* local_file_name
+char* remote_file_name
+response
+char* error_message
