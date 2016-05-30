@@ -28,7 +28,8 @@
 #include "libethercat/ec.h"
 
 /** 1st sync pulse delay in ns here 100ms */
-#define SYNC_DELAY       ((int64_t)100000000)
+#define SYNC_DELAY       ((int64_t)10000000)
+//#define SYNC_DELAY       ((int64_t)100000000)
 
 //! configure slave for distributed clock sync 0 pulse
 /*/

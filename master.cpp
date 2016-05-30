@@ -254,6 +254,9 @@ int master::set_state(module_state_t new_state) {
                 else 
                     _pec->slaves[nr].dc.use_dc = 0;
             }
+           
+            for (nr = 0; nr < _pec->slave_cnt; ++nr)
+                _slave_info[nr]->register_interfaces();
 
             break;
         }
@@ -290,9 +293,6 @@ int master::set_state(module_state_t new_state) {
                     }
                 }
             }
-            
-            for (nr = 0; nr < _pec->slave_cnt; ++nr)
-                _slave_info[nr]->register_interfaces();
 
             break;
         }

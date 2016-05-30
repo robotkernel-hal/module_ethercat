@@ -42,7 +42,7 @@
 int ec_foe_read(ec_t *pec, uint16_t slave, uint32_t password,
         char remote_file_name[MAX_FILE_NAME_SIZE], 
         const char *local_file_name) {
-    int wkc = -1;
+    int wkc = -1, fd = 0;
     ec_slave_t *slv = (ec_slave_t *)&pec->slaves[slave];
 
     if (!(slv->eeprom.mbx_supported & EC_EEPROM_MBX_FOE)) {
@@ -91,7 +91,7 @@ int ec_foe_read(ec_t *pec, uint16_t slave, uint32_t password,
     ec_foe_data_request_t *read_buf_data = 
         (ec_foe_data_request_t *)(slv->mbx_read.buf);
 
-    int fd = open(local_file_name, O_CREAT | O_RDWR);
+    fd = open(local_file_name, O_CREAT | O_RDWR);
 
     while (1) {
         // wait for answer
@@ -133,7 +133,11 @@ int ec_foe_read(ec_t *pec, uint16_t slave, uint32_t password,
         ec_log(10, __func__, "got packet %d\n", read_buf_data->packet_nr);
 
         size_t len = read_buf_data->mbx_hdr.length - 6;
-        write(fd, read_buf_data->data.bdata, len);
+
+        if (strncmp(remote_file_name, "ECATFW__", 8) == 0) 
+            write(fd, &read_buf_data->data.bdata[8], len - 8);
+        else
+            write(fd, read_buf_data->data.bdata, len);
 
         // everthing is fine, send ack 
         // mailbox header
@@ -184,7 +188,7 @@ exit:
 int ec_foe_write(ec_t *pec, uint16_t slave, uint32_t password,
         char remote_file_name[MAX_FILE_NAME_SIZE], 
         const char *local_file_name) {
-    int wkc = -1;
+    int wkc = -1, fd = 0;
     ec_slave_t *slv = (ec_slave_t *)&pec->slaves[slave];
 
     if (!(slv->eeprom.mbx_supported & EC_EEPROM_MBX_FOE)) {
@@ -237,7 +241,7 @@ int ec_foe_write(ec_t *pec, uint16_t slave, uint32_t password,
     int i = 10000000;
     do {
         ec_mbx_clear(pec, slave, 1);
-        wkc = ec_mbx_receive(pec, slave, EC_DEFAULT_TIMEOUT_MBX * 100);
+        wkc = ec_mbx_receive(pec, slave, EC_DEFAULT_TIMEOUT_MBX * 10);
 
         if (--i == 0)
             break;
@@ -273,7 +277,7 @@ int ec_foe_write(ec_t *pec, uint16_t slave, uint32_t password,
         goto exit;
     }
 
-    int fd = open(local_file_name, O_RDONLY);
+    fd = open(local_file_name, O_RDONLY);
     if (fd == -1) {
         ec_log(10, __func__, "error opening file: %s\n", strerror(errno));
         goto exit;
@@ -281,14 +285,48 @@ int ec_foe_write(ec_t *pec, uint16_t slave, uint32_t password,
 
     // mailbox len - mailbox hdr (6) - foe header (6)
     size_t data_len = slv->sm[1].len - 6 - 6;
+    off_t offset = 0;
+
+    if (strcmp(remote_file_name, "ECATFW__bootstrap.bin") == 0)
+        offset = 0x400000;
+    else if (strcmp(remote_file_name, "ECATFW__bootloader.bin") == 0)
+        offset = 0x408000;
+    else if (strcmp(remote_file_name, "ECATFW__slave.bin") == 0)
+        offset = 0x410000;
 
     while (1) {
+        int last_pkt = 0;
+
         // everthing is fine, send data 
         ec_mbx_clear(pec, slave, 0);
-        ssize_t bytes_read = read(fd, write_buf_data->data.bdata, data_len);
+    
+        if (strncmp(remote_file_name, "ECATFW__", 8) == 0) {
+            size_t fw_len = data_len - 8; // firmware update header (8)
+            ec_fw_update_t *fw = (ec_fw_update_t *)write_buf_data->data.bdata;
+
+            ssize_t bytes_read = read(fd, fw->data, fw_len);
+            if (bytes_read < fw_len)
+                last_pkt = 1;
+            
+            fw->cmd = EFW_CMD_WRCODE;
+            fw->size = bytes_read;
+            fw->address_low = offset & 0xFFFF;
+            fw->address_high = (offset>>16) & 0xFFFF;
+
+            offset += bytes_read;
+
+            // mailbox header
+            write_buf_data->mbx_hdr.length    = 6 + 8 + bytes_read; 
+        } else {
+            ssize_t bytes_read = read(fd, write_buf_data->data.bdata, data_len);
+            if (bytes_read < data_len)
+                last_pkt = 1;
+
+            // mailbox header
+            write_buf_data->mbx_hdr.length    = 6 + bytes_read; 
+        }
 
         // mailbox header
-        write_buf_data->mbx_hdr.length    = 6 + bytes_read; 
         write_buf_data->mbx_hdr.address   = 0x0000;
         write_buf_data->mbx_hdr.priority  = 0x00;
         write_buf_data->mbx_hdr.mbxtype   = EC_MBX_FOE;
@@ -307,9 +345,9 @@ int ec_foe_write(ec_t *pec, uint16_t slave, uint32_t password,
 
         // wait for ack
         ec_mbx_clear(pec, slave, 1);
-        wkc = ec_mbx_receive(pec, slave, 10000 * EC_DEFAULT_TIMEOUT_MBX);
+        wkc = ec_mbx_receive(pec, slave, 10 * EC_DEFAULT_TIMEOUT_MBX);
         if (!wkc) {
-            ec_log(10, __func__, "error on reading receive mailbox wating for ack\n");
+            ec_log(10, __func__, "error on reading receive mailbox wating for data ack\n");
             goto exit;
         }
 
@@ -327,7 +365,7 @@ int ec_foe_write(ec_t *pec, uint16_t slave, uint32_t password,
         
         ec_log(10, __func__, "got ack for packet %d\n", read_buf_ack->packet_nr);
 
-        if (bytes_read < data_len)
+        if (last_pkt)
             break;
     }
 

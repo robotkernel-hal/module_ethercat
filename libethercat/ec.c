@@ -156,8 +156,11 @@ int ec_set_state(ec_t *pec, ec_state_t state) {
 
     switch (state) {
         case EC_STATE_BOOT: {
-            for (i = 0; i < pec->slave_cnt; ++i)
+            for (i = 0; i < pec->slave_cnt; ++i) {
+                ec_log(100, get_state_string(state), "setting state for slave %d\n", i);
                 ec_slave_state_transition(pec, i, state);
+            }
+
             break;
         }
         case EC_STATE_INIT: {
@@ -277,8 +280,10 @@ int ec_set_state(ec_t *pec, ec_state_t state) {
             break;
         }        
         case EC_STATE_PREOP:
-            for (i = 0; i < pec->slave_cnt; ++i)
+            for (i = 0; i < pec->slave_cnt; ++i) {
+                ec_log(100, get_state_string(state), "setting state for slave %d\n", i);
                 ec_slave_state_transition(pec, i, state);
+            }
 
             ec_dc_config(pec);
             break;

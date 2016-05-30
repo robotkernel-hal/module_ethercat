@@ -82,6 +82,11 @@ typedef struct eeprom_info {
     uint16_t mbx_receive_size;
     uint16_t mbx_send_offset;
     uint16_t mbx_send_size;
+    
+    uint16_t boot_mbx_receive_offset;
+    uint16_t boot_mbx_receive_size;
+    uint16_t boot_mbx_send_offset;
+    uint16_t boot_mbx_send_size;
 
     ec_eeprom_cat_general_t general;
 
@@ -111,15 +116,19 @@ enum {
 };
 
 enum {
-    EC_EEPROM_ADR_VENDOR_ID     = 0x0008,
-    EC_EEPROM_ADR_PRODUCT_CODE  = 0x000A,
-    EC_EEPROM_ADR_MBX_RECV_OFF  = 0x0018,  
-    EC_EEPROM_ADR_MBX_RECV_SIZE = 0x0019, 
-    EC_EEPROM_ADR_MBX_SEND_OFF  = 0x001A,  
-    EC_EEPROM_ADR_MBX_SEND_SIZE = 0x001B, 
-    EC_EEPROM_ADR_MBX_SUPPORTED = 0x001C,
-    EC_EEPROM_ADR_SIZE          = 0x003E,
-    EC_EEPROM_ADR_CAT_OFFSET    = 0x0040,
+    EC_EEPROM_ADR_VENDOR_ID          = 0x0008,
+    EC_EEPROM_ADR_PRODUCT_CODE       = 0x000A,
+    EC_EEPROM_ADR_BOOT_MBX_RECV_OFF  = 0x0014,  
+    EC_EEPROM_ADR_BOOT_MBX_RECV_SIZE = 0x0015, 
+    EC_EEPROM_ADR_BOOT_MBX_SEND_OFF  = 0x0016,  
+    EC_EEPROM_ADR_BOOT_MBX_SEND_SIZE = 0x0017, 
+    EC_EEPROM_ADR_STD_MBX_RECV_OFF   = 0x0018,  
+    EC_EEPROM_ADR_STD_MBX_RECV_SIZE  = 0x0019, 
+    EC_EEPROM_ADR_STD_MBX_SEND_OFF   = 0x001A,  
+    EC_EEPROM_ADR_STD_MBX_SEND_SIZE  = 0x001B, 
+    EC_EEPROM_ADR_MBX_SUPPORTED      = 0x001C,
+    EC_EEPROM_ADR_SIZE               = 0x003E,
+    EC_EEPROM_ADR_CAT_OFFSET         = 0x0040,
 };
 
 enum {

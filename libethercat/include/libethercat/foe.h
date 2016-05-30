@@ -63,6 +63,14 @@ typedef struct ec_foe_error_request {
     char            error_text[MAX_ERROR_TEXT_SIZE];
 } ec_foe_error_request_t;
 
+typedef struct ec_fw_update {
+    uint16_t cmd;
+    uint16_t size;
+    uint16_t address_low;
+    uint16_t address_high;
+    uint16_t data[(EC_MAX_DATA-8)>>1];
+} ec_fw_update_t;
+
 enum {
     EC_FOE_OP_CODE_READ_REQUEST  = 0x01,
     EC_FOE_OP_CODE_WRITE_REQUEST = 0x02,
@@ -85,6 +93,20 @@ enum {
     EC_FOE_ERROR_NOT_BOOTSTRAP       = 0x8009,
     EC_FOE_ERROR_NO_RIGHTS           = 0x800A,
     EC_FOE_ERROR_PROGRAM_ERROR       = 0x800B,
+};
+
+enum {
+    EFW_CMD_IGNORE                  = 0,
+    EFW_CMD_MEMORY_TRANSFER         = 1,
+    EFW_CMD_WRCODE                  = 2,
+    EFW_CMD_CHK_DEVID               = 3,
+    EFW_CMD_CHK_DEVICEID            = 3,
+    EFW_CMD_CHKSUM                  = 4,
+    EFW_CMD_WRCODECHKSUM            = 5,
+    EFW_CMD_SET_DEVID               = 6,
+    EFW_CMD_CHKSUMCHKSUM            = 6,
+    EFW_CMD_BOOTCHKSUM              = 7,
+    EFW_CMD_SET_EEPROM              = 10,
 };
 
 #ifdef __cplusplus
