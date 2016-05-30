@@ -120,13 +120,10 @@ int ec_slave_set_state(ec_t *pec, uint16_t slave, ec_state_t state) {
         act_state = 0;
         wkc = ec_slave_get_state(pec, slave, &act_state, NULL);
 
-        ec_log(100, "EC_STATE_SET", "slave %d, state %X, act_state %X, wkc %d\n", 
-                slave, state, act_state, wkc);
-
         if (act_state & EC_STATE_ERROR) {
             ec_fprd(pec, pec->slaves[slave].fixed_address, 
                     EC_REG_ALSTATCODE, &value, sizeof(value), &wkc);
-            ec_log(10, "EC_STATE_SET", "slave %d, state switch to %d failed, alstatcode 0x%04X\n", 
+            ec_log(10, "EC_STATE_SET", "slave %2d, state switch to %d failed, alstatcode 0x%04X\n", 
                     slave, state, value);
 
             ec_slave_set_state(pec, slave, (act_state & EC_STATE_MASK) | EC_STATE_RESET);
@@ -134,14 +131,17 @@ int ec_slave_set_state(ec_t *pec, uint16_t slave, ec_state_t state) {
         }
     
         if (ec_timer_expired(&timeout)) {
-            ec_log(10, "EC_STATE_SET", "slave %d did not respond on state switch to %d\n", 
+            ec_log(10, "EC_STATE_SET", "slave %2d did not respond on state switch to %d\n", 
                     slave, state);
             wkc = 0;
             break;
         }
 
-        ec_sleep(100000000);
+        ec_sleep(1000000);
     } while (act_state != state);
+
+    ec_log(100, "EC_STATE_SET", "slave %2d, state %X, act_state %X, wkc %d\n", 
+            slave, state, act_state, wkc);
 
     return wkc;
 }
@@ -242,9 +242,10 @@ int ec_slave_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
     ec_state_t act_state = 0;
     ec_slave_t *slv = &pec->slaves[slave];
 
+    ec_log(10, __func__, "slave %2d, state %d\n", slave, state);
 #define ec_reg_read(reg, buf, buflen) { uint16_t wkc; \
     ec_fprd(pec, pec->slaves[slave].fixed_address, (reg), (buf), (buflen), &wkc); \
-    if (!wkc) ec_log(10, __func__, "reading reg 0x%X : no answer from slave %d\n", slave); }
+    if (!wkc) ec_log(10, __func__, "reading reg 0x%X : no answer from slave %2d\n", slave); }
 
     // check error state
     wkc = ec_slave_get_state(pec, slave, &act_state, NULL);
@@ -268,8 +269,13 @@ int ec_slave_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
             // configure mailboxes if any supported
             if (slv->eeprom.mbx_supported) {
                 // read mailbox
-                slv->sm[1].adr = slv->eeprom.mbx_send_offset;
-                slv->sm[1].len = slv->eeprom.mbx_send_size;
+                if ((transition == INIT_2_BOOT) && slv->eeprom.boot_mbx_send_offset) {
+                    slv->sm[1].adr = slv->eeprom.boot_mbx_send_offset;
+                    slv->sm[1].len = slv->eeprom.boot_mbx_send_size;
+                } else {
+                    slv->sm[1].adr = slv->eeprom.mbx_send_offset;
+                    slv->sm[1].len = slv->eeprom.mbx_send_size;
+                }
                 slv->sm[1].flags = 0x00010022;
                 slv->mbx_read.sm_nr = 1;
                 free_resource(slv->mbx_read.buf);
@@ -278,8 +284,13 @@ int ec_slave_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
                 slv->mbx_read.skip_next = 0;
 
                 // write mailbox
-                slv->sm[0].adr = slv->eeprom.mbx_receive_offset;
-                slv->sm[0].len = slv->eeprom.mbx_receive_size;
+                if ((transition == INIT_2_BOOT) && slv->eeprom.boot_mbx_receive_offset) {
+                    slv->sm[0].adr = slv->eeprom.boot_mbx_receive_offset;
+                    slv->sm[0].len = slv->eeprom.boot_mbx_receive_size;
+                } else {
+                    slv->sm[0].adr = slv->eeprom.mbx_receive_offset;
+                    slv->sm[0].len = slv->eeprom.mbx_receive_size;
+                }
                 slv->sm[0].flags = 0x00010026;
                 slv->mbx_write.sm_nr = 0;
                 free_resource(slv->mbx_write.buf);
@@ -448,6 +459,8 @@ int ec_slave_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
             wkc = ec_slave_set_state(pec, slave, state);
             break;
         default:
+                wkc = ec_slave_set_state(pec, slave, EC_STATE_INIT);
+            ec_log(10, __func__, "unknown state transition for slave %2d -> %04X\n", slave, transition);
             break;
     };
 
