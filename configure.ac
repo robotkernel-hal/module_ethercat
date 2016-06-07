@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.63])
-AC_INIT([module_ethercat], [4.0.8], [robert.burger@dlr.de])
+AC_INIT([module_ethercat], [4.0.9], [robert.burger@dlr.de])
 AM_INIT_AUTOMAKE([-Wall -Werror foreign subdir-objects])
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_MACRO_DIR([m4])
@@ -33,6 +33,9 @@ PKG_CHECK_MODULES([INTERFACE_SERCOS_PROTOCOL], [interface_sercos_protocol], [], 
                    ])
 PKG_CHECK_MODULES([INTERFACE_PROCESS_DATA_INSPECTION], [interface_process_data_inspection], [], [
                     RMPM_CHECK_MODULES([INTERFACE_PROCESS_DATA_INSPECTION], [robotkernel.interface_process_data_inspection])
+                   ])
+PKG_CHECK_MODULES([LIBSTRING_UTIL], [libstring_util], [], [
+                    RMPM_CHECK_MODULES([LIBSTRING_UTIL], [software.libstring_util])
                    ])
 
 RM_FIND_LN_FROM_ENV
