@@ -111,7 +111,7 @@ int ec_slave_set_state(ec_t *pec, uint16_t slave, ec_state_t state) {
     pec->slaves[slave].expected_state = state;
 
     ec_timer_t timeout;
-    ec_timer_init(&timeout, 500000000); // 5 second timeout
+    ec_timer_init(&timeout, 5000000000); // 5 second timeout
 
     do {
         ec_fpwr(pec, pec->slaves[slave].fixed_address, 
@@ -261,8 +261,6 @@ int ec_slave_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
         case INIT_2_SAFEOP:
         case INIT_2_OP: {
             // init to preop stuff
-            ec_eeprom_dump(pec, slave);
-
             ec_log(10, get_transition_string(transition), "slave %2d, vendor 0x%08X, product 0x%08X, mbx 0x%04X\n",
                     slave, slv->eeprom.vendor_id, slv->eeprom.product_code, slv->eeprom.mbx_supported);
 
@@ -451,6 +449,12 @@ int ec_slave_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
 
             ec_log(10, get_transition_string(transition), "slave %2d: pdi ctrl 0x%04X, fmmus %d, syncm %d\n", 
                     slave, slv->pdi_ctrl, slv->fmmu_ch, slv->sm_ch);
+            
+            // init to preop stuff
+            ec_eeprom_dump(pec, slave);
+
+            ec_log(10, get_transition_string(transition), "slave %2d, vendor 0x%08X, product 0x%08X, mbx 0x%04X\n",
+                    slave, slv->eeprom.vendor_id, slv->eeprom.product_code, slv->eeprom.mbx_supported);
         }
         case PREOP_2_PREOP:
         case SAFEOP_2_SAFEOP:

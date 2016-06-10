@@ -609,27 +609,33 @@ int master::request(int reqcode, void* ptr) {
                 entry_desc.data = NULL;
                 ret2 = ec_coe_sdo_entry_desc_read(_pec, desc->slave_id, desc->index, 
                         desc->sub_index, 0x7F, &entry_desc);
-                if (ret2 <= 0)
+                if (ret2 <= 0) {
+                    ret = -1;
                     break;
+                }
 
                 entry_desc.data = (uint8_t *)malloc(entry_desc.data_len);
-                ec_coe_sdo_entry_desc_read(_pec, desc->slave_id, desc->index, 
+                ret2 = ec_coe_sdo_entry_desc_read(_pec, desc->slave_id, desc->index, 
                         desc->sub_index, 0x7F, &entry_desc);
+                if (ret2 <= 0) {
+                    ret = -1;
+                    break;
+                }
 
                 desc->value_info    = 0x7F;
                 desc->data_type     = entry_desc.data_type;
                 desc->bit_length    = entry_desc.bit_length;
                 desc->obj_access    = entry_desc.obj_access;
+                desc->name_len      = entry_desc.data_len;                
+                if (desc->name_len > 0) {
+                    desc->name          = (char *)malloc(entry_desc.data_len + 1);
+                    memcpy(desc->name, &entry_desc.data[0], desc->name_len);
+                    desc->name[desc->name_len] = '\0';
+                } else
+                    desc->name      = NULL;
 
-//                size_t name_len = min(entry_desc.data_len, CANOPEN_MAXNAME - 1);
-//                memcpy(desc->name, &entry_desc.data[0], name_len);
-//                desc->name[name_len] = '\0';
-                desc->name_len = entry_desc.data_len;                
-                desc->name = (char *)malloc(entry_desc.data_len + 1);
-                memcpy(desc->name, &entry_desc.data[0], desc->name_len);
-                desc->name[desc->name_len] = '\0';
-
-                free(entry_desc.data);
+                if (entry_desc.data)
+                    free(entry_desc.data);
             } else { // search in eeprom entries
                 bool found = false;
 
@@ -663,11 +669,14 @@ int master::request(int reqcode, void* ptr) {
                         if ((slv->eeprom.txpdos[i].name_idx > 0) &&
                                 (slv->eeprom.txpdos[i].name_idx <= slv->eeprom.strings_cnt)) {
                             char *tmp = slv->eeprom.strings[slv->eeprom.txpdos[i].name_idx-1];
-                            size_t name_len = min(strlen(tmp), CANOPEN_MAXNAME - 1);
-                            memcpy(desc->name, tmp, name_len);
-                            desc->name[name_len] = '\0';
-                        } else
-                            desc->name[0] = '\0';
+                            desc->name_len = min(strlen(tmp), CANOPEN_MAXNAME - 1);
+                            desc->name = (char *)malloc(desc->name_len + 1);
+                            memcpy(desc->name, tmp, desc->name_len);
+                            desc->name[desc->name_len] = '\0';
+                        } else {
+                            desc->name_len = 0;
+                            desc->name = NULL;
+                        }
                     }
                 }
 
@@ -686,13 +695,19 @@ int master::request(int reqcode, void* ptr) {
                         if ((slv->eeprom.rxpdos[i].name_idx > 0) &&
                                 (slv->eeprom.rxpdos[i].name_idx <= slv->eeprom.strings_cnt)) {
                             char *tmp = slv->eeprom.strings[slv->eeprom.rxpdos[i].name_idx-1];
-                            size_t name_len = min(strlen(tmp), CANOPEN_MAXNAME -1);
-                            memcpy(desc->name, tmp, name_len);
-                            desc->name[name_len] = '\0';
-                        } else
-                            desc->name[0] = '\0';
+                            desc->name_len = min(strlen(tmp), CANOPEN_MAXNAME - 1);
+                            desc->name = (char *)malloc(desc->name_len + 1);
+                            memcpy(desc->name, tmp, desc->name_len);
+                            desc->name[desc->name_len] = '\0';
+                        } else {
+                            desc->name_len = 0;
+                            desc->name = NULL;
+                        }
                     }
                 }
+
+                if (!found)
+                    ret = -1;
             }
             break;
         }
