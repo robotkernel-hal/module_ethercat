@@ -34,6 +34,9 @@ PKG_CHECK_MODULES([INTERFACE_SERCOS_PROTOCOL], [interface_sercos_protocol], [], 
 PKG_CHECK_MODULES([INTERFACE_PROCESS_DATA_INSPECTION], [interface_process_data_inspection], [], [
                     RMPM_CHECK_MODULES([INTERFACE_PROCESS_DATA_INSPECTION], [robotkernel.interface_process_data_inspection])
                    ])
+PKG_CHECK_MODULES([LIBSTRING_UTIL], [libstring_util], [], [
+                    RMPM_CHECK_MODULES([LIBSTRING_UTIL], [software.libstring_util])
+                   ])
 
 RM_FIND_LN_FROM_ENV
 
