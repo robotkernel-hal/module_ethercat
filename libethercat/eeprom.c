@@ -405,7 +405,6 @@ void ec_eeprom_dump(ec_t *pec, uint16_t slave) {
 
         switch (cat_type) {
             default: 
-                cat_type = EC_EEPROM_CAT_END;
             case EC_EEPROM_CAT_END:
             case EC_EEPROM_CAT_NOP:
                 break;
