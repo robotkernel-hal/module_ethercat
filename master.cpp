@@ -231,6 +231,10 @@ int master::set_state(module_state_t new_state) {
             }
 
             ec_set_state(_pec, EC_STATE_BOOT);
+            
+            for (nr = 0; nr < _pec->slave_cnt; ++nr)
+                _slave_info[nr]->register_interfaces(module_state_boot);
+
             break;
         }
         case module_state_init: {
@@ -247,16 +251,13 @@ int master::set_state(module_state_t new_state) {
                     _slave_info[nr] = slv;
                 }
                 
-                _slave_info[nr]->unregister_interfaces();
-
                 if (_slave_info[nr]->dc.has_dc)
                     _pec->slaves[nr].dc.use_dc = 1;
                 else 
                     _pec->slaves[nr].dc.use_dc = 0;
+                
+                _slave_info[nr]->register_interfaces(module_state_init);
             }
-           
-            for (nr = 0; nr < _pec->slave_cnt; ++nr)
-                _slave_info[nr]->register_interfaces();
 
             break;
         }
@@ -293,6 +294,9 @@ int master::set_state(module_state_t new_state) {
                     }
                 }
             }
+            
+            for (nr = 0; nr < _pec->slave_cnt; ++nr)
+                _slave_info[nr]->register_interfaces(module_state_preop);
 
             break;
         }
@@ -338,6 +342,9 @@ int master::set_state(module_state_t new_state) {
 
             ec_set_state(_pec, EC_STATE_SAFEOP);
             
+            for (nr = 0; nr < _pec->slave_cnt; ++nr)
+                _slave_info[nr]->register_interfaces(module_state_safeop);
+
             start();
             break;
         case module_state_op:
@@ -354,6 +361,10 @@ int master::set_state(module_state_t new_state) {
             _pec->tx_sync = 0;
 
             ec_set_state(_pec, EC_STATE_OP);
+            
+            for (nr = 0; nr < _pec->slave_cnt; ++nr)
+                _slave_info[nr]->register_interfaces(module_state_op);
+
             break;
         default:
             ret = -1;

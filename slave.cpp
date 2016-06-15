@@ -219,6 +219,10 @@ void slave::_init() {
         register_file_read(k.clnt, base.str() + ".file_read");
         register_file_write(k.clnt, base.str() + ".file_write");
     }
+        
+    intf_pd  = NULL;
+    intf_mi  = NULL;
+    intf_coe = NULL;
 }
 
 //! prepare state transitions
@@ -409,7 +413,7 @@ bool slave::prepare_state_transition(transition_t transition) {
                     }
 
                     printf("data: ");
-                    for (int q = 0; q < data_len; ++q)
+                    for (unsigned int q = 0; q < data_len; ++q)
                         printf("%02X ", data[q]);
                     printf("\n");
                     uint32_t abort_code = 0;
@@ -522,7 +526,7 @@ void slave::memory_request(int code, memory_t *memreq) {
  * \param ctx ethercat context
  * \return N/A
  */
-void slave::register_interfaces() {
+void slave::register_interfaces(module_state_t state) {
     std::stringstream slave_name; 
     slave_name << "slave_" << index;
     
@@ -532,43 +536,66 @@ void slave::register_interfaces() {
     node["slave_id"] = index;
     node["loglevel"] = (string)master_dev->ll;
 
-    if (ifaces.size() != 0)
-        return;
-
-    ifaces.push_back(robotkernel::kernel::register_interface_cb(
-            "libinterface_canopen_protocol.so", node));
-    ifaces.push_back(robotkernel::kernel::register_interface_cb( 
-            "libinterface_process_data_inspection.so", node));
-    ifaces.push_back(robotkernel::kernel::register_interface_cb(
-            "libinterface_memory_inspection.so", node));
+#define INTF_UNREGISTER(id) \
+    if (id) { kernel::unregister_interface_cb(id); (id) = NULL; }
+#define INTF_MAP_UNREGISTER(intf_map) \
+    while(!(intf_map).empty()) { \
+        iface_map_t::iterator it = (intf_map).begin(); \
+        kernel::unregister_interface_cb(it->second); \
+        (intf_map).erase(it); }
     
-    if (master_dev->_pec->slaves[index].eeprom.mbx_supported & EC_EEPROM_MBX_SOE) {
-        int atn;
-        for (atn = 0; atn < master_dev->_pec->slaves[index].eeprom.general.soe_channels; ++atn) {
-            std::stringstream atn_name;
-            atn_name << "slave_" << index << ".atn_" << atn;
+#define INTF_REGISTER(id, so) \
+    if ((id) == NULL) (id) = robotkernel::kernel::register_interface_cb((so), node);
 
-            node["dev_name"] = atn_name.str();
-            node["slave_id"] = ECAT_SLAVE_ID_SUB | (atn << 16) | index;
+    switch (state) {
+        case module_state_init:
+        case module_state_boot: 
+            INTF_UNREGISTER(intf_pd);
+            INTF_UNREGISTER(intf_coe);
+            INTF_MAP_UNREGISTER(intf_atn_pd);
+            INTF_MAP_UNREGISTER(intf_atn_soe);
+            
+            INTF_REGISTER(intf_mi, "libinterface_memory_inspection.so");
+            break;
+        case module_state_preop: {
+            INTF_UNREGISTER(intf_pd);
+            INTF_MAP_UNREGISTER(intf_atn_pd);
+            
+            INTF_REGISTER(intf_coe, "libinterface_canopen_protocol.so");
 
-            ifaces.push_back(robotkernel::kernel::register_interface_cb(
-                "libinterface_sercos_protocol.so", node));
-            ifaces.push_back(robotkernel::kernel::register_interface_cb(
-                "libinterface_process_data_inspection.so", node));
+            int atn;
+            for (atn = 0; atn < master_dev->_pec->slaves[index].eeprom.general.soe_channels; ++atn) {
+                if (intf_atn_soe.find(atn) != intf_atn_soe.end())
+                    continue; // already registered
+                
+                std::stringstream atn_name;
+                atn_name << "slave_" << index << ".atn_" << atn;
+
+                node["dev_name"] = atn_name.str();
+                node["slave_id"] = ECAT_SLAVE_ID_SUB | (atn << 16) | index;
+                INTF_REGISTER(intf_atn_soe[atn], "libinterface_sercos_protocol.so");
+            }
+            break;
         }
-    }
-}
+        case module_state_op:
+        case module_state_safeop: {
+            INTF_REGISTER(intf_pd, "libinterface_process_data_inspection.so");
+            int atn;
+            for (atn = 0; atn < master_dev->_pec->slaves[index].eeprom.general.soe_channels; ++atn) {
+                if (intf_atn_pd.find(atn) != intf_atn_pd.end())
+                    continue; // already registered
+                
+                std::stringstream atn_name;
+                atn_name << "slave_" << index << ".atn_" << atn;
 
-//! unregister interfaces of slave
-/*!
- * \return N/A
- */
-void slave::unregister_interfaces() {
-    while(!ifaces.empty()) {
-        kernel::interface_id_t id = ifaces.front();
-        ifaces.pop_front();
-
-        kernel::unregister_interface_cb(id);
+                node["dev_name"] = atn_name.str();
+                node["slave_id"] = ECAT_SLAVE_ID_SUB | (atn << 16) | index;
+                INTF_REGISTER(intf_atn_pd[atn], "libinterface_process_data_inspection.so");
+            }
+            break;
+        }
+        default:
+            break;
     }
 }
 

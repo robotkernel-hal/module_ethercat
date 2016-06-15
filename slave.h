@@ -49,6 +49,8 @@ namespace module_ethercat {
 
 class master;
 
+#define TO_TRANSITION(from, to) ((((from) & 0xF) << 4) | ((to) & 0xF))
+
 //! init command transition
 typedef enum transition {
     boot_to_boot     =  0x00,
@@ -216,13 +218,7 @@ class slave : public ln_service_set_ec_state_base,
          * \param ctx ethercat context
          * \return N/A
          */
-        void register_interfaces();
-
-        //! unregister interfaces of slave
-        /*!
-         * \return N/A
-         */
-        void unregister_interfaces();
+        void register_interfaces(module_state_t state);
 
         //! perform memory request
         /*!
@@ -242,8 +238,14 @@ class slave : public ln_service_set_ec_state_base,
         //! initialize common stuff
         void _init();
 
-        typedef std::list<robotkernel::kernel::interface_id_t> iface_list_t;
-        iface_list_t ifaces;
+        typedef robotkernel::kernel::interface_id_t iface_t;
+        typedef std::map<int, iface_t> iface_map_t;
+
+        iface_t     intf_pd;
+        iface_t     intf_mi;
+        iface_t     intf_coe;
+        iface_map_t intf_atn_soe;
+        iface_map_t intf_atn_pd;
 
         module_ethercat::master *master_dev;
 };
