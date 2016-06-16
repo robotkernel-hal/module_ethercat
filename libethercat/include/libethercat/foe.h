@@ -126,8 +126,8 @@ extern "C" {
  * \return working counter
  */
 int ec_foe_read(ec_t *pec, uint16_t slave, uint32_t password,
-        char remote_file_name[MAX_FILE_NAME_SIZE], 
-        const char *local_file_name);
+        char file_name[MAX_FILE_NAME_SIZE], uint8_t **file_data, 
+        ssize_t *file_data_len, char **error_message);
 
 //! write file over foe
 /*!
@@ -139,8 +139,8 @@ int ec_foe_read(ec_t *pec, uint16_t slave, uint32_t password,
  * \return working counter
  */
 int ec_foe_write(ec_t *pec, uint16_t slave, uint32_t password,
-        char remote_file_name[MAX_FILE_NAME_SIZE], 
-        const char *local_file_name);
+        char file_name[MAX_FILE_NAME_SIZE], uint8_t *file_data, 
+        ssize_t file_data_len, char **error_message);
 
 #ifdef __cplusplus
 }

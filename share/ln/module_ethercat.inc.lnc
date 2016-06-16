@@ -9,7 +9,7 @@ requires_version 0.2.43
 #   module_ethercat_mds
 #     (optional) add custom message definition paths
 
-# rk_depends: interface_process_data_inspection, interface_memory_inspection, interface_canopen_protocol, interface_sercos_protocol
+# rk_depends: interface_process_data_inspection, interface_memory_inspection, interface_canopen_protocol, interface_sercos_protocol, interface_file_protocol
 
 defines
 module_ethercat_base: %(dirname %(dirname %(CURDIR)))

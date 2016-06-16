@@ -25,6 +25,7 @@
 #include "master.h"
 #include "interface_canopen_protocol/module_intf.h"
 #include "interface_sercos_protocol/module_intf.h"
+#include "interface_file_protocol/module_intf.h"
 
 MODULE_DEF(module_ethercat, module_ethercat::master)
 
@@ -459,6 +460,44 @@ int master::request(int reqcode, void* ptr) {
         case MOD_REQUEST_GET_PD_COOKIE:
             *(uint64_t **)ptr = &pd_cookie;
             break;
+        case MOD_REQUEST_FILE_READ: {
+            file_readwrite_info_t *frwi = (file_readwrite_info_t *)ptr;
+            uint32_t password = 0;
+            char file_name[MAX_FILE_NAME_SIZE];
+            strncpy(file_name, frwi->file_name, MAX_FILE_NAME_SIZE-1);
+            if (frwi->password)
+                password = strtol(frwi->password, NULL, 10);
+
+            ret = ec_foe_read(
+                    _pec,                   // ethercat master device
+                    frwi->slave_id,         // slave index
+                    password,               // file password
+                    file_name,              // file name
+                    &frwi->file_data,       // returns file_data
+                    &frwi->file_data_len,   // returns file_data_len
+                    &frwi->error_message);  // returns error_message
+
+            break;
+        }
+        case MOD_REQUEST_FILE_WRITE: {
+            file_readwrite_info_t *frwi = (file_readwrite_info_t *)ptr;
+            uint32_t password = 0;
+            char file_name[MAX_FILE_NAME_SIZE];
+            strncpy(file_name, frwi->file_name, MAX_FILE_NAME_SIZE-1);
+            if (frwi->password)
+                password = strtol(frwi->password, NULL, 10);
+
+            ret = ec_foe_write(
+                    _pec,                   // ethercat master device
+                    frwi->slave_id,         // slave index
+                    password,               // file password
+                    file_name,              // file name
+                    frwi->file_data,        // file_data
+                    frwi->file_data_len,    // file_data_len
+                    &frwi->error_message);  // returns error_message
+
+            break;
+        }
         case MOD_REQUEST_MEMORY_READ:
         case MOD_REQUEST_MEMORY_WRITE:
         case MOD_REQUEST_MEMORY_GET_INFO: {

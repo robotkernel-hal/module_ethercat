@@ -216,13 +216,12 @@ void slave::_init() {
 
         register_set_ec_state(k.clnt, base.str() + ".set_ec_state");
         register_get_ec_state(k.clnt, base.str() + ".get_ec_state");
-        register_file_read(k.clnt, base.str() + ".file_read");
-        register_file_write(k.clnt, base.str() + ".file_write");
     }
         
     intf_pd  = NULL;
     intf_mi  = NULL;
     intf_coe = NULL;
+    intf_foe = NULL;
 }
 
 //! prepare state transitions
@@ -548,10 +547,23 @@ void slave::register_interfaces(module_state_t state) {
     if ((id) == NULL) (id) = robotkernel::kernel::register_interface_cb((so), node);
 
     switch (state) {
-        case module_state_init:
         case module_state_boot: 
+            if (master_dev->_pec->slaves[index].eeprom.mbx_supported 
+                    & EC_EEPROM_MBX_FOE) {
+                INTF_REGISTER(intf_foe, "libinterface_file_protocol.so");
+            }
+
             INTF_UNREGISTER(intf_pd);
             INTF_UNREGISTER(intf_coe);
+            INTF_MAP_UNREGISTER(intf_atn_pd);
+            INTF_MAP_UNREGISTER(intf_atn_soe);
+            
+            INTF_REGISTER(intf_mi, "libinterface_memory_inspection.so");
+            break;
+        case module_state_init:
+            INTF_UNREGISTER(intf_pd);
+            INTF_UNREGISTER(intf_coe);
+            INTF_UNREGISTER(intf_foe);
             INTF_MAP_UNREGISTER(intf_atn_pd);
             INTF_MAP_UNREGISTER(intf_atn_soe);
             
@@ -562,6 +574,10 @@ void slave::register_interfaces(module_state_t state) {
             INTF_MAP_UNREGISTER(intf_atn_pd);
             
             INTF_REGISTER(intf_coe, "libinterface_canopen_protocol.so");
+            if (master_dev->_pec->slaves[index].eeprom.mbx_supported 
+                    & EC_EEPROM_MBX_FOE) {
+                INTF_REGISTER(intf_foe, "libinterface_file_protocol.so");
+            }
 
             int atn;
             for (atn = 0; atn < master_dev->_pec->slaves[index].eeprom.general.soe_channels; ++atn) {
@@ -646,33 +662,3 @@ int slave::on_get_ec_state(ln::service_request& req, ln_service_module_ethercat_
     return 0;
 }
 	    
-int slave::on_file_read(ln::service_request& req, ln_service_module_ethercat_file_read& svc) {
-    char remote_file_name[MAX_FILE_NAME_SIZE];
-    ssize_t remote_file_name_len = min(MAX_FILE_NAME_SIZE-1, svc.req.file_name_len);
-    strncpy(remote_file_name, svc.req.file_name, remote_file_name_len);
-    remote_file_name[remote_file_name_len] = '\0';
-
-    string local_file_name(svc.req.file_name, svc.req.file_name_len);
-    
-    ec_foe_read(master_dev->_pec, index, svc.req.password, 
-            remote_file_name, local_file_name.c_str());
-
-    req.respond();
-    return 0;
-}
-
-int slave::on_file_write(ln::service_request& req, ln_service_module_ethercat_file_write& svc) {
-    char remote_file_name[MAX_FILE_NAME_SIZE];
-    ssize_t remote_file_name_len = min(MAX_FILE_NAME_SIZE-1, svc.req.remote_file_name_len);
-    strncpy(remote_file_name, svc.req.remote_file_name, remote_file_name_len);
-    remote_file_name[remote_file_name_len] = '\0';
-
-    string local_file_name(svc.req.local_file_name, svc.req.local_file_name_len);
-    
-    ec_foe_write(master_dev->_pec, index, svc.req.password, 
-            remote_file_name, local_file_name.c_str());
-
-    req.respond();
-    return 0;
-}
-

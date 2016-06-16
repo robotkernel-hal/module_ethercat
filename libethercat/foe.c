@@ -35,14 +35,14 @@
  * \param pec pointer to ethercat master
  * \param slave slave number
  * \param password foe password
- * \param remote_file_name file_name to read from
+ * \param file_name file_name to read from
  * \param local_file_name file_name to store file to
  * \return working counter
  */
 int ec_foe_read(ec_t *pec, uint16_t slave, uint32_t password,
-        char remote_file_name[MAX_FILE_NAME_SIZE], 
-        const char *local_file_name) {
-    int wkc = -1, fd = 0;
+        char file_name[MAX_FILE_NAME_SIZE], uint8_t **file_data, 
+        ssize_t *file_data_len, char **error_message) {
+    int wkc = -1;
     ec_slave_t *slv = (ec_slave_t *)&pec->slaves[slave];
 
     if (!(slv->eeprom.mbx_supported & EC_EEPROM_MBX_FOE)) {
@@ -57,7 +57,7 @@ int ec_foe_read(ec_t *pec, uint16_t slave, uint32_t password,
 
     // calc lengths
     ssize_t foe_max_len = min(slv->sm[1].len, MAX_FILE_NAME_SIZE);
-    ssize_t remote_file_name_len = min(strlen(remote_file_name), foe_max_len-6);
+    ssize_t file_name_len = min(strlen(file_name), foe_max_len-6);
 
     // empty mailbox if anything in
     ec_mbx_clear(pec, slave, 1);
@@ -65,7 +65,7 @@ int ec_foe_read(ec_t *pec, uint16_t slave, uint32_t password,
 
     // mailbox header
     ec_mbx_clear(pec, slave, 0);
-    write_buf->mbx_hdr.length    = 6 + remote_file_name_len;
+    write_buf->mbx_hdr.length    = 6 + file_name_len;
     write_buf->mbx_hdr.address   = 0x0000;
     write_buf->mbx_hdr.priority  = 0x00;
     write_buf->mbx_hdr.counter   = 0;
@@ -77,7 +77,9 @@ int ec_foe_read(ec_t *pec, uint16_t slave, uint32_t password,
 
     // read request (password 4 Byte)
     write_buf->password          = password;
-    memcpy(write_buf->file_name, remote_file_name, remote_file_name_len);
+    memcpy(write_buf->file_name, file_name, file_name_len);
+
+    ec_log(10, __func__, "start reading file \"%s\"\n", file_name);
 
     // send request
     wkc = ec_mbx_send(pec, slave, EC_DEFAULT_TIMEOUT_MBX);
@@ -91,7 +93,7 @@ int ec_foe_read(ec_t *pec, uint16_t slave, uint32_t password,
     ec_foe_data_request_t *read_buf_data = 
         (ec_foe_data_request_t *)(slv->mbx_read.buf);
 
-    fd = open(local_file_name, O_CREAT | O_RDWR);
+    *file_data_len = 0;
 
     while (1) {
         // wait for answer
@@ -112,15 +114,19 @@ int ec_foe_read(ec_t *pec, uint16_t slave, uint32_t password,
             ec_foe_error_request_t *read_buf_error =
                 (ec_foe_error_request_t *)(slv->mbx_read.buf);
 
-            ec_log(10, __func__, "got foe error code 0x%X\n", read_buf_error->error_code);
+            ec_log(100, __func__, "got foe error code 0x%X\n", read_buf_error->error_code);
 
             ssize_t text_len = (read_buf_data->mbx_hdr.length - 6);
             if (text_len > 0) {
-                char *error_text = malloc(text_len + 1);
-                strncpy(error_text, read_buf_error->error_text, text_len);
-                error_text[text_len] = '\0';
-                ec_log(10, __func__, "error_text: %s\n", error_text);
+                *error_message = strndup(read_buf_error->error_text, text_len);
+            } else {
+                if (read_buf_error->error_code == 0x800D) {
+                    *error_message = strdup("file not found!");
+                }
             }
+
+            wkc = -1;
+            goto exit;
         }
 
         if (read_buf_data->foe_hdr.op_code != EC_FOE_OP_CODE_DATA_REQUEST) {
@@ -130,14 +136,17 @@ int ec_foe_read(ec_t *pec, uint16_t slave, uint32_t password,
             continue;
         }
 
-        ec_log(10, __func__, "got packet %d\n", read_buf_data->packet_nr);
-
         size_t len = read_buf_data->mbx_hdr.length - 6;
 
-        if (strncmp(remote_file_name, "ECATFW__", 8) == 0) 
-            write(fd, &read_buf_data->data.bdata[8], len - 8);
-        else
-            write(fd, read_buf_data->data.bdata, len);
+        if (strncmp(file_name, "ECATFW__", 8) == 0) {
+            *file_data = realloc(*file_data, *file_data_len + len - 8);
+            memcpy(*file_data + *file_data_len, &read_buf_data->data.bdata[8], len - 8); 
+            *file_data_len += len - 8;
+        } else {
+            *file_data = realloc(*file_data, *file_data_len + len);
+            memcpy(*file_data + *file_data_len, &read_buf_data->data.bdata[0], len); 
+            *file_data_len += len;
+        }
 
         // everthing is fine, send ack 
         // mailbox header
@@ -163,8 +172,9 @@ int ec_foe_read(ec_t *pec, uint16_t slave, uint32_t password,
             break;
     }
 
+
 exit:
-    close(fd);
+    ec_log(10, __func__, "reading file \"%s\" finished\n", file_name);
 
     // reset mailbox state 
     if (slv->mbx_read.sm_state) {
@@ -181,14 +191,14 @@ exit:
  * \param pec pointer to ethercat master
  * \param slave slave number
  * \param password foe password
- * \param remote_file_name file_name to store to
+ * \param file_name file_name to store to
  * \param local_file_name file_name to read file from
  * \return working counter
  */
 int ec_foe_write(ec_t *pec, uint16_t slave, uint32_t password,
-        char remote_file_name[MAX_FILE_NAME_SIZE], 
-        const char *local_file_name) {
-    int wkc = -1, fd = 0;
+        char file_name[MAX_FILE_NAME_SIZE], uint8_t *file_data, 
+        ssize_t file_data_len, char **error_message) {
+    int wkc = -1;
     ec_slave_t *slv = (ec_slave_t *)&pec->slaves[slave];
 
     if (!(slv->eeprom.mbx_supported & EC_EEPROM_MBX_FOE)) {
@@ -203,7 +213,7 @@ int ec_foe_write(ec_t *pec, uint16_t slave, uint32_t password,
 
     // calc lengths
     ssize_t foe_max_len = min(slv->sm[1].len, MAX_FILE_NAME_SIZE);
-    ssize_t remote_file_name_len = min(strlen(remote_file_name), foe_max_len-6);
+    ssize_t file_name_len = min(strlen(file_name), foe_max_len-6);
 
     // empty mailbox if anything in
     ec_mbx_clear(pec, slave, 1);
@@ -211,7 +221,7 @@ int ec_foe_write(ec_t *pec, uint16_t slave, uint32_t password,
 
     // mailbox header
     ec_mbx_clear(pec, slave, 0);
-    write_buf->mbx_hdr.length    = 6 + remote_file_name_len;
+    write_buf->mbx_hdr.length    = 6 + file_name_len;
     write_buf->mbx_hdr.address   = 0x0000;
     write_buf->mbx_hdr.priority  = 0x00;
     write_buf->mbx_hdr.counter   = 0;
@@ -223,7 +233,7 @@ int ec_foe_write(ec_t *pec, uint16_t slave, uint32_t password,
 
     // read request (password 4 Byte)
     write_buf->password          = password;
-    memcpy(write_buf->file_name, remote_file_name, remote_file_name_len);
+    memcpy(write_buf->file_name, file_name, file_name_len);
 
     // send request
     wkc = ec_mbx_send(pec, slave, EC_DEFAULT_TIMEOUT_MBX);
@@ -277,21 +287,15 @@ int ec_foe_write(ec_t *pec, uint16_t slave, uint32_t password,
         goto exit;
     }
 
-    fd = open(local_file_name, O_RDONLY);
-    if (fd == -1) {
-        ec_log(10, __func__, "error opening file: %s\n", strerror(errno));
-        goto exit;
-    }
-
     // mailbox len - mailbox hdr (6) - foe header (6)
     size_t data_len = slv->sm[1].len - 6 - 6;
-    off_t offset = 0;
+    off_t offset = 0, file_offset = 0;
 
-    if (strcmp(remote_file_name, "ECATFW__bootstrap.bin") == 0)
+    if (strcmp(file_name, "ECATFW__bootstrap.bin") == 0)
         offset = 0x400000;
-    else if (strcmp(remote_file_name, "ECATFW__bootloader.bin") == 0)
+    else if (strcmp(file_name, "ECATFW__bootloader.bin") == 0)
         offset = 0x408000;
-    else if (strcmp(remote_file_name, "ECATFW__slave.bin") == 0)
+    else if (strcmp(file_name, "ECATFW__slave.bin") == 0)
         offset = 0x410000;
 
     while (1) {
@@ -300,11 +304,12 @@ int ec_foe_write(ec_t *pec, uint16_t slave, uint32_t password,
         // everthing is fine, send data 
         ec_mbx_clear(pec, slave, 0);
     
-        if (strncmp(remote_file_name, "ECATFW__", 8) == 0) {
+        if (strncmp(file_name, "ECATFW__", 8) == 0) {
             size_t fw_len = data_len - 8; // firmware update header (8)
             ec_fw_update_t *fw = (ec_fw_update_t *)write_buf_data->data.bdata;
 
-            ssize_t bytes_read = read(fd, fw->data, fw_len);
+            int bytes_read = min(file_data_len - file_offset, fw_len);
+            memcpy(fw->data, file_data + file_offset, bytes_read);
             if (bytes_read < fw_len)
                 last_pkt = 1;
             
@@ -314,13 +319,18 @@ int ec_foe_write(ec_t *pec, uint16_t slave, uint32_t password,
             fw->address_high = (offset>>16) & 0xFFFF;
 
             offset += bytes_read;
+            file_offset += bytes_read;
 
             // mailbox header
             write_buf_data->mbx_hdr.length    = 6 + 8 + bytes_read; 
         } else {
-            ssize_t bytes_read = read(fd, write_buf_data->data.bdata, data_len);
+            int bytes_read = min(file_data_len - file_offset, data_len);
+            memcpy(write_buf_data, file_data + file_offset, bytes_read);
             if (bytes_read < data_len)
                 last_pkt = 1;
+
+            offset += bytes_read;
+            file_offset += bytes_read;
 
             // mailbox header
             write_buf_data->mbx_hdr.length    = 6 + bytes_read; 
@@ -370,8 +380,6 @@ int ec_foe_write(ec_t *pec, uint16_t slave, uint32_t password,
     }
 
 exit:
-    close(fd);
-        
     ec_log(10, __func__, "file download finished\n");
 
     // reset mailbox state 
