@@ -117,8 +117,7 @@ slave::slave_dc::slave_dc(const YAML::Node& node) {
     
     type             = get_as<int>(node, "type");
     cycle_time_0     = get_as<uint32_t>(node, "cycle_time_0", 0);
-    if (type == 1)
-        cycle_time_1 = get_as<uint32_t>(node, "cycle_time_1", 0);
+    cycle_time_1     = get_as<uint32_t>(node, "cycle_time_1", 0);
     cycle_shift      = get_as<uint32_t>(node, "cycle_shift", 0);
 }
 

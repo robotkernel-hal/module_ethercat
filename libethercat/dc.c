@@ -306,8 +306,8 @@ int ec_dc_config(ec_t *pec) {
                 /* current slave has children */
                 /* those childrens delays need to be substacted */
                 if (slv->link_cnt > 1)
-                    dt1 = ec_dc_porttime(pec, i, ec_dc_prevport(pec, i, slv->entryport)) -
-                        ec_dc_porttime(pec, i, slv->entryport);
+                    dt1 = ec_dc_porttime(pec, slave, ec_dc_prevport(pec, slave, slv->entryport)) -
+                        ec_dc_porttime(pec, slave, slv->entryport);
 
                 /* we are only interrested in positive diference */
                 if (dt1 > dt3) dt1 = -dt1;
@@ -347,7 +347,7 @@ int ec_dc_config(ec_t *pec) {
         }
     }
 
-    uint64_t temp_dc;
+    uint64_t temp_dc = 0;
     ec_frmw(pec, pec->dc.master_address, EC_REG_DCSYSTIME,
             &temp_dc, 8, &wkc);
 
