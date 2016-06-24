@@ -71,6 +71,9 @@ int hw_open(hw_t **pphw, const char *devname, int prio, int cpumask) {
     struct ifreq ifr;
     struct sockaddr_ll sll;
     memset(&sll, 0, sizeof(sll));
+
+    ec_log(10, __func__, "size sockaddr %d, sockaddr_ll %d\n", 
+            sizeof(struct sockaddr), sizeof(struct sockaddr_ll));
 #endif
 
     (*pphw) = (hw_t *)malloc(sizeof(hw_t));
@@ -113,13 +116,13 @@ int hw_open(hw_t **pphw, const char *devname, int prio, int cpumask) {
     memset(&ifr, 0, sizeof(ifr));
     strncpy(ifr.ifr_name, devname, sizeof(ifr.ifr_name));
     ioctl((*pphw)->sockfd, SIOCGIFMTU, &ifr);
-    (*pphw)->mtu_size = ifr.ifr_mtu;
+    (*pphw)->mtu_size   = ifr.ifr_mtu;
     ec_log(10, "hw_open", "got mtu size %d\n", (*pphw)->mtu_size);
 
     // bind socket to protocol, in this case RAW EtherCAT */
-    sll.sll_family = AF_PACKET;
-    sll.sll_ifindex = ifindex;
-    sll.sll_protocol = htons(ETH_P_ECAT);
+    sll.sll_family      = AF_PACKET;
+    sll.sll_ifindex     = ifindex;
+    sll.sll_protocol    = htons(ETH_P_ECAT);
     bind((*pphw)->sockfd, (struct sockaddr *)&sll, sizeof(sll));
 #elif defined __VXWORKS__
     /* we use snarf link layer device driver */

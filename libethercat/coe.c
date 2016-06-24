@@ -725,7 +725,7 @@ int ec_coe_generate_mapping(ec_t *pec, uint16_t slave) {
     uint16_t start_adr; 
     ec_slave_t *slv = (ec_slave_t *)&pec->slaves[slave];
 
-    ec_log(10, __func__, "slave %d\n", slave);
+    ec_log(100, __func__, "slave %d\n", slave);
 
     if (slv->sm[0].adr > slv->sm[1].adr)
         start_adr = slv->sm[0].adr + slv->sm[0].len;
@@ -799,7 +799,7 @@ int ec_coe_generate_mapping(ec_t *pec, uint16_t slave) {
         }
 
         if (bit_len) {
-            ec_log(10, __func__, "slave %2d: sm%d length bits %d, bytes %d\n", 
+            ec_log(100, __func__, "slave %2d: sm%d length bits %d, bytes %d\n", 
                     slave, sm_idx, bit_len, (bit_len + 7) / 8);
 
             if (slv->sm && slv->sm_ch > sm_idx) {

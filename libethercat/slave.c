@@ -254,6 +254,8 @@ int ec_slave_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
 
     // generate transition
     ec_state_transition_t transition = ((act_state & EC_STATE_MASK) << 8) | (state & EC_STATE_MASK); 
+            
+    ec_log(10, get_transition_string(transition), "slave %2d\n", slave);
 
     switch (transition) {
         case INIT_2_BOOT:

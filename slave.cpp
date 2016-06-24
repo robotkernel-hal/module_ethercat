@@ -100,12 +100,12 @@ slave::soe_init_cmd::~soe_init_cmd() {
 
 //! default construction
 slave::slave_dc::slave_dc() {
-    has_dc = false;
+    has_dc          = false;
 
-    type = 0;
-    cycle_time_0 = 0;
-    cycle_time_1 = 0;
-    cycle_shift  = 0;
+    type            = 0;
+    cycle_time_0    = 0;
+    cycle_time_1    = 0;
+    cycle_shift     = 0;
 }
 
 //! construction
@@ -113,12 +113,12 @@ slave::slave_dc::slave_dc() {
  * \param node yaml intialization node
  */
 slave::slave_dc::slave_dc(const YAML::Node& node) {
-    has_dc = true;
+    has_dc          = true;
     
-    type             = get_as<int>(node, "type");
-    cycle_time_0     = get_as<uint32_t>(node, "cycle_time_0", 0);
-    cycle_time_1     = get_as<uint32_t>(node, "cycle_time_1", 0);
-    cycle_shift      = get_as<uint32_t>(node, "cycle_shift", 0);
+    type            = get_as<int     >(node, "type");
+    cycle_time_0    = get_as<uint32_t>(node, "cycle_time_0", 0);
+    cycle_time_1    = get_as<uint32_t>(node, "cycle_time_1", 0);
+    cycle_shift     = get_as<uint32_t>(node, "cycle_shift", 0);
 }
 
 //! construction
@@ -126,7 +126,7 @@ slave::slave_dc::slave_dc(const YAML::Node& node) {
  * \param node yaml intialization node
  */
 slave::sync_manager_settings::sync_manager_settings(const YAML::Node& node) {
-    _address = get_as<int>(node, "address");
+    _address = get_as<int     >(node, "address");
     _flags   = get_as<unsigned>(node, "flags");
     _length  = get_as<unsigned>(node, "length");
 }
@@ -230,17 +230,18 @@ void slave::_init() {
  */
 bool slave::prepare_state_transition(transition_t transition) {
     int state_from = (transition & 0xF0) >> 4,
-        state_to = transition & 0x0F;
+        state_to   =  transition & 0x0F;
 
     if (state_to == 4) {
         // configure distributed clocks if needed 
         if (master_dev->_pec->dc.have_dc && dc.has_dc) {
             if (dc.cycle_time_0 == 0)
                 dc.cycle_time_0 = master_dev->_pec->dc.timer_override; 
-            if (dc.cycle_time_1 == 0)
-                dc.cycle_time_1 = master_dev->_pec->dc.timer_override; 
 
             if (dc.type == 1) {
+                if (dc.cycle_time_1 == 0)
+                    dc.cycle_time_1 = master_dev->_pec->dc.timer_override; 
+
                 master_dev->log(verbose, "slave %2d configuring dc sync 01, "
                         "cycle_times %d/%d, cycle_shift %d\n",
                         index, dc.cycle_time_0, dc.cycle_time_1, dc.cycle_shift);
@@ -291,12 +292,12 @@ bool slave::prepare_state_transition(transition_t transition) {
 
                 master_dev->log(warning, "desc returned %d, data_len %d\n", ret2, entry_desc.data_len);
                 if (ret2 > 0) {
-                    py_value *pval      = eval_full(cmd->value);
-                    py_int *pintval     = dynamic_cast<py_int *>(pval);
-                    py_long *plongval   = dynamic_cast<py_long *>(pval);
-                    py_float *pfloatval = dynamic_cast<py_float *>(pval);
-                    py_special *pspval  = dynamic_cast<py_special *>(pval);
-                
+                    py_value    *pval       = eval_full(cmd->value);
+                    py_int      *pintval    = dynamic_cast<py_int *>(pval);
+                    py_long     *plongval   = dynamic_cast<py_long *>(pval);
+                    py_float    *pfloatval  = dynamic_cast<py_float *>(pval);
+                    py_special  *pspval     = dynamic_cast<py_special *>(pval);
+                 
                     size_t data_len = (entry_desc.bit_length+7)/8;
                     uint8_t *data = new uint8_t[data_len];
 
@@ -465,6 +466,7 @@ void slave::memory_request(int code, memory_t *memreq) {
     switch (code) {
         case MOD_REQUEST_MEMORY_READ: {
             uint16_t address = MEM_ADDRESS(memreq->address);
+            memset(memreq->data, 0, memreq->length);
 
             switch (memreq->address & MEM_TYPE_MASK) {
                 case MEM_TYPE_SLAVE_EEPROM:
