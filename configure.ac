@@ -1,8 +1,11 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
-AC_PREREQ([2.63])
-AC_INIT([module_ethercat], [4.0.12], [robert.burger@dlr.de])
+AC_PREREQ([2.69])
+AC_INIT(
+	[module_ethercat], 
+	m4_esyscmd_s([cat project.properties | grep VERSION    | cut -d'=' -f2 | xargs printf "%s"]),
+	m4_esyscmd_s([cat project.properties | grep MAINTAINER | cut -d'=' -f2 | xargs printf "%s"]))
 AM_INIT_AUTOMAKE([-Wall -Werror foreign subdir-objects])
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_MACRO_DIR([m4])
@@ -18,28 +21,9 @@ AC_PROG_AWK
 AC_PROG_INSTALL
 AC_PROG_LIBTOOL
 AC_PROG_LN_S
+AC_PROG_MAKE_SET
 
-PKG_CHECK_MODULES([ROBOTKERNEL], [robotkernel], [], [
-                    RMPM_CHECK_MODULES([ROBOTKERNEL], [robotkernel.robotkernel])
-                   ])
-PKG_CHECK_MODULES([INTERFACE_MEMORY_INSPECTION], [interface_memory_inspection], [], [
-                    RMPM_CHECK_MODULES([INTERFACE_MEMORY_INSPECTION], [robotkernel.interface_memory_inspection])
-                   ])
-PKG_CHECK_MODULES([INTERFACE_CANOPEN_PROTOCOL], [interface_canopen_protocol], [], [
-                    RMPM_CHECK_MODULES([INTERFACE_CANOPEN_PROTOCOL], [robotkernel.interface_canopen_protocol])
-                   ])
-PKG_CHECK_MODULES([INTERFACE_SERCOS_PROTOCOL], [interface_sercos_protocol], [], [
-                    RMPM_CHECK_MODULES([INTERFACE_SERCOS_PROTOCOL], [robotkernel.interface_sercos_protocol])
-                   ])
-PKG_CHECK_MODULES([INTERFACE_PROCESS_DATA_INSPECTION], [interface_process_data_inspection], [], [
-                    RMPM_CHECK_MODULES([INTERFACE_PROCESS_DATA_INSPECTION], [robotkernel.interface_process_data_inspection])
-                   ])
-PKG_CHECK_MODULES([INTERFACE_FILE_PROTOCOL], [interface_file_protocol], [], [
-                    RMPM_CHECK_MODULES([INTERFACE_FILE_PROTOCOL], [robotkernel.interface_file_protocol])
-                   ])
-PKG_CHECK_MODULES([LIBSTRING_UTIL], [libstring_util], [], [
-                    RMPM_CHECK_MODULES([LIBSTRING_UTIL], [software.libstring_util])
-                   ])
+m4_esyscmd([scripts/m4_deps.py])
 
 RM_FIND_LN_FROM_ENV
 
