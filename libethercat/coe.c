@@ -645,13 +645,14 @@ int ec_coe_sdo_entry_desc_read(ec_t *pec, uint16_t slave, uint16_t index, uint8_
     int wkc;
     ec_slave_t *slv = (ec_slave_t *)&pec->slaves[slave];
     
-    if (!(slv->eeprom.mbx_supported & EC_EEPROM_MBX_COE))
+    if (    !(slv->eeprom.mbx_supported & EC_EEPROM_MBX_COE) ||
+            !(slv->mbx_write.buf) || !(slv->mbx_read.buf))
         return 0;
 
     pthread_mutex_lock(&slv->mbx_lock);
 
-    ec_sdo_entry_desc_req_t *write_buf = (ec_sdo_entry_desc_req_t *)(pec->slaves[slave].mbx_write.buf);
-    ec_sdo_entry_desc_resp_t *read_buf = (ec_sdo_entry_desc_resp_t *)(pec->slaves[slave].mbx_read.buf); 
+    ec_sdo_entry_desc_req_t *write_buf = (ec_sdo_entry_desc_req_t *)(slv->mbx_write.buf);
+    ec_sdo_entry_desc_resp_t *read_buf = (ec_sdo_entry_desc_resp_t *)(slv->mbx_read.buf); 
     ec_mbx_clear(pec, slave, 1);
     ec_mbx_receive(pec, slave, 0); // empty mailbox if anything pending
 
