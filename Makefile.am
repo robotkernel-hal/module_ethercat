@@ -32,6 +32,7 @@ libmodule_ethercat_la_CXXFLAGS = -Wall \
 								 @INTERFACE_CANOPEN_PROTOCOL_CFLAGS@ \
 								 @INTERFACE_SERCOS_PROTOCOL_CFLAGS@ \
 								 @INTERFACE_FILE_PROTOCOL_CFLAGS@ \
+								 @YAML_CPP_CFLAGS@ \
 								 @LIBSTRING_UTIL_CFLAGS@
 
 libmodule_ethercat_la_CFLAGS   = -std=gnu99 \
@@ -46,6 +47,7 @@ libmodule_ethercat_la_CFLAGS   = -std=gnu99 \
 								 @INTERFACE_CANOPEN_PROTOCOL_CFLAGS@ \
 								 @INTERFACE_SERCOS_PROTOCOL_CFLAGS@ \
 								 @INTERFACE_FILE_PROTOCOL_CFLAGS@ \
+								 @YAML_CPP_CFLAGS@ \
 								 @LIBSTRING_UTIL_CFLAGS@
 
 libmodule_ethercat_la_LDFLAGS  = -Wall -release $(PACKAGE_VERSION)
