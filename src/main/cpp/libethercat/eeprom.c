@@ -374,6 +374,9 @@ void ec_eeprom_dump(ec_t *pec, uint16_t slave) {
     uint32_t value32 = 0;
     ec_slave_t *slv = &pec->slaves[slave];
 
+    if (slv->eeprom.read_eeprom == 1)
+        return;
+
 #define eeprom(adr, mem) \
     ec_eepromread_len(pec, slave, (adr), (uint8_t *)&(mem), sizeof(mem));
 #define eeprom_log(...) \
@@ -394,6 +397,10 @@ void ec_eeprom_dump(ec_t *pec, uint16_t slave) {
     eeprom(EC_EEPROM_ADR_BOOT_MBX_SEND_SIZE, slv->eeprom.boot_mbx_send_size);
 
     size = value32 & 0x0000FFFF;
+
+    // we do not need to read full eeprom if we have a mailbox
+    if (slv->eeprom.mbx_supported)
+        return;
 
     while (cat_type != EC_EEPROM_CAT_END) {
         int ret = eeprom(cat_offset, value32);
@@ -585,5 +592,7 @@ void ec_eeprom_dump(ec_t *pec, uint16_t slave) {
 
         cat_offset += cat_len + 2; 
     }
+    
+    slv->eeprom.read_eeprom = 1;
 }
 

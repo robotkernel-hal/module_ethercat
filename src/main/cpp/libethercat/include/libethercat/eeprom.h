@@ -74,6 +74,8 @@ typedef struct PACKED ec_eeprom_cat_fmmu {
 } PACKED ec_eeprom_cat_fmmu_t;
     
 typedef struct eeprom_info {
+    int read_eeprom;
+
     uint32_t vendor_id;
     uint32_t product_code;
     uint16_t mbx_supported;
