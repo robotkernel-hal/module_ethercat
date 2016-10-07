@@ -25,8 +25,12 @@
 #include "libethercat/slave.h"
 #include "libethercat/ec.h"
 #include "libethercat/coe.h"
+#include "libethercat/soe.h"
+#include "libethercat/mbx.h"
+#include "libethercat/dc.h"
 
 #include <string.h>
+#include <errno.h>
 
 const char transition_string_boot_to_init[]     = "BOOT_2_INIT";
 const char transition_string_init_to_boot[]     = "INIT_2_BOOT";
@@ -93,6 +97,87 @@ const char *get_transition_string(ec_state_transition_t transition) {
 
 extern const char *get_state_string(ec_state_t state);
 
+//! allocate init command structure
+/*!
+ * \param type EC_MBX_COE, EC_MBX_SOE, ...
+ * \param transition ECat transition, (0x24 -> PRE to SAFE, ...)
+ * \param id CoE dictionary identifier, SoE idn
+ * \param si_el CoE sub index, SoE element
+ * \param ca_atn CoE complete access mode, SoE atn
+ * \param data new id data
+ * \param datalen new id data length
+ * \return NULL or newly created init command
+ */
+ec_slave_mailbox_init_cmd_t *ec_slave_mailbox_init_cmd_alloc(
+        int type, int transition, int id, int si_el, int ca_atn,
+        char *data, size_t datalen) {
+    ec_slave_mailbox_init_cmd_t *cmd = (ec_slave_mailbox_init_cmd_t *)malloc(
+            sizeof(ec_slave_mailbox_init_cmd_t));
+
+    if (cmd == NULL) {
+        ec_log(10, "ec_slave_mailbox_init_cmd_alloc", "malloc error %s\n", 
+                strerror(errno));
+        return NULL;
+    }
+
+    cmd->type       = type;
+    cmd->transition = transition;
+    cmd->id         = id; 
+    cmd->si_el      = si_el;
+    cmd->ca_atn     = ca_atn;
+    cmd->data       = (char *)malloc(datalen);
+    cmd->datalen    = datalen;
+    
+    if (cmd->data == NULL) {
+        ec_log(10, "ec_slave_mailbox_init_cmd_alloc", "malloc error %s\n", 
+                strerror(errno));
+        free(cmd);
+        return NULL;
+    }
+
+    memcpy(cmd->data, data, datalen);
+
+    return cmd;
+}
+
+//! freeing init command strucuture
+/*!
+ * \param cmd init command to free
+ */
+void ec_slave_mailbox_init_cmd_free(ec_slave_mailbox_init_cmd_t *cmd) {
+    if (cmd) {
+        if (cmd->data)
+            free(cmd->data);
+
+        free (cmd);
+    }
+}
+
+//! add master init command
+/*!
+ * \param ring master ring structure
+ * \param atn drive atn
+ * \param direction service direction
+ * \param element service element
+ * \param idn id number
+ * \param value pointer to values
+ * \param vallen legnth of values
+ * \param desc null-terminated description (maybe NULL)
+ */
+void ec_slave_add_init_cmd(ec_t *pec, uint16_t slave,
+        int type, int transition, int id, int si_el, int ca_atn,
+        char *data, size_t datalen) {
+
+    ec_log(10, "haha", "datalen %d\n", datalen);
+    ec_slave_mailbox_init_cmd_t *cmd = ec_slave_mailbox_init_cmd_alloc(
+            type, transition, id, si_el, ca_atn, data, datalen);
+
+    if (!cmd)
+        return;
+
+    LIST_INSERT_HEAD(&pec->slaves[slave].init_cmds, cmd, le);
+}
+
 //! set ethercat state on slave 
 /*!
  * \param pec ethercat master pointer
@@ -111,7 +196,7 @@ int ec_slave_set_state(ec_t *pec, uint16_t slave, ec_state_t state) {
     pec->slaves[slave].expected_state = state;
 
     ec_timer_t timeout;
-    ec_timer_init(&timeout, 5000000000); // 5 second timeout
+    ec_timer_init(&timeout, 10000000000); // 10 second timeout
 
     do {
         ec_fpwr(pec, pec->slaves[slave].fixed_address, 
@@ -182,6 +267,7 @@ int ec_slave_get_state(ec_t *pec, uint16_t slave, ec_state_t *state,
  */
 int ec_slave_generate_mapping(ec_t *pec, uint16_t slave) {
     ec_slave_t *slv = (ec_slave_t *)&pec->slaves[slave];
+
     if (slv->sm_set_by_user)
         return 0; // we're already done
 
@@ -198,7 +284,7 @@ int ec_slave_generate_mapping(ec_t *pec, uint16_t slave) {
             // inputs and outputs
             for (int txpdo_idx = 0; txpdo_idx < slv->eeprom.txpdos_cnt; ++txpdo_idx) {
                 ec_eeprom_cat_pdo_t *pdo = &slv->eeprom.txpdos[txpdo_idx];
-                ec_log(100, "GENERATE_MAPPING", "slave %2d: got txpdo bit_len %d, sm %d\n", 
+                ec_log(100, "GENERATE_MAPPING EEP", "slave %2d: got txpdo bit_len %d, sm %d\n", 
                         slave, pdo->bit_len, pdo->sm_nr);
 
                 if (sm_idx == pdo->sm_nr) 
@@ -208,18 +294,18 @@ int ec_slave_generate_mapping(ec_t *pec, uint16_t slave) {
             // outputs
             for (int rxpdo_idx = 0; rxpdo_idx < slv->eeprom.rxpdos_cnt; ++rxpdo_idx) {
                 ec_eeprom_cat_pdo_t *pdo = &slv->eeprom.rxpdos[rxpdo_idx];
-                ec_log(100, "GENERATE_MAPPING", "slave %2d: got rxpdo bit_len %d, sm %d\n", 
+                ec_log(100, "GENERATE_MAPPING EEP", "slave %2d: got rxpdo bit_len %d, sm %d\n", 
                         slave, pdo->bit_len, pdo->sm_nr);
 
                 if (sm_idx == pdo->sm_nr) 
                     bit_len += pdo->bit_len;
             }
 
-            ec_log(100, "GENERATE_MAPPING", "slave %2d: txpdos %d, rxpdos %d, bitlen%d %d\n", 
+            ec_log(100, "GENERATE_MAPPING EEP", "slave %2d: txpdos %d, rxpdos %d, bitlen%d %d\n", 
                     slave, slv->eeprom.txpdos_cnt, slv->eeprom.rxpdos_cnt, sm_idx, bit_len);
 
             if (bit_len > 0) {
-                ec_log(10, "GENERATE_MAPPING", "slave %2d: sm%d length bits %d, bytes %d\n", 
+                ec_log(10, "GENERATE_MAPPING EEP", "slave %2d: sm%d length bits %d, bytes %d\n", 
                         slave, sm_idx, bit_len, (bit_len + 7) / 8);
 
                 slv->sm[sm_idx].len = (bit_len + 7) / 8;
@@ -228,6 +314,64 @@ int ec_slave_generate_mapping(ec_t *pec, uint16_t slave) {
     }
 
     return 1;
+}
+
+//! prepare state transition on ethercat slave
+/*!
+ * \param pec ethercat master pointer
+ * \param slave slave number
+ * \param state switch to state
+ * \return wkc
+ */
+int ec_slave_prepare_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
+    uint16_t wkc;
+    ec_state_t act_state = 0;
+    ec_slave_t *slv = &pec->slaves[slave];
+            ec_log(10, "OLD ADR", "slave %d, to %d, adr %d\n", slave, (int)state,slv->sm[3].adr);
+
+    // check error state
+    wkc = ec_slave_get_state(pec, slave, &act_state, NULL);
+    if (!wkc) {
+        ec_log(10, __func__, "slave %2d: error getting state\n", slave);
+        return -1;
+    }
+    
+    // generate transition
+    ec_state_transition_t transition = ((act_state & EC_STATE_MASK) << 8) | (state & EC_STATE_MASK); 
+
+    switch (transition) {
+        default:
+            break;
+        case INIT_2_SAFEOP:
+        case PREOP_2_SAFEOP:
+            ec_log(10, get_transition_string(transition), "slave %2d: sending init cmds\n", slave);
+
+            ec_slave_mailbox_init_cmd_t *cmd;
+            LIST_FOREACH(cmd, &slv->init_cmds, le) {
+                if (cmd->transition != 0x24) 
+                    continue;
+
+                if (cmd->type == EC_MBX_COE) {
+                    ec_log(10, get_transition_string(transition), "slave %2d: sending CoE init cmd 0x%04X:%d, "
+                            "ca %d, datalen %d, datap %p\n", slave, 
+                            cmd->id, cmd->si_el, cmd->ca_atn, cmd->datalen, cmd->data);
+
+                    uint8_t *buf = (uint8_t *)cmd->data;
+                    size_t buf_len = cmd->datalen;
+                    uint32_t abort_code = 0;
+
+                    int wkc = ec_coe_sdo_write(pec, slave, cmd->id, 
+                            cmd->si_el, cmd->ca_atn, buf, &buf_len, &abort_code);
+                    if (!wkc) {
+                        ec_log(10, get_transition_string(transition), "slave %2d: writing sdo failed!\n");
+                    } 
+                }
+            }
+
+            break;
+    }
+
+    return 0;
 }
 
 //! state transition on ethercat slave
@@ -242,7 +386,9 @@ int ec_slave_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
     ec_state_t act_state = 0;
     ec_slave_t *slv = &pec->slaves[slave];
 
-    ec_log(10, __func__, "slave %2d, state %d\n", slave, state);
+    if (slv->sm)
+        ec_log(10, "OLD ADR", "slave %d, to %d, adr %d\n", slave, (int)state,slv->sm[3].adr);
+
 #define ec_reg_read(reg, buf, buflen) { uint16_t wkc; \
     ec_fprd(pec, pec->slaves[slave].fixed_address, (reg), (buf), (buflen), &wkc); \
     if (!wkc) ec_log(10, __func__, "reading reg 0x%X : no answer from slave %2d\n", slave); }
@@ -255,8 +401,6 @@ int ec_slave_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
     // generate transition
     ec_state_transition_t transition = ((act_state & EC_STATE_MASK) << 8) | (state & EC_STATE_MASK); 
             
-    ec_log(10, get_transition_string(transition), "slave %2d\n", slave);
-
     switch (transition) {
         case INIT_2_BOOT:
         case INIT_2_PREOP:
@@ -291,6 +435,7 @@ int ec_slave_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
                     slv->sm[0].adr = slv->eeprom.mbx_receive_offset;
                     slv->sm[0].len = slv->eeprom.mbx_receive_size;
                 }
+
                 slv->sm[0].flags = 0x00010026;
                 slv->mbx_write.sm_nr = 0;
                 free_resource(slv->mbx_write.buf);
@@ -307,42 +452,47 @@ int ec_slave_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
                             &slv->sm[sm_idx], sizeof(ec_slave_sm_t), &wkc);
                 }
 
-                if (slv->eeprom.general.ds402_channels > 0) {
-                    slv->subdev_cnt = slv->eeprom.general.ds402_channels;
-                    slv->subdevs = (ec_slave_subdev_t *)malloc(slv->subdev_cnt * 
-                            sizeof(ec_slave_subdev_t));
-
-                    int q;
-                    for (q = 0; q < slv->subdev_cnt; q++) {
-                        slv->subdevs[q].pdin.pd = slv->subdevs[q].pdout.pd = NULL;
-                        slv->subdevs[q].pdin.len = slv->subdevs[q].pdout.len = 0;
-                    }
-                } else if (slv->eeprom.general.soe_channels > 0) {
-                    slv->subdev_cnt = slv->eeprom.general.soe_channels;
-                    slv->subdevs = (ec_slave_subdev_t *)malloc(slv->subdev_cnt * 
-                            sizeof(ec_slave_subdev_t));
-
-                    int q;
-                    for (q = 0; q < slv->subdev_cnt; q++) {
-                        slv->subdevs[q].pdin.pd = slv->subdevs[q].pdout.pd = NULL;
-                        slv->subdevs[q].pdin.len = slv->subdevs[q].pdout.len = 0;
-                    }
-                }
             }
 
             ec_eeprom_to_pdi(pec, slave);
 
             // write state to slave
-            if (transition == INIT_2_BOOT)
+            if (transition == INIT_2_BOOT) {
                 wkc = ec_slave_set_state(pec, slave, EC_STATE_BOOT);
-            else
+                break;
+            } else
                 wkc = ec_slave_set_state(pec, slave, EC_STATE_PREOP);
-
+                
             if (transition == INIT_2_PREOP || transition == INIT_2_BOOT)
                 break;
         }
         case PREOP_2_SAFEOP: 
         case PREOP_2_OP: {
+            // configure distributed clocks if needed 
+            if (pec->dc.have_dc && slv->dc.use_dc) {
+                if (slv->dc.cycle_time_0 == 0)
+                    slv->dc.cycle_time_0 = pec->dc.timer_override; 
+
+                if (slv->dc.type == 1) {
+                    if (slv->dc.cycle_time_1 == 0)
+                        slv->dc.cycle_time_1 = pec->dc.timer_override; 
+
+                    ec_log(10, get_transition_string(transition), "slave %2d: configuring dc sync 01, "
+                            "cycle_times %d/%d, cycle_shift %d\n", slave, slv->dc.cycle_time_0, 
+                            slv->dc.cycle_time_1, slv->dc.cycle_shift);
+
+                    ec_dc_sync01(pec, slave, 1, slv->dc.cycle_time_0, 
+                            slv->dc.cycle_time_1, slv->dc.cycle_shift);
+                } else {
+                    ec_log(10, get_transition_string(transition), "slave %2d: configuring dc sync 0, "
+                            "cycle_time %d, cycle_shift %d\n", slave,
+                            slv->dc.cycle_time_0, slv->dc.cycle_shift);
+
+                    ec_dc_sync0(pec, slave, 1, slv->dc.cycle_time_0, slv->dc.cycle_shift);
+                }
+            } else
+                ec_dc_sync0(pec, slave, 0, 0, 0);
+
             int start_sm = slv->eeprom.mbx_supported ? 2 : 0;
 
             for (int sm_idx = start_sm; sm_idx < slv->sm_ch; ++sm_idx) {
@@ -406,6 +556,11 @@ int ec_slave_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
         }
         case BOOT_2_INIT:
         case INIT_2_INIT: {
+            // rewrite fixed address
+            ec_apwr(pec, slv->auto_inc_address, EC_REG_STADR, 
+                    (uint8_t *)&slv->fixed_address, sizeof(slv->fixed_address), &wkc); 
+        
+            // disable ditributed clocks
             uint8_t dc_active = 0;
             ec_fpwr(pec, pec->slaves[slave].fixed_address, EC_REG_DCSYNCACT, 
                     &dc_active, sizeof(dc_active), &wkc);
@@ -415,10 +570,31 @@ int ec_slave_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
             free_resource(slv->mbx_write.buf);
             free_resource(slv->sm);
             free_resource(slv->fmmu);
+            free_resource(slv->subdevs);
 
-            // get number of sync managers and fmmus
+            // get number of sync managers
             ec_reg_read(EC_REG_SM_CH, &slv->sm_ch, 1);
+            if (slv->sm_ch) {
+                alloc_resource(slv->sm, ec_slave_sm_t, 
+                        slv->sm_ch * sizeof(ec_slave_sm_t));
+
+                for (int i = 0; i < slv->sm_ch; ++i) 
+                    ec_transmit_no_reply(pec, EC_CMD_FPWR, 
+                            ec_to_adr(slv->fixed_address, 0x800 + (8 * i)),
+                            (uint8_t *)&slv->sm[i], sizeof(ec_slave_sm_t));
+            }
+
+            // get number of fmmus
             ec_reg_read(EC_REG_FMMU_CH, &slv->fmmu_ch, 1);
+            if (slv->fmmu_ch) {
+                alloc_resource(slv->fmmu, ec_slave_fmmu_t, 
+                        slv->fmmu_ch * sizeof(ec_slave_fmmu_t));
+
+                for (int i = 0; i < slv->fmmu_ch; ++i) 
+                    ec_transmit_no_reply(pec, EC_CMD_FPWR, 
+                            ec_to_adr(slv->fixed_address, 0x600 + (16 * i)),
+                            (uint8_t *)&slv->fmmu[i], sizeof(ec_slave_fmmu_t));
+            }
 
             // get ram size
             uint8_t ram_size = 0;
@@ -427,35 +603,38 @@ int ec_slave_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
 
             // get pdi control 
             ec_reg_read(EC_REG_PDICTL, &slv->pdi_ctrl, sizeof(slv->pdi_ctrl));
-
             // get features
             ec_reg_read(EC_REG_ESCSUP, &slv->features, sizeof(slv->features));
 
-            if (slv->sm_ch) {
-                alloc_resource(slv->sm, ec_slave_sm_t, slv->sm_ch * sizeof(ec_slave_sm_t));
-
-                for (int i = 0; i < slv->sm_ch; ++i) 
-                    ec_transmit_no_reply(pec, EC_CMD_FPWR, 
-                            ec_to_adr(slv->fixed_address, 0x800 + (8 * i)),
-                            (uint8_t *)&slv->sm[i], sizeof(ec_slave_sm_t));
-            }
-
-            if (slv->fmmu_ch) {
-                alloc_resource(slv->fmmu, ec_slave_fmmu_t, slv->fmmu_ch * sizeof(ec_slave_fmmu_t));
-
-                for (int i = 0; i < slv->fmmu_ch; ++i) 
-                    ec_transmit_no_reply(pec, EC_CMD_FPWR, 
-                            ec_to_adr(slv->fixed_address, 0x600 + (16 * i)),
-                            (uint8_t *)&slv->fmmu[i], sizeof(ec_slave_fmmu_t));
-            }
-
-            ec_log(10, get_transition_string(transition), "slave %2d: pdi ctrl 0x%04X, fmmus %d, syncm %d\n", 
+            ec_log(10, get_transition_string(transition), 
+                    "slave %2d: pdi ctrl 0x%04X, fmmus %d, syncm %d\n", 
                     slave, slv->pdi_ctrl, slv->fmmu_ch, slv->sm_ch);
             
             // init to preop stuff
+            slv->eeprom.read_eeprom = 0;
             ec_eeprom_dump(pec, slave);
+                
+            // allocate sub device structures
+            if (slv->eeprom.general.ds402_channels > 0)
+                slv->subdev_cnt = slv->eeprom.general.ds402_channels;
+            else if (slv->eeprom.general.soe_channels > 0)
+                slv->subdev_cnt = slv->eeprom.general.soe_channels;
+            else 
+                slv->subdev_cnt = 0;
 
-            ec_log(10, get_transition_string(transition), "slave %2d, vendor 0x%08X, product 0x%08X, mbx 0x%04X\n",
+            if (slv->subdev_cnt) {
+                alloc_resource(slv->subdevs, ec_slave_subdev_t, 
+                        slv->subdev_cnt * sizeof(ec_slave_subdev_t));
+
+                int q;
+                for (q = 0; q < slv->subdev_cnt; q++) {
+                    slv->subdevs[q].pdin.pd = slv->subdevs[q].pdout.pd = NULL;
+                    slv->subdevs[q].pdin.len = slv->subdevs[q].pdout.len = 0;
+                }
+            }
+
+            ec_log(10, get_transition_string(transition), 
+                    "slave %2d: vendor 0x%08X, product 0x%08X, mbx 0x%04X\n",
                     slave, slv->eeprom.vendor_id, slv->eeprom.product_code, slv->eeprom.mbx_supported);
         }
         case PREOP_2_PREOP:
@@ -472,3 +651,4 @@ int ec_slave_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
 
     return wkc;
 }
+

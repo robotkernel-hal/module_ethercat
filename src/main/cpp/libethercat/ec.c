@@ -164,123 +164,18 @@ int ec_set_state(ec_t *pec, ec_state_t state) {
             break;
         }
         case EC_STATE_INIT: {
-            uint16_t fixed = 1000, wkc = 0, val = 0;
-
-            ec_state_t init_state = EC_STATE_INIT | EC_STATE_RESET;
-            ec_bwr(pec, EC_REG_ALCTL, &init_state, sizeof(init_state), &wkc); 
-
-            // free resources if previosly initialized
-            for (i = 0; i < pec->slave_cnt; ++i)
+            for (i = 0; i < pec->slave_cnt; ++i) {
+                ec_log(100, get_state_string(state), "setting state for slave %d\n", i);
                 ec_slave_state_transition(pec, i, state);
-
-            pec->slave_cnt = 0;
-            free_resource(pec->slaves);
-
-            // allocating slave structures
-            ret = ec_brd(pec, EC_REG_TYPE, (uint8_t *)&val, sizeof(val), &wkc); 
-            pec->slave_cnt = wkc;
-            alloc_resource(pec->slaves, ec_slave_t, pec->slave_cnt * sizeof(ec_slave_t));
-
-            for (i = 0; i < 65536; ++i) {
-                int auto_inc = -1 * i;
-
-                ret = ec_aprd(pec, auto_inc, EC_REG_TYPE, (uint8_t *)&val, sizeof(val), &wkc);
-
-                if (wkc == 0)
-                    break;  // break here, cause there seems to be no more slave
-
-                ec_log(100, get_state_string(state), "found slave with auto inc address %d, "
-                        "wkc %d\n", auto_inc, wkc);
-
-                pec->slaves[i].assigned_pd_group = -1;
-                pec->slaves[i].auto_inc_address = auto_inc;
-                pec->slaves[i].fixed_address = fixed;
-                pec->slaves[i].dc.use_dc = 1;
-                pec->slaves[i].sm_set_by_user = 0;
-                pec->slaves[i].subdev_cnt = 0;
-                pec->slaves[i].subdevs = NULL;
-                pthread_mutex_init(&pec->slaves[i].mbx_lock, NULL);
-
-                ec_apwr(pec, auto_inc, EC_REG_STADR, (uint8_t *)&fixed, sizeof(fixed), &wkc); 
-                if (wkc == 1)
-                    ec_log(100, get_state_string(state), "fixed address %d successfully "
-                            "written to slave %d\n", fixed, auto_inc);
-                
-                // set eeprom to pdi, some slaves need this
-                ec_eeprom_to_pdi(pec, i);
-                init_state = EC_STATE_INIT | EC_STATE_RESET;
-                ec_fpwr(pec, fixed, EC_REG_ALCTL, &init_state, sizeof(init_state), &wkc); 
-
-                fixed++;
-            }
-
-            ec_log(10, get_state_string(state), "found %d ethercat slaves\n", i);
-
-            for (int slave = 0; slave < pec->slave_cnt; ++slave) {
-                ec_slave_t *slv = &pec->slaves[slave]; 
-                ec_slave_state_transition(pec, slave, state);
-
-                uint16_t topology = 0;
-                ec_fprd(pec, slv->fixed_address, EC_REG_DLSTAT, &topology, sizeof(topology), &wkc);
-
-                slv->link_cnt = 0;
-                slv->active_ports = 0;
-
-                if ((topology & 0x0300) == 0x0200) { // port 0 open and communication established
-                    slv->link_cnt++;
-                    slv->active_ports |= 0x01;
-                }
-                if ((topology & 0x0c00) == 0x0800) { // port1 open and communication established
-                    slv->link_cnt++;
-                    slv->active_ports |= 0x02;
-                }
-                if ((topology & 0x3000) == 0x2000) { // port2 open and communication established
-                    slv->link_cnt++;
-                    slv->active_ports |= 0x04;
-                }
-                if ((topology & 0xc000) == 0x8000) { // port3 open and communication established
-                    slv->link_cnt++;
-                    slv->active_ports |= 0x08;
-                }
-
-                // read out physical type
-                ec_fprd(pec, slv->fixed_address, EC_REG_PORTDES, &slv->ptype, sizeof(slv->ptype), &wkc);
-
-                // 0=no links, not possible 
-                // 1=1 link  , end of line 
-                // 2=2 links , one before and one after 
-                // 3=3 links , split point 
-                // 4=4 links , cross point 
-
-                // search for parent
-                slv->parent = -1; // parent is master at beginning
-                if (slave >= 1) {
-                    int topoc = 0, tmp_slave = slave - 1;
-                    do {
-                        topology = pec->slaves[tmp_slave].link_cnt;
-                        if (topology == 1)
-                            topoc--;    // endpoint found
-                        if (topology == 3)
-                            topoc++;    // split found
-                        if (topology == 4)
-                            topoc += 2; // cross found
-                        if (((topoc >= 0) && (topology > 1)) || (tmp_slave == 0)) { 
-                            slv->parent = tmp_slave; // parent found
-                            tmp_slave = 0;
-                        }
-                        tmp_slave--;
-                    }
-                    while (tmp_slave >= 0);
-                }
-
-                ec_log(100, get_state_string(state), "slave %2d has parent %d\n", slave, slv->parent);
-
             }
 
             break;
         }        
         case EC_STATE_PREOP:
             for (i = 0; i < pec->slave_cnt; ++i) {
+                if (pec->slaves[i].assigned_pd_group == -1)
+                    continue;
+
                 ec_log(100, get_state_string(state), "setting state for slave %d\n", i);
                 ec_slave_state_transition(pec, i, state);
             }
@@ -289,10 +184,12 @@ int ec_set_state(ec_t *pec, ec_state_t state) {
             break;
         case EC_STATE_SAFEOP: {
             int i, j, k;
+
             for (int slave = 0; slave < pec->slave_cnt; ++slave) {
                 if (pec->slaves[slave].assigned_pd_group == -1)
                     continue;
 
+                ec_slave_prepare_state_transition(pec, slave, EC_STATE_SAFEOP);
                 ec_slave_generate_mapping(pec, slave);
             }
 
@@ -478,19 +375,20 @@ void *ec_tx_thread(void *arg) {
  * \param ifname ethercat master interface name
  * \param prio receive thread priority
  * \param cpumask receive thread cpumask
+ * \param eeprom_log log eeprom to stdout
  * \return 0 on succes, otherwise error code
  */
-int ec_open(ec_t **ppec, const char *ifname, int prio, int cpumask) {
+int ec_open(ec_t **ppec, const char *ifname, int prio, int cpumask, int eeprom_log) {
     int i;
-    
-    (*ppec) = (ec_t *)malloc(sizeof(ec_t));
-    if (!(*ppec))
+    ec_t *pec = malloc(sizeof(ec_t)); 
+    (*ppec) = pec;
+    if (!pec)
         return ENOMEM;
 
-    pthread_mutex_init(&(*ppec)->idx_lock, NULL);
+    pthread_mutex_init(&pec->idx_lock, NULL);
     
     // fill index queue
-    TAILQ_INIT(&(*ppec)->idx);
+    TAILQ_INIT(&pec->idx);
     for (i = 0; i < 255; ++i) {
         idx_entry_t *entry = (idx_entry_t *)malloc(sizeof(idx_entry_t));
         entry->idx = i;
@@ -499,46 +397,153 @@ int ec_open(ec_t **ppec, const char *ifname, int prio, int cpumask) {
         ec_index_put(*ppec, entry);
     }
 
-    (*ppec)->phw = NULL;
-    (*ppec)->slave_cnt = 0;
-    (*ppec)->pd_group_cnt = 0;
-    (*ppec)->slaves = NULL;
-    (*ppec)->pd_groups = NULL;
-    (*ppec)->tx_sync = 1;
+    // slaves'n groups
+    pec->phw                = NULL;
+    pec->slave_cnt          = 0;
+    pec->pd_group_cnt       = 0;
+    pec->slaves             = NULL;
+    pec->pd_groups          = NULL;
+    pec->tx_sync            = 1;
 
-    (*ppec)->dc.have_dc = 0;
-    (*ppec)->dc.dc_time = 0;
-    (*ppec)->dc.dc_cycle_sum = 0;
-    (*ppec)->dc.dc_cycle_cnt = 0;
+    // init values for distributed clocks
+    pec->dc.have_dc         = 0;
+    pec->dc.dc_time         = 0;
+    pec->dc.dc_cycle_sum    = 0;
+    pec->dc.dc_cycle_cnt    = 0;
+    pec->dc.rtc_time        = 0;
+    pec->dc.rtc_cycle_sum   = 0;
+    pec->dc.rtc_cycle       = 0;
+    pec->dc.rtc_count       = 0;
+    pec->dc.act_diff        = 0;
 
-    (*ppec)->dc.rtc_time = 0;
-    (*ppec)->dc.rtc_cycle_sum = 0;
-    (*ppec)->dc.rtc_cycle = 0;
-    (*ppec)->dc.rtc_count = 0;
+    // eeprom logging level
+    pec->eeprom_log         = eeprom_log;
 
-    (*ppec)->dc.act_diff = 0;
-
-    (*ppec)->eeprom_log = 1;
-
-    datagram_pool_open(&(*ppec)->pool, 1000);
+    datagram_pool_open(&pec->pool, 1000);
         
-    if (hw_open(&(*ppec)->phw, ifname, prio, cpumask) == -1) {
-        datagram_pool_close((*ppec)->pool);
+    if (hw_open(&pec->phw, ifname, prio, cpumask) == -1) {
+        datagram_pool_close(pec->pool);
 
         idx_entry_t *idx;
-        while ((idx = TAILQ_FIRST(&(*ppec)->idx)) != NULL) {
-            TAILQ_REMOVE(&(*ppec)->idx, idx, qh);
+        while ((idx = TAILQ_FIRST(&pec->idx)) != NULL) {
+            TAILQ_REMOVE(&pec->idx, idx, qh);
             free(idx);
         }
 
-        pthread_mutex_destroy(&(*ppec)->idx_lock);
-        free(*ppec);
+        pthread_mutex_destroy(&pec->idx_lock);
+        free(pec);
         *ppec = NULL;
 
         return -1;
     }
 
-    ec_async_message_loop_create(&(*ppec)->async_loop, (*ppec));
+    ec_async_message_loop_create(&pec->async_loop, pec);
+
+    uint16_t fixed = 1000, wkc = 0, val = 0;
+
+    ec_state_t init_state = EC_STATE_INIT | EC_STATE_RESET;
+    ec_bwr(pec, EC_REG_ALCTL, &init_state, sizeof(init_state), &wkc); 
+
+    // allocating slave structures
+    int ret = ec_brd(pec, EC_REG_TYPE, (uint8_t *)&val, sizeof(val), &wkc); 
+    pec->slave_cnt = wkc;
+    alloc_resource(pec->slaves, ec_slave_t, pec->slave_cnt * sizeof(ec_slave_t));
+
+    for (i = 0; i < 65536; ++i) {
+        int auto_inc = -1 * i;
+
+        ret = ec_aprd(pec, auto_inc, EC_REG_TYPE, (uint8_t *)&val, sizeof(val), &wkc);
+
+        if (wkc == 0)
+            break;  // break here, cause there seems to be no more slave
+
+        ec_log(10, "EC_OPEN", "slave %2d: auto inc %3d, fixed %d\n", 
+                i, auto_inc, fixed);
+
+        pec->slaves[i].assigned_pd_group = -1;
+        pec->slaves[i].auto_inc_address = auto_inc;
+        pec->slaves[i].fixed_address = fixed;
+        pec->slaves[i].dc.use_dc = 1;
+        pec->slaves[i].sm_set_by_user = 0;
+        pec->slaves[i].subdev_cnt = 0;
+        pec->slaves[i].subdevs = NULL;
+        pec->slaves[i].eeprom.read_eeprom = 0;
+        pthread_mutex_init(&pec->slaves[i].mbx_lock, NULL);
+
+        ec_apwr(pec, auto_inc, EC_REG_STADR, (uint8_t *)&fixed, sizeof(fixed), &wkc); 
+        if (wkc == 0)
+            ec_log(10, "EC_OPEN", "slave %2d: error writing fixed address %d\n",
+                    i, fixed);
+
+        // set eeprom to pdi, some slaves need this
+        ec_eeprom_to_pdi(pec, i);
+        init_state = EC_STATE_INIT | EC_STATE_RESET;
+        ec_fpwr(pec, fixed, EC_REG_ALCTL, &init_state, sizeof(init_state), &wkc); 
+
+        fixed++;
+    }
+
+    ec_log(10, "EC_OPEN", "found %d ethercat slaves\n", i);
+
+    for (int slave = 0; slave < pec->slave_cnt; ++slave) {
+        ec_slave_t *slv = &pec->slaves[slave]; 
+        ec_slave_state_transition(pec, slave, EC_STATE_INIT);
+
+        uint16_t topology = 0;
+        ec_fprd(pec, slv->fixed_address, EC_REG_DLSTAT, &topology, sizeof(topology), &wkc);
+
+        slv->link_cnt = 0;
+        slv->active_ports = 0;
+
+        if ((topology & 0x0300) == 0x0200) { // port 0 open and communication established
+            slv->link_cnt++;
+            slv->active_ports |= 0x01;
+        }
+        if ((topology & 0x0c00) == 0x0800) { // port1 open and communication established
+            slv->link_cnt++;
+            slv->active_ports |= 0x02;
+        }
+        if ((topology & 0x3000) == 0x2000) { // port2 open and communication established
+            slv->link_cnt++;
+            slv->active_ports |= 0x04;
+        }
+        if ((topology & 0xc000) == 0x8000) { // port3 open and communication established
+            slv->link_cnt++;
+            slv->active_ports |= 0x08;
+        }
+
+        // read out physical type
+        ec_fprd(pec, slv->fixed_address, EC_REG_PORTDES, &slv->ptype, sizeof(slv->ptype), &wkc);
+
+        // 0=no links, not possible 
+        // 1=1 link  , end of line 
+        // 2=2 links , one before and one after 
+        // 3=3 links , split point 
+        // 4=4 links , cross point 
+
+        // search for parent
+        slv->parent = -1; // parent is master at beginning
+        if (slave >= 1) {
+            int topoc = 0, tmp_slave = slave - 1;
+            do {
+                topology = pec->slaves[tmp_slave].link_cnt;
+                if (topology == 1)
+                    topoc--;    // endpoint found
+                if (topology == 3)
+                    topoc++;    // split found
+                if (topology == 4)
+                    topoc += 2; // cross found
+                if (((topoc >= 0) && (topology > 1)) || (tmp_slave == 0)) { 
+                    slv->parent = tmp_slave; // parent found
+                    tmp_slave = 0;
+                }
+                tmp_slave--;
+            }
+            while (tmp_slave >= 0);
+        }
+
+        ec_log(100, "EC_OPEN", "slave %2d has parent %d\n", slave, slv->parent);
+    }
 
     return 0;
 }
@@ -661,13 +666,13 @@ int ec_transceive(ec_t *pec, uint8_t cmd, uint32_t adr,
     idx_entry_t *p_idx;
 
     if (ec_index_get(pec, &p_idx) != 0) {
-        ec_log(5, __func__, "error getting ethercat index\n");
+        ec_log(5, "EC_TRANSCEIVE", "error getting ethercat index\n");
         return -1;
     }
 
     if (datagram_pool_get(pec->pool, &p_de, NULL) != 0) {
         ec_index_put(pec, p_idx);
-        ec_log(5, __func__, "error getting datagram from pool\n");
+        ec_log(5, "EC_TRANSCEIVE", "error getting datagram from pool\n");
         return -1;
     }
 
@@ -731,13 +736,13 @@ int ec_transmit_no_reply(ec_t *pec, uint8_t cmd, uint32_t adr,
     idx_entry_t *p_idx;
 
     if (ec_index_get(pec, &p_idx) != 0) {
-        ec_log(5, __func__, "error getting ethercat index\n");
+        ec_log(5, "EC_TRANSMIT_NO_REPLY", "error getting ethercat index\n");
         return -1;
     }
 
     if (datagram_pool_get(pec->pool, &p_de, NULL) != 0) {
         ec_index_put(pec, p_idx);
-        ec_log(5, __func__, "error getting datagram from pool\n");
+        ec_log(5, "EC_TRANSMIT_NO_REPLY", "error getting datagram from pool\n");
         return -1;
     }
 
@@ -774,13 +779,13 @@ int ec_send_process_data_group(ec_t *pec, int group) {
     ec_pd_group_t *pd = &pec->pd_groups[group];
 
     if (ec_index_get(pec, &pd->p_idx) != 0) {
-        ec_log(5, __func__, "error getting ethercat index\n");
+        ec_log(5, "EC_SEND_PROCESS_DATA_GROUP", "error getting ethercat index\n");
         return -1;
     }
 
     if (datagram_pool_get(pec->pool, &pd->p_de, NULL) != 0) {
         ec_index_put(pec, pd->p_idx);
-        ec_log(5, __func__, "error getting datagram from pool\n");
+        ec_log(5, "EC_SEND_PROCESS_DATA_GROUP", "error getting datagram from pool\n");
         return -1;
     }
 
@@ -811,17 +816,18 @@ int ec_send_process_data_group(ec_t *pec, int group) {
  */
 int ec_receive_process_data_group(ec_t *pec, int group, ec_timer_t *timeout) {
     static int wkc_mismatch_cnt = 0;
+    int ret = 0;
 
     uint16_t wkc = 0;
     ec_pd_group_t *pd = &pec->pd_groups[group];
     if (!pd->p_idx)
-        return 0;
+        return ret;
     
     // wait for completion
     struct timespec ts = { timeout->sec, timeout->nsec };
-    int ret = sem_timedwait(&pd->p_idx->waiter, &ts);
+    ret = sem_timedwait(&pd->p_idx->waiter, &ts);
     if (ret == -1) {
-        ec_log(5, __func__, "sem_timedwait group id %d: %s\n", 
+        ec_log(5, "EC_RECEIVE_PROCESS_DATA_GROUP", "sem_timedwait group id %d: %s\n", 
                 group, strerror(errno));
     } else {
         wkc = ec_datagram_wkc(&pd->p_de->datagram);
@@ -832,12 +838,13 @@ int ec_receive_process_data_group(ec_t *pec, int group, ec_timer_t *timeout) {
         if ((pec->master_state == EC_STATE_SAFEOP || pec->master_state == EC_STATE_OP) 
             && wkc != pd->wkc_expected) {
             if ((wkc_mismatch_cnt++%1000) == 0) {
-                ec_log(10, __func__, "group %2d: working counter mismatch got %u, expected %u, "
+                ec_log(10, "EC_RECEIVE_PROCESS_DATA_GROUP", "group %2d: working counter mismatch got %u, expected %u, "
                         "slave_cnt %d, mismatch_cnt %d\n", group, wkc, pd->wkc_expected, 
                         pec->slave_cnt, wkc_mismatch_cnt);
             }
             
             ec_async_check_group(pec->async_loop, group);
+            ret = -1;
         } else {
             wkc_mismatch_cnt = 0;
         }
@@ -846,7 +853,7 @@ int ec_receive_process_data_group(ec_t *pec, int group, ec_timer_t *timeout) {
     datagram_pool_put(pec->pool, pd->p_de);
     ec_index_put(pec, pd->p_idx);
 
-    return 0;
+    return ret;
 }
 
 //! send distributed clock sync datagram
@@ -884,13 +891,13 @@ int ec_send_distributed_clocks_sync(ec_t *pec) {
     pec->dc.rtc_time = act_rtc_time;
 
     if (ec_index_get(pec, &pec->dc.p_idx_dc) != 0) {
-        ec_log(5, __func__, "error getting ethercat index\n");
+        ec_log(5, "EC_SEND_DISTRIBUTED_CLOCKS_SYNC", "error getting ethercat index\n");
         return -1;
     }
 
     if (datagram_pool_get(pec->pool, &pec->dc.p_de_dc, NULL) != 0) {
         ec_index_put(pec, pec->dc.p_idx_dc);
-        ec_log(5, __func__, "error getting datagram from pool\n");
+        ec_log(5, "EC_SEND_DISTRIBUTED_CLOCKS_SYNC", "error getting datagram from pool\n");
         return -1;
     }
 
@@ -925,8 +932,8 @@ int ec_receive_distributed_clocks_sync(ec_t *pec, ec_timer_t *timeout) {
     struct timespec ts = { timeout->sec, timeout->nsec };
     int ret = sem_timedwait(&pec->dc.p_idx_dc->waiter, &ts);
     if (ret == -1) {
-        ec_log(5, __func__, "sem_timedwait distributed clocks: %s\n", 
-                strerror(errno));
+        ec_log(5, "EC_RECEIVE_DISTRIBUTED_CLOCKS_SYNC", "sem_timedwait distributed clocks (sent: %lld): %s\n", 
+                pec->dc.rtc_time, strerror(errno));
     } else {
         wkc = ec_datagram_wkc(&pec->dc.p_de_dc->datagram);
 
@@ -978,17 +985,17 @@ int ec_receive_distributed_clocks_sync(ec_t *pec, ec_timer_t *timeout) {
 
                     // dc system time offset frame
                     if (ec_index_get(pec, &p_idx_dc_sto) != 0) {
-                        ec_log(5, __func__, "error getting ethercat index\n");
+                        ec_log(5, "EC_RECEIVE_DISTRIBUTED_CLOCKS_SYNC", "error getting ethercat index\n");
                         goto sto_exit;
                     }
 
                     if (datagram_pool_get(pec->pool, &p_de_dc_sto, NULL) != 0) {
                         ec_index_put(pec, p_idx_dc_sto);
-                        ec_log(5, __func__, "error getting datagram from pool\n");
+                        ec_log(5, "EC_RECEIVE_DISTRIBUTED_CLOCKS_SYNC", "error getting datagram from pool\n");
                         goto sto_exit;
                     }
 
-//                    ec_log(100, __func__, "dc_sto adding %d [ns]\n", pec->dc.act_diff);                                
+//                    ec_log(100, "EC_RECEIVE_DISTRIBUTED_CLOCKS_SYNC", "dc_sto adding %d [ns]\n", pec->dc.act_diff);                                
 
                     // correct system time offset, sync ref_clock to master_clock
                     pec->dc.dc_sto += pec->dc.act_diff;

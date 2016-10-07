@@ -88,6 +88,15 @@ int ec_slave_get_state(struct ec *pec, uint16_t slave,
  */
 int ec_slave_generate_mapping(struct ec *pec, uint16_t slave);
 
+//! prepare state transition on ethercat slave
+/*!
+ * \param pec ethercat master pointer
+ * \param slave slave number
+ * \param state switch to state
+ * \return wkc
+ */
+int ec_slave_prepare_state_transition(ec_t *pec, uint16_t slave, ec_state_t state);
+
 //! state transition on ethercat slave
 /*!
  * \param pec ethercat master pointer
@@ -96,6 +105,21 @@ int ec_slave_generate_mapping(struct ec *pec, uint16_t slave);
  * \return wkc
  */
 int ec_slave_state_transition(struct ec *pec, uint16_t slave, ec_state_t state);
+
+//! add master init command
+/*!
+ * \param ring master ring structure
+ * \param atn drive atn
+ * \param direction service direction
+ * \param element service element
+ * \param idn id number
+ * \param value pointer to values
+ * \param vallen legnth of values
+ * \param desc null-terminated description (maybe NULL)
+ */
+void ec_slave_add_init_cmd(ec_t *pec, uint16_t slave,
+        int type, int transition, int id, int si_el, int ca_atn,
+        char *data, size_t datalen);
 
 #ifdef __cplusplus
 }

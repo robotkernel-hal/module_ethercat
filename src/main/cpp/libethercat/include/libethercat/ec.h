@@ -107,6 +107,13 @@ typedef struct PACKED ec_slave_dc_info {
     int prev;
 
     int consumedports;
+            
+    int64_t system_time_offset;
+            
+    int type;              //! dc type, 0 = sync0, 1 = sync01
+    uint32_t cycle_time_0; //! cycle time of sync 0 [ns]
+    uint32_t cycle_time_1; //! cycle time of sync 1 [ns]
+    uint32_t cycle_shift;  //! cycle shift time [ns]
 } ec_slave_dc_info_t;
 
 typedef struct ec_pd {
@@ -118,6 +125,21 @@ typedef struct ec_slave_subdev {
     ec_pd_t pdin;
     ec_pd_t pdout;
 } ec_slave_subdev_t;
+
+//! slave mailbox init commands
+typedef struct ec_slave_mailbox_init_cmd {
+    int type;                   //!< EC_MBX_COE, EC_MBX_SOE, ...
+    int transition;             //!< ECat transition, (0x24 -> PRE to SAFE, ...)
+    int id;                     //!< CoE dictionary identifier, SoE idn
+    int si_el;                  //!< CoE sub index, SoE element
+    int ca_atn;                 //!< CoE complete access mode, SoE atn
+    char *data;                 //!< new id data
+    size_t datalen;             //!< new id data length
+
+    LIST_ENTRY(ec_slave_mailbox_init_cmd) le;
+} ec_slave_mailbox_init_cmd_t;
+    
+LIST_HEAD(ec_slave_mailbox_init_cmds, ec_slave_mailbox_init_cmd);
 
 typedef struct ec_slave {
     int16_t     auto_inc_address;   //!< physical bus address
@@ -157,6 +179,7 @@ typedef struct ec_slave {
     ec_slave_dc_info_t dc;
     
     ec_state_t expected_state;
+    struct ec_slave_mailbox_init_cmds init_cmds;
 } ec_slave_t;
 
 typedef struct PACKED ec_dc_info {
@@ -231,9 +254,10 @@ void ec_log(int lvl, const char *pre, const char *format, ...);
  * \param ifname ethercat master interface name
  * \param prio receive thread priority
  * \param cpumask receive thread cpumask
+ * \param eeprom_log log eeprom to stdout
  * \return 0 on succes, otherwise error code
  */
-int ec_open(ec_t **ppec, const char *ifname, int prio, int cpumask);
+int ec_open(ec_t **ppec, const char *ifname, int prio, int cpumask, int eeprom_log);
 
 //! closes ethercat master
 /*!
