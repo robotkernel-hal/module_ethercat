@@ -222,11 +222,6 @@ void *hw_rx_thread(void *arg) {
             sleep(1);
         }
         
-        if (ec_frame_length(pframe) < bytesrx) {
-            ec_log(10, "RX_THREAD", "received %d bytes, frame length should be %d bytes\n", 
-                    bytesrx, ec_frame_length(pframe));
-        }
-
         /* check if it is an EtherCAT frame */
         if (pframe->ethertype != htons(ETH_P_ECAT)) {
             ec_log(10, "RX_THREAD", "received non-ethercat frame! (bytes %d, type 0x%X)\n", 

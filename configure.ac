@@ -13,9 +13,14 @@ AC_CONFIG_MACRO_DIR([m4])
 RMPM_ENV
 RMPM_ARCH
 
-m4_ifdef([AM_PROG_AR], [AM_PROG_AR])
+# load env-file with each make invocation
+if test -n "$SOURCE_ENV"; then
+   echo "loading $SOURCE_ENV"
+   source $SOURCE_ENV
+fi
 
 # Checks for programs.
+m4_ifdef([AM_PROG_AR], [AM_PROG_AR])
 AC_PROG_CXX
 AC_PROG_AWK
 AC_PROG_INSTALL
@@ -23,8 +28,26 @@ AC_PROG_LIBTOOL
 AC_PROG_LN_S
 AC_PROG_MAKE_SET
 
-m4_esyscmd([scripts/m4_deps.py])
+if test -z "$MAKE"; then
+   MAKE=make
+fi
+# expand path with each make invocation
+if test -n "$TOOLCHAIN"; then
+   MAKE="$MAKE PATH=$TOOLCHAIN:$PATH"
+   PATH=$TOOLCHAIN:$PATH
+fi
+# load env-file with each make invocation
+if test -n "$SOURCE_ENV"; then
+   echo "loading $SOURCE_ENV"
+   source $SOURCE_ENV
+   MAKE="source $SOURCE_ENV; $MAKE"
+fi
+if test -n "$MAKE"; then
+   SET_MAKE="MAKE := $MAKE"
+fi
+AC_SUBST(SET_MAKE)
 
+m4_esyscmd([scripts/m4_deps.py])
 RM_FIND_LN_FROM_ENV
 
 AC_DEFINE_UNQUOTED(BUILD_DATE,"`date -u`",[Date (usually date of extraction from SVN).])
@@ -47,4 +70,3 @@ AC_SUBST(DL_LIBS)
 AC_CONFIG_FILES([Makefile src/main/cpp/Makefile])
 
 AC_OUTPUT
-
