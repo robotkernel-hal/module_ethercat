@@ -44,8 +44,7 @@ AC_CHECK_FUNCS([strdup])
 AC_CHECK_LIB(dl, dlopen, DL_LIBS="-ldl", DL_LIBS=)
 AC_SUBST(DL_LIBS)
 
-AC_CONFIG_FILES([Makefile])
-AC_CONFIG_FILES([module_ethercat.pt], [cp module_ethercat.pt ${ac_abs_top_srcdir}])
+AC_CONFIG_FILES([Makefile src/main/cpp/Makefile])
 
 AC_OUTPUT
 
