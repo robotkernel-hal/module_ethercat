@@ -188,9 +188,6 @@ int ec_eepromwrite(ec_t *pec, uint16_t slave, uint32_t eepadr, uint16_t *data) {
     
     int ret = 0, retry_cnt = 100;
     uint16_t wkc = 0, eepcsr = 0x0100; // write access
-    int word_cnt = 0;
-
-//    ec_log(10, "EEPROM_WRITE", "writing %X: %04X\n", eepadr, *data);
 
     // 1. Check if the Busy bit of the EEPROM Status register is 
     // cleared (0x0502[15]=0) and the EEPROM interface is not busy, 
@@ -293,7 +290,6 @@ int ec_eepromwrite(ec_t *pec, uint16_t slave, uint32_t eepadr, uint16_t *data) {
     if (eepcsr & 0x4000)
         ec_log(10, "EEPROM_WRITE", "error write enable\n");
     if (eepcsr & 0x2000) {
-//        ec_log(10, "EEPROM_WRITE", "error acknowledge/command\n");
         ret = -1;
     }
     if (eepcsr & 0x0800)
@@ -398,10 +394,6 @@ void ec_eeprom_dump(ec_t *pec, uint16_t slave) {
 
     size = value32 & 0x0000FFFF;
 
-    // we do not need to read full eeprom if we have a mailbox
-    if (slv->eeprom.mbx_supported)
-        return;
-
     while (cat_type != EC_EEPROM_CAT_END) {
         int ret = eeprom(cat_offset, value32);
         if (ret != 0)
@@ -416,7 +408,7 @@ void ec_eeprom_dump(ec_t *pec, uint16_t slave) {
             case EC_EEPROM_CAT_NOP:
                 break;
             case EC_EEPROM_CAT_STRINGS: {
-                eeprom_log(100, "EEPROM_STRINGS", "slave %2d, cat_len %d\n", 
+                eeprom_log(100, "EEPROM_STRINGS", "slave %2d: cat_len %d\n", 
                         slave, cat_len);
                 
                 uint8_t *buf = malloc(cat_len*2 + 1);
@@ -426,7 +418,7 @@ void ec_eeprom_dump(ec_t *pec, uint16_t slave) {
                 int local_offset = 0, i;
                 slv->eeprom.strings_cnt = buf[local_offset++];
 
-                eeprom_log(100, "EEPROM_STRINGS", "slave %2d, stored strings %d\n", 
+                eeprom_log(100, "EEPROM_STRINGS", "slave %2d: stored strings %d\n", 
                         slave, slv->eeprom.strings_cnt);
 
                 if (!slv->eeprom.strings_cnt) {
@@ -445,10 +437,10 @@ void ec_eeprom_dump(ec_t *pec, uint16_t slave) {
 
                     slv->eeprom.strings[i][string_len] = '\0';
                     
-                    eeprom_log(100, "EEPROM_STRINGS", "slave %2d, string %d, length %d : %s\n", 
+                    eeprom_log(100, "EEPROM_STRINGS", "          string %d, length %d : %s\n", 
                             slave, i, string_len, slv->eeprom.strings[i]);
                     if (local_offset > cat_len*2) {
-                        eeprom_log(5, "EEPROM_STRINGS", "slave %2d, something wrong in eeprom string section\n",
+                        eeprom_log(5, "EEPROM_STRINGS", "          something wrong in eeprom string section\n",
                                 slave);
                         break;
                     }
@@ -466,7 +458,7 @@ void ec_eeprom_dump(ec_t *pec, uint16_t slave) {
 
                 eeprom(cat_offset+2, slv->eeprom.general);
 
-                eeprom_log(100, "EEPROM_GENERAL", "slave %2d: group_idx %d, img_idx %d, order_idx %d, name_idx %d\n", 
+                eeprom_log(100, "EEPROM_GENERAL", "          group_idx %d, img_idx %d, order_idx %d, name_idx %d\n", 
                         slave, slv->eeprom.general.group_idx,
                         slv->eeprom.general.img_idx,
                         slv->eeprom.general.order_idx,
@@ -474,7 +466,8 @@ void ec_eeprom_dump(ec_t *pec, uint16_t slave) {
                 break;
             }
             case EC_EEPROM_CAT_FMMU: {
-                eeprom_log(100, "EEPROM_FMMU", "slave %2d:\n", slave);
+                eeprom_log(100, "EEPROM_FMMU", "slave %2d: entries %d\n", 
+                        slave, cat_len);
 
                 // skip cat type and len
                 int local_offset = cat_offset + 2;
@@ -483,15 +476,20 @@ void ec_eeprom_dump(ec_t *pec, uint16_t slave) {
                     eeprom(local_offset, value32);
                     uint8_t *tmp = (uint8_t *)&value32;
                     for (i = 0; i < 4 && i < (cat_len*2); ++i, ++fmmu_idx)
-                        if ((fmmu_idx < slv->fmmu_ch) && (tmp[i] >= 1) && (tmp[i] <= 3))
+                        if ((fmmu_idx < slv->fmmu_ch) && (tmp[i] >= 1) && (tmp[i] <= 3)) {
                             slv->fmmu[fmmu_idx].type = tmp[i];
+                
+                            eeprom_log(100, "EEPROM_FMMU", "           fmmu%d, type %d\n", 
+                                fmmu_idx, tmp[i]);
+                        }
 
                     local_offset += 2;
                 }
                 break;
             }
             case EC_EEPROM_CAT_SM: {
-                eeprom_log(100, "EEPROM_SM", "slave %2d:\n", slave);
+                eeprom_log(100, "EEPROM_SM", "slave %2d: entries %d\n", 
+                        slave, cat_len/(sizeof(ec_eeprom_cat_sm_t)/2));
 
                 // skip cat type and len
                 int j = 0, local_offset = cat_offset + 2;
@@ -523,14 +521,14 @@ void ec_eeprom_dump(ec_t *pec, uint16_t slave) {
                         slv->sm[j].len = slv->eeprom.sms[j].len;
                         slv->sm[j].flags = (slv->eeprom.sms[j].activate << 16) | slv->eeprom.sms[j].ctrl_reg;
 
-                        eeprom_log(100, "EEPROM_SM", "slave %2d, sm%d adr 0x%X, len %d, flags 0x%X\n", 
-                                slave, j, slv->sm[j].adr, slv->sm[j].len, slv->sm[j].flags);
+                        eeprom_log(100, "EEPROM_SM", "          sm%d adr 0x%X, len %d, flags 0x%X\n", 
+                                j, slv->sm[j].adr, slv->sm[j].len, slv->sm[j].flags);
                     } else {
-                        eeprom_log(100, "EEPROM_SM", "slave %2d, sm%d adr 0x%X, len %d, flags 0x%X\n", 
-                                slave, j, slv->eeprom.sms[j].adr, slv->eeprom.sms[j].len,
+                        eeprom_log(100, "EEPROM_SM", "          sm%d adr 0x%X, len %d, flags 0x%X\n", 
+                                j, slv->eeprom.sms[j].adr, slv->eeprom.sms[j].len,
                                 (slv->eeprom.sms[j].activate << 16) | slv->eeprom.sms[j].ctrl_reg);
                                 
-                        eeprom_log(100, "EEPROM_SM", "slave %2d, sm%d already set by user\n", slave, j);
+                        eeprom_log(100, "EEPROM_SM", "          sm%d already set by user\n", j);
                     }
 
                     j++;
