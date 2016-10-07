@@ -46,6 +46,7 @@ const string module_ethercat::state_strings[] = {
     "EtherCAT OP"
 };
 
+
 void log_func(int lvl, void *user, const char *format, ...) {
     master *e = (master *)user;
     va_list ap;
@@ -164,13 +165,6 @@ master::master(const std::string& name, const YAML::Node& node)
     _dc_sync.first_run = true;
     _dc_sync.last_diff = 0.;
 
-    int ret = ec_open(&_pec, _ifname.c_str(), _recv_prio, _recv_mask);
-    if (ret != 0) 
-        throw str_exception("ec_open failed: %s!\n", strerror(ret));
-
-    // assing eeprom log level 
-    _pec->eeprom_log = _log_eeprom_data;
-
     pthread_mutex_init(&pd_lock, NULL);
     pthread_cond_init(&pd_cond, NULL);
    
@@ -190,13 +184,66 @@ master::master(const std::string& name, const YAML::Node& node)
 
     pd_cookie = 0;
 
-    set_state(module_state_init);
+    // -----------------------------------------------------------
+    // open ethercat interface
+    int ret = ec_open(&_pec, _ifname.c_str(), _recv_prio, _recv_mask, _log_eeprom_data);
+    if (ret != 0) 
+        throw str_exception("ec_open failed: %s!\n", strerror(ret));
+        
+    // -----------------------------------------------------------
+    // setting init commands and distributed clocks
+    for (slave_map_t::iterator it = _slave_info.begin(); 
+            it != _slave_info.end(); ++it) {
+        int slave_nr = it->first;
+        slave *slv = it->second;
 
-    // add process data inspection 
-    //    std::stringstream channel_name; 
-    //    channel_name << "channel_" << (int)0;
-    //    _pd_interface_id = robotkernel::kernel::register_interface_cb(_name.c_str(), 
-    //            "libinterface_process_data_inspection.so", channel_name.str().c_str(), 0);
+
+        if (_pec->slave_cnt > slave_nr) {
+            log(info, "setting inits for slave %d\n", slave_nr);
+
+            for (slave::coe_list_t::iterator it2 = slv->coe_init_cmds.begin();
+                    it2 != slv->coe_init_cmds.end(); ++it2) {
+                slave::coe_init_cmd_t *cmd = *it2;
+                ec_slave_add_init_cmd(_pec, slave_nr, EC_MBX_COE, 
+                        (int)cmd->transition, cmd->index, cmd->subindex, 
+                        cmd->ca, cmd->data, cmd->datalen);
+            }
+        } else {
+            log(info, "setting inits for slave %d, failed. no slave found!\n", slave_nr);
+        }
+                
+        if (slv->dc.has_dc) {
+            _pec->slaves[slave_nr].dc.use_dc        = 1;
+            _pec->slaves[slave_nr].dc.type          = slv->dc.type;
+            _pec->slaves[slave_nr].dc.cycle_time_0  = slv->dc.cycle_time_0;
+            _pec->slaves[slave_nr].dc.cycle_time_1  = slv->dc.cycle_time_1;
+            _pec->slaves[slave_nr].dc.cycle_shift   = slv->dc.cycle_shift;
+        } else 
+            _pec->slaves[slave_nr].dc.use_dc = 0;
+    }
+
+    // -----------------------------------------------------------
+    // creating and assigning process data groups
+    ec_create_pd_groups(_pec, _group_info.size());
+            
+    for (group_map_t::iterator it = _group_info.begin(); it != _group_info.end(); ++it) {
+        int g_nr = it->first;
+
+        for (std::list<int>::iterator it2 = it->second->_slaves.begin();
+                it2 != it->second->_slaves.end(); ++it2) {
+
+            int s_nr = *it2;
+            if (_pec->slave_cnt <= s_nr) {
+                log(warning, "slave %d not connected to ethercat bus, "
+                        "not adding to group %d\n", s_nr, g_nr);
+                continue;
+            }
+
+            _pec->slaves[s_nr].assigned_pd_group = g_nr;
+        }
+    }
+    
+    set_state(module_state_init);
 }
 
 //! destruction 
@@ -212,6 +259,38 @@ master::~master() {
     pthread_mutex_destroy(&pd_lock);
     pthread_cond_destroy(&pd_cond);
 }
+
+#define TRANSITION_INIT_2_UNKNOWN       0x0001FFFE
+#define TRANSITION_INIT_2_ERROR         0x0001FFFF
+#define TRANSITION_INIT_2_BOOT          0x00010000
+#define TRANSITION_INIT_2_INIT          0x00010001
+#define TRANSITION_INIT_2_PREOP         0x00010002
+#define TRANSITION_INIT_2_SAFEOP        0x00010003
+#define TRANSITION_INIT_2_OP            0x00010004
+
+#define TRANSITION_PREOP_2_UNKNOWN      0x0002FFFE
+#define TRANSITION_PREOP_2_ERROR        0x0002FFFF
+#define TRANSITION_PREOP_2_BOOT         0x00020000
+#define TRANSITION_PREOP_2_INIT         0x00020001
+#define TRANSITION_PREOP_2_PREOP        0x00020002
+#define TRANSITION_PREOP_2_SAFEOP       0x00020003
+#define TRANSITION_PREOP_2_OP           0x00020004
+
+#define TRANSITION_SAFEOP_2_UNKNOWN     0x0003FFFE
+#define TRANSITION_SAFEOP_2_ERROR       0x0003FFFF
+#define TRANSITION_SAFEOP_2_BOOT        0x00030000
+#define TRANSITION_SAFEOP_2_INIT        0x00030001
+#define TRANSITION_SAFEOP_2_PREOP       0x00030002
+#define TRANSITION_SAFEOP_2_SAFEOP      0x00030003
+#define TRANSITION_SAFEOP_2_OP          0x00030004
+
+#define TRANSITION_OP_2_UNKNOWN         0x0004FFFE
+#define TRANSITION_OP_2_ERROR           0x0004FFFF
+#define TRANSITION_OP_2_BOOT            0x00040000
+#define TRANSITION_OP_2_INIT            0x00040001
+#define TRANSITION_OP_2_PREOP           0x00040002
+#define TRANSITION_OP_2_SAFEOP          0x00040003
+#define TRANSITION_OP_2_OP              0x00040004
 
 //! set module state machine to defined state
 /*!
@@ -315,31 +394,9 @@ int master::set_state(module_state_t new_state) {
                 dc_timer_override = 
                 _pec->dc.timer_override = tmp * 1E9;
             }
-            ec_create_pd_groups(_pec, _group_info.size());
-            
             // start cyclic operation via trigger
             _pec->tx_sync = 0;
             state = module_state_safeop;
-
-            for (group_map_t::iterator it = _group_info.begin(); it != _group_info.end(); ++it) {
-                int g_nr = it->first;
-
-                for (std::list<int>::iterator it2 = it->second->_slaves.begin();
-                        it2 != it->second->_slaves.end(); ++it2) {
-
-                    int s_nr = *it2;
-                    if (_pec->slave_cnt <= s_nr) {
-                        log(warning, "slave %d not connected to ethercat bus, "
-                                "not adding to group %d\n", s_nr, g_nr);
-                        continue;
-                    }
-
-                    _pec->slaves[s_nr].assigned_pd_group = g_nr;
-                    _slave_info[s_nr]->prepare_state_transition(preop_to_safeop);
-                }
-
-                it->second->register_interfaces(name, ll);
-            }
 
             ec_set_state(_pec, EC_STATE_SAFEOP);
             
@@ -349,15 +406,6 @@ int master::set_state(module_state_t new_state) {
             start();
             break;
         case module_state_op:
-            for (group_map_t::iterator it = _group_info.begin(); it != _group_info.end(); ++it) {
-                for (std::list<int>::iterator it2 = it->second->_slaves.begin();
-                        it2 != it->second->_slaves.end(); ++it2) {
-
-                    int s_nr = *it2;
-                    _slave_info[s_nr]->prepare_state_transition(safeop_to_op);
-                }
-            }
-
             start();
             _pec->tx_sync = 0;
 
@@ -878,6 +926,7 @@ int master::request(int reqcode, void* ptr) {
 //! module trigger callback
 void master::trigger() {
     int i = 0;
+    int64_t max_timeout = 0;
     ec_timer_t dc_timeout;
 
     if (state >= module_state_safeop) {
@@ -890,11 +939,14 @@ void master::trigger() {
             g->_divisor_cnt = 0;
             ec_send_process_data_group(_pec, i);
             ec_timer_init(&g->timeout, g->_recv_timeout);
+
+            if (max_timeout < g->_recv_timeout)
+                max_timeout = g->_recv_timeout;
         }
 
         if (_pec->dc.have_dc) {
             ec_send_distributed_clocks_sync(_pec);
-            ec_timer_init(&dc_timeout, 1E6);
+            ec_timer_init(&dc_timeout, max_timeout);
         }
     }
 
@@ -966,6 +1018,7 @@ void master::run() {
         ec_timer_init(&abstime, 100000000);
         timeout.tv_sec = abstime.sec;
         timeout.tv_nsec = abstime.nsec;
+//        log(info, "running %d, run_flag %d\n", running(), this->run_flag);
 
         if (pthread_cond_timedwait(&async_cond, &async_lock, &timeout) != 0)
             continue;
