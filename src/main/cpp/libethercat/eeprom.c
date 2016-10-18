@@ -437,11 +437,11 @@ void ec_eeprom_dump(ec_t *pec, uint16_t slave) {
 
                     slv->eeprom.strings[i][string_len] = '\0';
                     
-                    eeprom_log(100, "EEPROM_STRINGS", "          string %d, length %d : %s\n", 
-                            slave, i, string_len, slv->eeprom.strings[i]);
+                    eeprom_log(100, "EEPROM_STRINGS", "          string %2d, length %2d : %s\n", 
+                            i, string_len, slv->eeprom.strings[i]);
                     if (local_offset > cat_len*2) {
-                        eeprom_log(5, "EEPROM_STRINGS", "          something wrong in eeprom string section\n",
-                                slave);
+                        eeprom_log(5, "EEPROM_STRINGS", "          something wrong in eeprom "
+                                "string section\n");
                         break;
                     }
                 }
@@ -458,7 +458,8 @@ void ec_eeprom_dump(ec_t *pec, uint16_t slave) {
 
                 eeprom(cat_offset+2, slv->eeprom.general);
 
-                eeprom_log(100, "EEPROM_GENERAL", "          group_idx %d, img_idx %d, order_idx %d, name_idx %d\n", 
+                eeprom_log(100, "EEPROM_GENERAL", "          group_idx %d, img_idx %d, "
+                        "order_idx %d, name_idx %d\n", 
                         slave, slv->eeprom.general.group_idx,
                         slv->eeprom.general.img_idx,
                         slv->eeprom.general.order_idx,
@@ -479,7 +480,7 @@ void ec_eeprom_dump(ec_t *pec, uint16_t slave) {
                         if ((fmmu_idx < slv->fmmu_ch) && (tmp[i] >= 1) && (tmp[i] <= 3)) {
                             slv->fmmu[fmmu_idx].type = tmp[i];
                 
-                            eeprom_log(100, "EEPROM_FMMU", "           fmmu%d, type %d\n", 
+                            eeprom_log(100, "EEPROM_FMMU", "          fmmu%d, type %d\n", 
                                 fmmu_idx, tmp[i]);
                         }
 
@@ -540,23 +541,36 @@ void ec_eeprom_dump(ec_t *pec, uint16_t slave) {
 
                 // skip cat type and len
                 int j = 0, local_offset = cat_offset + 2;
-                slv->eeprom.txpdos_cnt = cat_len/(sizeof(ec_eeprom_cat_pdo_t)/2);
-
-                if (!slv->eeprom.txpdos_cnt)
+                if (!cat_len)
                     break;
 
-                // alloc pdos
-                slv->eeprom.txpdos = (ec_eeprom_cat_pdo_t *)malloc(
-                        sizeof(ec_eeprom_cat_pdo_t) * slv->eeprom.txpdos_cnt);
+                // read pdo
+                ec_eeprom_cat_pdo_t *pdo = malloc(sizeof(ec_eeprom_cat_pdo_t));
+                ec_eepromread_len(pec, slave, local_offset, 
+                        (uint8_t *)pdo, EC_EEPROM_CAT_PDO_LEN);
+                local_offset += EC_EEPROM_CAT_PDO_LEN / 2;
+                        
+                eeprom_log(100, "EEPROM_TXPDO", "          0x%04X\n",
+                        pdo->pdo_index);
+               
+                if (pdo->n_entry) {
+                    // alloc entries
+                    pdo->entries = malloc(pdo->n_entry * 
+                            sizeof(ec_eeprom_cat_pdo_entry_t));
 
-                while (local_offset < (cat_offset + cat_len + 2)) {
-                    eeprom(local_offset, slv->eeprom.txpdos[j++]);
-                    local_offset += sizeof(ec_eeprom_cat_pdo_t) / 2;
+                    for (j = 0; j < pdo->n_entry; ++j) {
+                        ec_eeprom_cat_pdo_entry_t *entry = &pdo->entries[j];
+                        ec_eepromread_len(pec, slave, local_offset,
+                                (uint8_t *)entry, sizeof(ec_eeprom_cat_pdo_entry_t));
 
-                    if (j >= slv->eeprom.txpdos_cnt)
-                        break;
+                        local_offset += sizeof(ec_eeprom_cat_pdo_entry_t) / 2;
+                
+                        eeprom_log(100, "EEPROM_TXPDO", "          0x%04X:%2d -> 0x%04X\n",
+                            pdo->pdo_index, j, entry->entry_index);
+                    }
                 }
 
+                TAILQ_INSERT_TAIL(&slv->eeprom.txpdos, pdo, qh);
                 break;
             }
             case EC_EEPROM_CAT_RXPDO: {
@@ -564,28 +578,62 @@ void ec_eeprom_dump(ec_t *pec, uint16_t slave) {
 
                 // skip cat type and len
                 int j = 0, local_offset = cat_offset + 2;
-                slv->eeprom.rxpdos_cnt = cat_len/(sizeof(ec_eeprom_cat_pdo_t)/2);
-
-                if (!slv->eeprom.rxpdos_cnt)
+                if (!cat_len)
                     break;
 
-                // alloc pdos
-                slv->eeprom.rxpdos = (ec_eeprom_cat_pdo_t *)malloc(
-                        sizeof(ec_eeprom_cat_pdo_t) * slv->eeprom.rxpdos_cnt);
+                // read pdo
+                ec_eeprom_cat_pdo_t *pdo = malloc(sizeof(ec_eeprom_cat_pdo_t));
+                ec_eepromread_len(pec, slave, local_offset, 
+                        (uint8_t *)pdo, EC_EEPROM_CAT_PDO_LEN);
+                local_offset += EC_EEPROM_CAT_PDO_LEN / 2;
+                        
+                eeprom_log(100, "EEPROM_RXPDO", "          0x%04X\n",
+                        pdo->pdo_index);
+               
+                if (pdo->n_entry) {
+                    // alloc entries
+                    pdo->entries = malloc(pdo->n_entry * 
+                            sizeof(ec_eeprom_cat_pdo_entry_t));
 
-                while (local_offset < (cat_offset + cat_len + 2)) {
-                    eeprom(local_offset, slv->eeprom.rxpdos[j++]);
-                    local_offset += sizeof(ec_eeprom_cat_pdo_t) / 2;
+                    for (j = 0; j < pdo->n_entry; ++j) {
+                        ec_eeprom_cat_pdo_entry_t *entry = &pdo->entries[j];
+                        ec_eepromread_len(pec, slave, local_offset,
+                                (uint8_t *)entry, sizeof(ec_eeprom_cat_pdo_entry_t));
 
-                    if (j >= slv->eeprom.rxpdos_cnt)
-                        break;
+                        local_offset += sizeof(ec_eeprom_cat_pdo_entry_t) / 2;
+                
+                        eeprom_log(100, "EEPROM_TXPDO", "          0x%04X:%2d -> 0x%04X\n",
+                            pdo->pdo_index, j, entry->entry_index);
+                    }
+                }
+
+                TAILQ_INSERT_TAIL(&slv->eeprom.rxpdos, pdo, qh);
+                break;
+            }
+            case EC_EEPROM_CAT_DC: {
+                eeprom_log(100, "EEPROM_DC", "slave %2d:\n", slave);
+                
+                int j = 0, local_offset = cat_offset + 2;
+                slv->eeprom.dcs_cnt = cat_len/(EC_EEPROM_CAT_DC_LEN/2);
+                slv->eeprom.dcs = malloc(EC_EEPROM_CAT_DC_LEN * slv->eeprom.dcs_cnt);
+
+                for (j = 0; j < slv->eeprom.dcs_cnt; ++j) {
+                    ec_eeprom_cat_dc_t *dc = &slv->eeprom.dcs[j];
+                    ec_eepromread_len(pec, slave, local_offset,
+                            (uint8_t *)dc, EC_EEPROM_CAT_DC_LEN);
+                    local_offset += EC_EEPROM_CAT_DC_LEN/2;
+                
+                    eeprom_log(100, "EEPROM_DC", "          cycle_time_0 %d, "
+                            "shift_time_0 %d, shift_time_1 %d, "
+                            "sync_0_cycle_factor %d, sync_1_cycle_factor %d, "
+                            "assign_active %d\n", 
+                            dc->cycle_time_0, dc->shift_time_0, dc->shift_time_1,
+                            dc->sync_0_cycle_factor, dc->sync_1_cycle_factor, 
+                            dc->assign_active);                   
                 }
 
                 break;
             }
-            case EC_EEPROM_CAT_DC:
-                eeprom_log(100, "EEPROM_DC", "slave %2d:\n", slave);
-                break;
         }
 
         cat_offset += cat_len + 2; 

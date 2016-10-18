@@ -468,6 +468,8 @@ int ec_open(ec_t **ppec, const char *ifname, int prio, int cpumask, int eeprom_l
         pec->slaves[i].subdev_cnt = 0;
         pec->slaves[i].subdevs = NULL;
         pec->slaves[i].eeprom.read_eeprom = 0;
+        TAILQ_INIT(&pec->slaves[i].eeprom.txpdos);
+        TAILQ_INIT(&pec->slaves[i].eeprom.rxpdos);
         pthread_mutex_init(&pec->slaves[i].mbx_lock, NULL);
 
         ec_apwr(pec, auto_inc, EC_REG_STADR, (uint8_t *)&fixed, sizeof(fixed), &wkc); 
@@ -578,11 +580,20 @@ int ec_close(ec_t *pec) {
 
                 free(slv->eeprom.strings);
             }
+            
+            ec_eeprom_cat_pdo_t *pdo;
+            while ((pdo = TAILQ_FIRST(&slv->eeprom.txpdos)) != NULL) {
+                TAILQ_REMOVE(&slv->eeprom.txpdos, pdo, qh);
+                free(pdo);
+            }
+           
+            while ((pdo = TAILQ_FIRST(&slv->eeprom.rxpdos)) != NULL) {
+                TAILQ_REMOVE(&slv->eeprom.rxpdos, pdo, qh);
+                free(pdo);
+            }
 
             free_resource(slv->eeprom.sms);
             free_resource(slv->eeprom.fmmus);
-            free_resource(slv->eeprom.txpdos);
-            free_resource(slv->eeprom.rxpdos);
             free_resource(slv->sm);
             free_resource(slv->fmmu);
             free_resource(slv->mbx_read.buf);

@@ -54,6 +54,8 @@ enum {
     EC_COE_SDO_INFO_GET_ENTRY_DESC_RESP,
 };
 
+#define DEFTYPE_PDOMAPPING          0x0021
+
 #define CANOPEN_MAXNAME 40
     
 //! CanOpen over EtherCAT sdo descriptor

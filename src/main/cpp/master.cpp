@@ -610,15 +610,18 @@ int master::request(int reqcode, void* ptr) {
                     list->indices_cnt += 1;
 
                 ec_slave_t *slv = &_pec->slaves[list->slave_id];
-                for (unsigned i = 0; i < slv->eeprom.txpdos_cnt; ++i) {
+                ec_eeprom_cat_pdo_t *pdo;
+
+                // inputs and outputs
+                TAILQ_FOREACH(pdo, &slv->eeprom.txpdos, qh) {
                     if (list->indices)
-                        list->indices[list->indices_cnt++] = slv->eeprom.txpdos[i].pdo_index;
+                        list->indices[list->indices_cnt++] = pdo->pdo_index;
                     else list->indices_cnt++;
                 }
 
-                for (unsigned i = 0; i < slv->eeprom.rxpdos_cnt; ++i) {
+                TAILQ_FOREACH(pdo, &slv->eeprom.rxpdos, qh) {
                     if (list->indices)
-                        list->indices[list->indices_cnt++] = slv->eeprom.rxpdos[i].pdo_index;
+                        list->indices[list->indices_cnt++] = pdo->pdo_index;
                     else list->indices_cnt++;
                 }
             }
@@ -654,19 +657,20 @@ int master::request(int reqcode, void* ptr) {
                     strncpy(desc->name, "Device Name", desc->name_len);
                 }
                 
-                for (unsigned i = 0; i < slv->eeprom.txpdos_cnt; ++i) {
-                    if (slv->eeprom.txpdos[i].pdo_index == desc->index) {
+                ec_eeprom_cat_pdo_t *pdo;
+                TAILQ_FOREACH(pdo, &slv->eeprom.txpdos, qh) {
+                    if (pdo->pdo_index == desc->index) {
                         found = true;
 
-                        desc->data_type         = slv->eeprom.txpdos[i].data_type;
+                        desc->data_type         = DEFTYPE_PDOMAPPING;
                         desc->object_code       = 7;
-                        desc->max_subindices    = slv->eeprom.txpdos[i].n_entry;
+                        desc->max_subindices    = pdo->n_entry;
 
-                        if ((slv->eeprom.txpdos[i].name_idx > 0) && 
-                                (slv->eeprom.txpdos[i].name_idx <= slv->eeprom.strings_cnt)) {
-                            desc->name_len      = strlen(slv->eeprom.strings[slv->eeprom.txpdos[i].name_idx-1]);
+                        if ((pdo->name_idx > 0) && 
+                                (pdo->name_idx <= slv->eeprom.strings_cnt)) {
+                            desc->name_len      = strlen(slv->eeprom.strings[pdo->name_idx-1]);
                             desc->name          = (char *)malloc(desc->name_len);
-                            strncpy(desc->name, slv->eeprom.strings[slv->eeprom.txpdos[i].name_idx-1], desc->name_len);
+                            strncpy(desc->name, slv->eeprom.strings[pdo->name_idx-1], desc->name_len);
                         } else {
                             desc->name_len = 0;
                         }
@@ -676,18 +680,18 @@ int master::request(int reqcode, void* ptr) {
                 if (found)
                     break;
 
-                for (unsigned i = 0; i < slv->eeprom.rxpdos_cnt; ++i) {
-                    if (slv->eeprom.rxpdos[i].pdo_index == desc->index) {
+                TAILQ_FOREACH(pdo, &slv->eeprom.rxpdos, qh) {
+                    if (pdo->pdo_index == desc->index) {
                         found = true;
 
-                        desc->data_type         = slv->eeprom.rxpdos[i].data_type;
+                        desc->data_type         = DEFTYPE_PDOMAPPING;
                         desc->object_code       = 7;
-                        desc->max_subindices    = slv->eeprom.rxpdos[i].n_entry;
-                        if ((slv->eeprom.rxpdos[i].name_idx > 0) && 
-                                (slv->eeprom.rxpdos[i].name_idx <= slv->eeprom.strings_cnt)) {
-                            desc->name_len      = strlen(slv->eeprom.strings[slv->eeprom.txpdos[i].name_idx-1]);
+                        desc->max_subindices    = pdo->n_entry;
+                        if ((pdo->name_idx > 0) && 
+                                (pdo->name_idx <= slv->eeprom.strings_cnt)) {
+                            desc->name_len      = strlen(slv->eeprom.strings[pdo->name_idx-1]);
                             desc->name          = (char *)malloc(desc->name_len);
-                            strcpy(desc->name, slv->eeprom.strings[slv->eeprom.rxpdos[i].name_idx-1]);
+                            strcpy(desc->name, slv->eeprom.strings[pdo->name_idx-1]);
                         } else {
                             desc->name_len      = 0;
                         }
@@ -755,18 +759,23 @@ int master::request(int reqcode, void* ptr) {
                     }
                 }
 
-                for (unsigned i = 0; i < slv->eeprom.txpdos_cnt; ++i) {
-                    if (slv->eeprom.txpdos[i].pdo_index == desc->index) {
+                ec_eeprom_cat_pdo_t *pdo;
+                TAILQ_FOREACH(pdo, &slv->eeprom.txpdos, qh) {
+                    if (pdo->pdo_index != desc->index)
+                        continue;
+
+                    if (desc->sub_index < pdo->n_entry) {
+                        ec_eeprom_cat_pdo_entry_t *entry = &pdo->entries[desc->sub_index];
                         found = true;
 
                         desc->value_info        = 0x7F;
-                        desc->data_type         = slv->eeprom.txpdos[i].data_type;
-                        desc->bit_length        = slv->eeprom.txpdos[i].bit_len;
+                        desc->data_type         = entry->data_type;
+                        desc->bit_length        = entry->bit_len;
                         desc->obj_access        = 7;
 
-                        if ((slv->eeprom.txpdos[i].name_idx > 0) &&
-                                (slv->eeprom.txpdos[i].name_idx <= slv->eeprom.strings_cnt)) {
-                            char *tmp = slv->eeprom.strings[slv->eeprom.txpdos[i].name_idx-1];
+                        if ((entry->entry_name_idx > 0) &&
+                                (entry->entry_name_idx <= slv->eeprom.strings_cnt)) {
+                            char *tmp = slv->eeprom.strings[entry->entry_name_idx-1];
                             desc->name_len = min(strlen(tmp), CANOPEN_MAXNAME - 1);
                             desc->name = (char *)malloc(desc->name_len + 1);
                             memcpy(desc->name, tmp, desc->name_len);
@@ -775,24 +784,30 @@ int master::request(int reqcode, void* ptr) {
                             desc->name_len = 0;
                             desc->name = NULL;
                         }
+
+                        break;
                     }
                 }
 
                 if (found)
                     break;
 
-                for (unsigned i = 0; i < slv->eeprom.rxpdos_cnt; ++i) {
-                    if (slv->eeprom.rxpdos[i].pdo_index == desc->index) {
+                TAILQ_FOREACH(pdo, &slv->eeprom.rxpdos, qh) {
+                    if (pdo->pdo_index != desc->index)
+                        continue;
+
+                    if (desc->sub_index < pdo->n_entry) {
+                        ec_eeprom_cat_pdo_entry_t *entry = &pdo->entries[desc->sub_index];
                         found = true;
 
                         desc->value_info        = 0x7F;
-                        desc->data_type         = slv->eeprom.rxpdos[i].data_type;
-                        desc->bit_length        = slv->eeprom.rxpdos[i].bit_len;
+                        desc->data_type         = entry->data_type;
+                        desc->bit_length        = entry->bit_len;
                         desc->obj_access        = 7;
 
-                        if ((slv->eeprom.rxpdos[i].name_idx > 0) &&
-                                (slv->eeprom.rxpdos[i].name_idx <= slv->eeprom.strings_cnt)) {
-                            char *tmp = slv->eeprom.strings[slv->eeprom.rxpdos[i].name_idx-1];
+                        if ((entry->entry_name_idx > 0) &&
+                                (entry->entry_name_idx <= slv->eeprom.strings_cnt)) {
+                            char *tmp = slv->eeprom.strings[entry->entry_name_idx-1];
                             desc->name_len = min(strlen(tmp), CANOPEN_MAXNAME - 1);
                             desc->name = (char *)malloc(desc->name_len + 1);
                             memcpy(desc->name, tmp, desc->name_len);
@@ -801,6 +816,8 @@ int master::request(int reqcode, void* ptr) {
                             desc->name_len = 0;
                             desc->name = NULL;
                         }
+
+                        break;
                     }
                 }
 

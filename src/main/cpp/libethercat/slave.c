@@ -208,7 +208,7 @@ int ec_slave_set_state(ec_t *pec, uint16_t slave, ec_state_t state) {
         if (act_state & EC_STATE_ERROR) {
             ec_fprd(pec, pec->slaves[slave].fixed_address, 
                     EC_REG_ALSTATCODE, &value, sizeof(value), &wkc);
-            ec_log(10, "EC_STATE_SET", "slave %2d, state switch to %d failed, alstatcode 0x%04X\n", 
+            ec_log(10, "EC_STATE_SET", "slave %2d: state switch to %d failed, alstatcode 0x%04X\n", 
                     slave, state, value);
 
             ec_slave_set_state(pec, slave, (act_state & EC_STATE_MASK) | EC_STATE_RESET);
@@ -216,7 +216,7 @@ int ec_slave_set_state(ec_t *pec, uint16_t slave, ec_state_t state) {
         }
     
         if (ec_timer_expired(&timeout)) {
-            ec_log(10, "EC_STATE_SET", "slave %2d did not respond on state switch to %d\n", 
+            ec_log(10, "EC_STATE_SET", "slave %2d: did not respond on state switch to %d\n", 
                     slave, state);
             wkc = 0;
             break;
@@ -225,7 +225,7 @@ int ec_slave_set_state(ec_t *pec, uint16_t slave, ec_state_t state) {
         ec_sleep(1000000);
     } while (act_state != state);
 
-    ec_log(100, "EC_STATE_SET", "slave %2d, state %X, act_state %X, wkc %d\n", 
+    ec_log(100, "EC_STATE_SET", "slave %2d: state %X, act_state %X, wkc %d\n", 
             slave, state, act_state, wkc);
 
     return wkc;
@@ -279,30 +279,38 @@ int ec_slave_generate_mapping(ec_t *pec, uint16_t slave) {
     else {
         // try eeprom
         for (int sm_idx = 0; sm_idx < slv->sm_ch; ++sm_idx) {
+            int txpdos_cnt = 0, rxpdos_cnt = 0;
             size_t bit_len = 0;
+            ec_eeprom_cat_pdo_t *pdo;
 
             // inputs and outputs
-            for (int txpdo_idx = 0; txpdo_idx < slv->eeprom.txpdos_cnt; ++txpdo_idx) {
-                ec_eeprom_cat_pdo_t *pdo = &slv->eeprom.txpdos[txpdo_idx];
-                ec_log(100, "GENERATE_MAPPING EEP", "slave %2d: got txpdo bit_len %d, sm %d\n", 
-                        slave, pdo->bit_len, pdo->sm_nr);
+            TAILQ_FOREACH(pdo, &slv->eeprom.txpdos, qh) {
+                if (sm_idx == pdo->sm_nr) {
+                    for (int entry_idx = 0; entry_idx < pdo->n_entry; ++entry_idx) { 
+                        ec_log(100, "GENERATE_MAPPING EEP", "slave %2d: got txpdo bit_len %d, sm %d\n", 
+                                slave, pdo->entries[entry_idx].bit_len, pdo->sm_nr);
+                        bit_len += pdo->entries[entry_idx].bit_len;
+                    }
 
-                if (sm_idx == pdo->sm_nr) 
-                    bit_len += pdo->bit_len;
+                    txpdos_cnt++;
+                }
             }
 
             // outputs
-            for (int rxpdo_idx = 0; rxpdo_idx < slv->eeprom.rxpdos_cnt; ++rxpdo_idx) {
-                ec_eeprom_cat_pdo_t *pdo = &slv->eeprom.rxpdos[rxpdo_idx];
-                ec_log(100, "GENERATE_MAPPING EEP", "slave %2d: got rxpdo bit_len %d, sm %d\n", 
-                        slave, pdo->bit_len, pdo->sm_nr);
+            TAILQ_FOREACH(pdo, &slv->eeprom.rxpdos, qh) {
+                if (sm_idx == pdo->sm_nr) {
+                    for (int entry_idx = 0; entry_idx < pdo->n_entry; ++entry_idx) { 
+                        ec_log(100, "GENERATE_MAPPING EEP", "slave %2d: got rxpdo bit_len %d, sm %d\n", 
+                                slave, pdo->entries[entry_idx].bit_len, pdo->sm_nr);
+                        bit_len += pdo->entries[entry_idx].bit_len;
+                    }
 
-                if (sm_idx == pdo->sm_nr) 
-                    bit_len += pdo->bit_len;
+                    rxpdos_cnt++;
+                }
             }
 
             ec_log(100, "GENERATE_MAPPING EEP", "slave %2d: txpdos %d, rxpdos %d, bitlen%d %d\n", 
-                    slave, slv->eeprom.txpdos_cnt, slv->eeprom.rxpdos_cnt, sm_idx, bit_len);
+                    slave, txpdos_cnt, rxpdos_cnt, sm_idx, bit_len);
 
             if (bit_len > 0) {
                 ec_log(10, "GENERATE_MAPPING EEP", "slave %2d: sm%d length bits %d, bytes %d\n", 

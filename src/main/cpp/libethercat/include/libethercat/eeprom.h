@@ -28,6 +28,9 @@
 
 #include "libethercat/common.h"
 #include <stdlib.h>
+#include <sys/queue.h>
+
+//------------------ Category General ---------------
 
 typedef struct PACKED ec_eeprom_cat_general {
     uint8_t group_idx;          //!< group information, index to STRING
@@ -44,6 +47,17 @@ typedef struct PACKED ec_eeprom_cat_general {
     uint8_t flags;
     uint16_t current_on_ebus;   //!< ebus current in [mA], negative = feed-in
 } ec_eeprom_cat_general_t;
+    
+//------------------ Category PDO -------------------
+
+typedef struct PACKED ec_eeprom_cat_pdo_entry {
+    uint16_t entry_index;
+    uint8_t sub_index;
+    uint8_t entry_name_idx;   
+    uint8_t data_type;
+    uint8_t bit_len;
+    uint16_t flags;
+} ec_eeprom_cat_pdo_entry_t;
 
 typedef struct PACKED ec_eeprom_cat_pdo {
     uint16_t pdo_index;
@@ -52,13 +66,15 @@ typedef struct PACKED ec_eeprom_cat_pdo {
     uint8_t dc_sync;
     uint8_t name_idx;
     uint16_t flags;
-    uint16_t entry_sub_index;
-    uint8_t sub_index;
-    uint8_t entry_name_idx;
-    uint8_t data_type;
-    uint8_t bit_len;
-    uint16_t flags_2;
+#define EC_EEPROM_CAT_PDO_LEN   8
+    ec_eeprom_cat_pdo_entry_t *entries;
+    
+    TAILQ_ENTRY(ec_eeprom_cat_pdo) qh;
 } ec_eeprom_cat_pdo_t;
+
+TAILQ_HEAD(ec_eeprom_cat_pdo_queue, ec_eeprom_cat_pdo);
+
+//------------------ Category SM --------------------
 
 typedef struct PACKED ec_eeprom_cat_sm {
     uint16_t adr;
@@ -68,6 +84,23 @@ typedef struct PACKED ec_eeprom_cat_sm {
     uint8_t  activate;
     uint8_t  pdi_ctrl;
 } PACKED ec_eeprom_cat_sm_t;
+
+//------------------ Category DC --------------------
+
+typedef struct PACKED ec_eeprom_cat_dc {
+    uint32_t cycle_time_0;
+    uint32_t shift_time_0;
+    uint32_t shift_time_1;
+    int16_t  sync_1_cycle_factor;
+    uint16_t assign_active;
+    int16_t  sync_0_cycle_factor;
+    uint8_t  name_idx;
+    uint8_t  desc_idx;
+    uint8_t  reserved[4];
+#define EC_EEPROM_CAT_DC_LEN    24
+} PACKED ec_eeprom_cat_dc_t;
+
+//------------------ Category FMMU ------------------
 
 typedef struct PACKED ec_eeprom_cat_fmmu {
     uint8_t type;
@@ -101,11 +134,11 @@ typedef struct eeprom_info {
     uint8_t fmmus_cnt;
     ec_eeprom_cat_fmmu_t *fmmus;
 
-    uint8_t txpdos_cnt;
-    ec_eeprom_cat_pdo_t *txpdos;
-    
-    uint8_t rxpdos_cnt;
-    ec_eeprom_cat_pdo_t *rxpdos;
+    struct ec_eeprom_cat_pdo_queue txpdos;
+    struct ec_eeprom_cat_pdo_queue rxpdos;
+
+    uint8_t dcs_cnt;
+    ec_eeprom_cat_dc_t *dcs;
 } eeprom_info_t;
 
 enum {
