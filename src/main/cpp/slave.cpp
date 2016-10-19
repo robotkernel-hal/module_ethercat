@@ -220,6 +220,7 @@ void slave::_init() {
     intf_pd  = NULL;
     intf_mi  = NULL;
     intf_coe = NULL;
+    intf_eeprom_coe = NULL;
     intf_foe = NULL;
 }
 
@@ -556,6 +557,7 @@ void slave::register_interfaces(module_state_t state) {
 
             INTF_UNREGISTER(intf_pd);
             INTF_UNREGISTER(intf_coe);
+            INTF_UNREGISTER(intf_eeprom_coe);
             INTF_MAP_UNREGISTER(intf_atn_pd);
             INTF_MAP_UNREGISTER(intf_atn_soe);
             
@@ -563,6 +565,7 @@ void slave::register_interfaces(module_state_t state) {
             break;
         case module_state_init:
             INTF_UNREGISTER(intf_pd);
+            INTF_UNREGISTER(intf_eeprom_coe);
             INTF_UNREGISTER(intf_coe);
             INTF_UNREGISTER(intf_foe);
             INTF_MAP_UNREGISTER(intf_atn_pd);
@@ -575,11 +578,19 @@ void slave::register_interfaces(module_state_t state) {
             INTF_MAP_UNREGISTER(intf_atn_pd);
             
             INTF_REGISTER(intf_coe, "libinterface_canopen_protocol.so");
+            
             if (master_dev->_pec->slaves[index].eeprom.mbx_supported 
                     & EC_EEPROM_MBX_FOE) {
                 INTF_REGISTER(intf_foe, "libinterface_file_protocol.so");
             }
+            
+            std::stringstream eeprom_coe_name;
+            eeprom_coe_name << "slave_" << index << ".eeprom";
 
+            node["dev_name"] = eeprom_coe_name.str();
+            node["slave_id"] = ECAT_SLAVE_ID_EEPROM | index;
+            INTF_REGISTER(intf_eeprom_coe, "libinterface_canopen_protocol.so");
+            
             int atn;
             for (atn = 0; atn < master_dev->_pec->slaves[index].eeprom.general.soe_channels; ++atn) {
                 if (intf_atn_soe.find(atn) != intf_atn_soe.end())

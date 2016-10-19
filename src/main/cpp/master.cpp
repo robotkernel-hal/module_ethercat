@@ -588,20 +588,9 @@ int master::request(int reqcode, void* ptr) {
         case MOD_REQUEST_CANOPEN_OBJECT_DICTIONARY_LIST: {
             canopen_object_dictionary_list *list = (canopen_object_dictionary_list *)ptr;
 
-            if (_pec->slaves[list->slave_id].eeprom.mbx_supported & EC_EEPROM_MBX_COE) {
-                uint8_t buf[512];
-                size_t len = sizeof(buf);
-                int ret = ec_coe_odlist_read(_pec, list->slave_id, buf, &len);
-
-                if (ret <= 0)
-                    break;
-
-                if (list->indices) {
-                    memcpy(list->indices, buf, len);
-                    list->indices_cnt = len/2;
-                } else
-                    list->indices_cnt = len/2;
-            } else { // search in eeprom entries
+            if (list->slave_id & ECAT_SLAVE_ID_EEPROM) {
+                // search in eeprom entries
+                uint16_t slave_id = ECAT_SLAVE_ID_GET_SLAVE(list->slave_id);
                 list->indices_cnt = 0;
 
                 if (list->indices)
@@ -609,7 +598,7 @@ int master::request(int reqcode, void* ptr) {
                 else
                     list->indices_cnt += 1;
 
-                ec_slave_t *slv = &_pec->slaves[list->slave_id];
+                ec_slave_t *slv = &_pec->slaves[slave_id];
                 ec_eeprom_cat_pdo_t *pdo;
 
                 // inputs and outputs
@@ -624,6 +613,21 @@ int master::request(int reqcode, void* ptr) {
                         list->indices[list->indices_cnt++] = pdo->pdo_index;
                     else list->indices_cnt++;
                 }
+            } else {
+                if (_pec->slaves[list->slave_id].eeprom.mbx_supported & EC_EEPROM_MBX_COE) {
+                    uint8_t buf[512];
+                    size_t len = sizeof(buf);
+                    int ret = ec_coe_odlist_read(_pec, list->slave_id, buf, &len);
+
+                    if (ret <= 0)
+                        break;
+
+                    if (list->indices) {
+                        memcpy(list->indices, buf, len);
+                        list->indices_cnt = len/2;
+                    } else
+                        list->indices_cnt = len/2;
+                }
             }
 
             break;
@@ -632,21 +636,12 @@ int master::request(int reqcode, void* ptr) {
             int ret2;
             canopen_object_description *desc = (canopen_object_description *)ptr;
 
-            if (_pec->slaves[desc->slave_id].eeprom.mbx_supported & EC_EEPROM_MBX_COE) {
-                // get description
-                ec_coe_sdo_desc_t obj_desc;
-                ret2 = ec_coe_sdo_desc_read(_pec, desc->slave_id, desc->index, &obj_desc);
-
-                desc->data_type      = obj_desc.data_type;
-                desc->object_code    = obj_desc.obj_code;
-                desc->max_subindices = obj_desc.max_subindices;
-                desc->name_len       = obj_desc.name_len;                
-                desc->name           = obj_desc.name; // allocated by ec_coe_sdo_desc_read, 
-                                                      // freed by caller
-            } else { // search in eeprom entries
+            if (desc->slave_id & ECAT_SLAVE_ID_EEPROM) {
+                // search in eeprom entries
+                uint16_t slave_id = ECAT_SLAVE_ID_GET_SLAVE(desc->slave_id);
                 bool found = false;
 
-                ec_slave_t *slv = &_pec->slaves[desc->slave_id];
+                ec_slave_t *slv = &_pec->slaves[slave_id];
 
                 if (desc->index == 0x1008) {
                     desc->data_type         = 0x0009;
@@ -663,7 +658,7 @@ int master::request(int reqcode, void* ptr) {
                         found = true;
 
                         desc->data_type         = DEFTYPE_PDOMAPPING;
-                        desc->object_code       = 7;
+                        desc->object_code       = pdo->n_entry > 1 ? 9 : 7;
                         desc->max_subindices    = pdo->n_entry;
 
                         if ((pdo->name_idx > 0) && 
@@ -685,7 +680,7 @@ int master::request(int reqcode, void* ptr) {
                         found = true;
 
                         desc->data_type         = DEFTYPE_PDOMAPPING;
-                        desc->object_code       = 7;
+                        desc->object_code       = pdo->n_entry > 1 ? 9 : 7;
                         desc->max_subindices    = pdo->n_entry;
                         if ((pdo->name_idx > 0) && 
                                 (pdo->name_idx <= slv->eeprom.strings_cnt)) {
@@ -697,6 +692,19 @@ int master::request(int reqcode, void* ptr) {
                         }
                     }
                 }
+            } else {
+                if (_pec->slaves[desc->slave_id].eeprom.mbx_supported & EC_EEPROM_MBX_COE) {
+                    // get description
+                    ec_coe_sdo_desc_t obj_desc;
+                    ret2 = ec_coe_sdo_desc_read(_pec, desc->slave_id, desc->index, &obj_desc);
+
+                    desc->data_type      = obj_desc.data_type;
+                    desc->object_code    = obj_desc.obj_code;
+                    desc->max_subindices = obj_desc.max_subindices;
+                    desc->name_len       = obj_desc.name_len;                
+                    desc->name           = obj_desc.name; // allocated by ec_coe_sdo_desc_read, 
+                    // freed by caller
+                }
             }
             break;
         }
@@ -705,43 +713,12 @@ int master::request(int reqcode, void* ptr) {
 
             canopen_element_description *desc = (canopen_element_description *)ptr;
 
-            if (_pec->slaves[desc->slave_id].eeprom.mbx_supported & EC_EEPROM_MBX_COE) {
-                // get description
-                ec_coe_sdo_entry_desc_t entry_desc;
-                entry_desc.data = NULL;
-                ret2 = ec_coe_sdo_entry_desc_read(_pec, desc->slave_id, desc->index, 
-                        desc->sub_index, 0x7F, &entry_desc);
-                if (ret2 <= 0) {
-                    ret = -1;
-                    break;
-                }
-
-                entry_desc.data = (uint8_t *)malloc(entry_desc.data_len);
-                ret2 = ec_coe_sdo_entry_desc_read(_pec, desc->slave_id, desc->index, 
-                        desc->sub_index, 0x7F, &entry_desc);
-                if (ret2 <= 0) {
-                    ret = -1;
-                    break;
-                }
-
-                desc->value_info    = 0x7F;
-                desc->data_type     = entry_desc.data_type;
-                desc->bit_length    = entry_desc.bit_length;
-                desc->obj_access    = entry_desc.obj_access;
-                desc->name_len      = entry_desc.data_len;                
-                if (desc->name_len > 0) {
-                    desc->name          = (char *)malloc(entry_desc.data_len + 1);
-                    memcpy(desc->name, &entry_desc.data[0], desc->name_len);
-                    desc->name[desc->name_len] = '\0';
-                } else
-                    desc->name      = NULL;
-
-                if (entry_desc.data)
-                    free(entry_desc.data);
-            } else { // search in eeprom entries
+            if (desc->slave_id & ECAT_SLAVE_ID_EEPROM) {
+                // search in eeprom entries
+                uint16_t slave_id = ECAT_SLAVE_ID_GET_SLAVE(desc->slave_id);
                 bool found = false;
 
-                ec_slave_t *slv = &_pec->slaves[desc->slave_id];
+                ec_slave_t *slv = &_pec->slaves[slave_id];
 
                 // device name
                 if (desc->index == 0x1008) {
@@ -757,72 +734,96 @@ int master::request(int reqcode, void* ptr) {
                         desc->bit_length = 7*8;
                         desc->obj_access = 7;
                     }
+
+                    break;
                 }
 
                 ec_eeprom_cat_pdo_t *pdo;
-                TAILQ_FOREACH(pdo, &slv->eeprom.txpdos, qh) {
-                    if (pdo->pdo_index != desc->index)
-                        continue;
+                
+                struct ec_eeprom_cat_pdo_queue *pdos[] = {
+                    &slv->eeprom.txpdos,
+                    &slv->eeprom.rxpdos };
 
-                    if (desc->sub_index < pdo->n_entry) {
-                        ec_eeprom_cat_pdo_entry_t *entry = &pdo->entries[desc->sub_index];
-                        found = true;
+                for (int qi = 0; qi < 2; qi++) {
+                    TAILQ_FOREACH(pdo, pdos[qi], qh) {
+                        if (pdo->pdo_index != desc->index)
+                            continue;
 
-                        desc->value_info        = 0x7F;
-                        desc->data_type         = entry->data_type;
-                        desc->bit_length        = entry->bit_len;
-                        desc->obj_access        = 7;
+                        if (desc->sub_index == 0) {
+                            found = true;
 
-                        if ((entry->entry_name_idx > 0) &&
-                                (entry->entry_name_idx <= slv->eeprom.strings_cnt)) {
-                            char *tmp = slv->eeprom.strings[entry->entry_name_idx-1];
-                            desc->name_len = min(strlen(tmp), CANOPEN_MAXNAME - 1);
-                            desc->name = (char *)malloc(desc->name_len + 1);
-                            memcpy(desc->name, tmp, desc->name_len);
-                            desc->name[desc->name_len] = '\0';
-                        } else {
-                            desc->name_len = 0;
-                            desc->name = NULL;
+                            desc->value_info        = 0x7F;
+                            desc->data_type         = 0x0005; //DEFTYPE_UNSIGNED8;
+                            desc->bit_length        = 8;
+                            desc->obj_access        = 7;
+                            desc->name_len          = strlen("SubIndex_0");
+                            desc->name              = strdup("SubIndex_0");
+                        } else if (desc->sub_index <= pdo->n_entry) {
+                            ec_eeprom_cat_pdo_entry_t *entry = &pdo->entries[desc->sub_index-1];
+                            found = true;
+
+                            desc->value_info        = 0x7F;
+                            desc->data_type         = entry->data_type;
+                            desc->bit_length        = entry->bit_len;
+                            desc->obj_access        = 7;
+
+                            if ((entry->entry_name_idx > 0) &&
+                                    (entry->entry_name_idx <= slv->eeprom.strings_cnt)) {
+                                char *tmp = slv->eeprom.strings[entry->entry_name_idx-1];
+                                desc->name_len = min(strlen(tmp), CANOPEN_MAXNAME - 1);
+                                desc->name = (char *)malloc(desc->name_len + 1);
+                                memcpy(desc->name, tmp, desc->name_len);
+                                desc->name[desc->name_len] = '\0';
+                            } else {
+                                desc->name_len = 0;
+                                desc->name = NULL;
+                            }
+
+                            break;
                         }
-
-                        break;
                     }
-                }
 
-                if (found)
-                    break;
-
-                TAILQ_FOREACH(pdo, &slv->eeprom.rxpdos, qh) {
-                    if (pdo->pdo_index != desc->index)
-                        continue;
-
-                    if (desc->sub_index < pdo->n_entry) {
-                        ec_eeprom_cat_pdo_entry_t *entry = &pdo->entries[desc->sub_index];
-                        found = true;
-
-                        desc->value_info        = 0x7F;
-                        desc->data_type         = entry->data_type;
-                        desc->bit_length        = entry->bit_len;
-                        desc->obj_access        = 7;
-
-                        if ((entry->entry_name_idx > 0) &&
-                                (entry->entry_name_idx <= slv->eeprom.strings_cnt)) {
-                            char *tmp = slv->eeprom.strings[entry->entry_name_idx-1];
-                            desc->name_len = min(strlen(tmp), CANOPEN_MAXNAME - 1);
-                            desc->name = (char *)malloc(desc->name_len + 1);
-                            memcpy(desc->name, tmp, desc->name_len);
-                            desc->name[desc->name_len] = '\0';
-                        } else {
-                            desc->name_len = 0;
-                            desc->name = NULL;
-                        }
-
+                    if (found)
                         break;
-                    }
                 }
-
+                
                 if (!found)
                     ret = -1;
+            } else {
+                if (_pec->slaves[desc->slave_id].eeprom.mbx_supported & EC_EEPROM_MBX_COE) {
+                    // get description
+                    ec_coe_sdo_entry_desc_t entry_desc;
+                    entry_desc.data = NULL;
+                    ret2 = ec_coe_sdo_entry_desc_read(_pec, desc->slave_id, desc->index, 
+                            desc->sub_index, 0x7F, &entry_desc);
+                    if (ret2 <= 0) {
+                        ret = -1;
+                        break;
+                    }
+
+                    entry_desc.data = (uint8_t *)malloc(entry_desc.data_len);
+                    ret2 = ec_coe_sdo_entry_desc_read(_pec, desc->slave_id, desc->index, 
+                            desc->sub_index, 0x7F, &entry_desc);
+                    if (ret2 <= 0) {
+                        ret = -1;
+                        break;
+                    }
+
+                    desc->value_info    = 0x7F;
+                    desc->data_type     = entry_desc.data_type;
+                    desc->bit_length    = entry_desc.bit_length;
+                    desc->obj_access    = entry_desc.obj_access;
+                    desc->name_len      = entry_desc.data_len;                
+                    if (desc->name_len > 0) {
+                        desc->name          = (char *)malloc(entry_desc.data_len + 1);
+                        memcpy(desc->name, &entry_desc.data[0], desc->name_len);
+                        desc->name[desc->name_len] = '\0';
+                    } else
+                        desc->name      = NULL;
+
+                    if (entry_desc.data)
+                        free(entry_desc.data);
+                }
             }
             break;
         }
@@ -835,28 +836,63 @@ int master::request(int reqcode, void* ptr) {
 //                    "sub_index %d, want to read %d bytes\n", value->slave_id, value->index,
 //                    value->sub_index, value->value_len);
 
-            if (_pec->slaves[value->slave_id].eeprom.mbx_supported & EC_EEPROM_MBX_COE) {
-                ec_coe_sdo_read(_pec, value->slave_id, value->index, value->sub_index, 
-                        0, (uint8_t *)value->value, &size, &abort_code);
-                value->value_len = size;
-                ret = abort_code;
-            } else { // search in eeprom entries
+            if (value->slave_id & ECAT_SLAVE_ID_EEPROM) {
+                // search in eeprom entries
+                uint16_t slave_id = ECAT_SLAVE_ID_GET_SLAVE(value->slave_id);
+                ec_slave_t *slv = &_pec->slaves[slave_id];
                 memset(value->value, 0, value->value_len);
+                bool found = false;
 
                 if (value->index == 0x1008) {
-                    ec_slave_t *slv = &_pec->slaves[value->slave_id];
+                    log(info, "got index 0x1008, name_idx %d, strings_cnt %d\n",
+                            slv->eeprom.general.name_idx, slv->eeprom.strings_cnt);
+
                     if ((slv->eeprom.strings_cnt > 0) &&
                             (slv->eeprom.general.name_idx <= slv->eeprom.strings_cnt)) {
+                        found = true;
+
                         value->value_len = strlen(slv->eeprom.strings[slv->eeprom.general.name_idx-1]);
                         memcpy(value->value, slv->eeprom.strings[slv->eeprom.general.name_idx-1], 
                                 value->value_len);
-                    } else {
-                        char buf[] = "unknown";
-                        value->value_len = 7;
-                        memcpy(value->value, buf, strlen(buf));
+                        log(info, "returning: %s\n", string((char *)value->value, value->value_len).c_str());
+                    } 
+                } else {
+                    ec_eeprom_cat_pdo_t *pdo;
+                    struct ec_eeprom_cat_pdo_queue *pdos[] = {
+                        &slv->eeprom.txpdos,
+                        &slv->eeprom.rxpdos };
+
+                    for (int qi = 0; qi < 2; qi++) {
+                        TAILQ_FOREACH(pdo, pdos[qi], qh) {
+                            if (pdo->pdo_index != value->index)
+                                continue;
+
+                            if (value->sub_index == 0) {
+                                found = true;
+                                value->value_len = 1;
+                                memcpy(value->value, &pdo->n_entry, 1);
+                            } else if (value->sub_index <= pdo->n_entry) {
+                                found = true;
+                                ec_eeprom_cat_pdo_entry_t *entry = &pdo->entries[value->sub_index-1];
+                                value->value_len = 2;
+                                memcpy(value->value, &entry->entry_index, 2);
+                            }
+                        } 
                     }
                 }
 
+                if (!found) {
+                    char buf[] = "unknown";
+                    value->value_len = 7;
+                    memcpy(value->value, buf, strlen(buf));
+                }
+            } else {
+                if (_pec->slaves[value->slave_id].eeprom.mbx_supported & EC_EEPROM_MBX_COE) {
+                    ec_coe_sdo_read(_pec, value->slave_id, value->index, value->sub_index, 
+                            0, (uint8_t *)value->value, &size, &abort_code);
+                    value->value_len = size;
+                    ret = abort_code;
+                } 
             }
             break;
         }

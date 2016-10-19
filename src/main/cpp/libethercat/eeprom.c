@@ -544,8 +544,15 @@ void ec_eeprom_dump(ec_t *pec, uint16_t slave) {
                 if (!cat_len)
                     break;
 
+                // freeing tailq first
+                ec_eeprom_cat_pdo_t *pdo;
+                while ((pdo = TAILQ_FIRST(&slv->eeprom.txpdos)) != NULL) {
+                    TAILQ_REMOVE(&slv->eeprom.txpdos, pdo, qh);
+                    free(pdo);
+                }
+
                 // read pdo
-                ec_eeprom_cat_pdo_t *pdo = malloc(sizeof(ec_eeprom_cat_pdo_t));
+                pdo = malloc(sizeof(ec_eeprom_cat_pdo_t));
                 ec_eepromread_len(pec, slave, local_offset, 
                         (uint8_t *)pdo, EC_EEPROM_CAT_PDO_LEN);
                 local_offset += EC_EEPROM_CAT_PDO_LEN / 2;
@@ -581,8 +588,15 @@ void ec_eeprom_dump(ec_t *pec, uint16_t slave) {
                 if (!cat_len)
                     break;
 
+                // freeing tailq first
+                ec_eeprom_cat_pdo_t *pdo;
+                while ((pdo = TAILQ_FIRST(&slv->eeprom.rxpdos)) != NULL) {
+                    TAILQ_REMOVE(&slv->eeprom.rxpdos, pdo, qh);
+                    free(pdo);
+                }
+
                 // read pdo
-                ec_eeprom_cat_pdo_t *pdo = malloc(sizeof(ec_eeprom_cat_pdo_t));
+                pdo = malloc(sizeof(ec_eeprom_cat_pdo_t));
                 ec_eepromread_len(pec, slave, local_offset, 
                         (uint8_t *)pdo, EC_EEPROM_CAT_PDO_LEN);
                 local_offset += EC_EEPROM_CAT_PDO_LEN / 2;
@@ -611,9 +625,18 @@ void ec_eeprom_dump(ec_t *pec, uint16_t slave) {
                 break;
             }
             case EC_EEPROM_CAT_DC: {
+                int j = 0, local_offset = cat_offset + 2;
+
                 eeprom_log(100, "EEPROM_DC", "slave %2d:\n", slave);
                 
-                int j = 0, local_offset = cat_offset + 2;
+                // freeing existing dcs ...
+                if (slv->eeprom.dcs) {
+                    free(slv->eeprom.dcs);
+                    slv->eeprom.dcs = NULL;
+                    slv->eeprom.dcs_cnt = 0;
+                }
+                
+                // allocating new dcs
                 slv->eeprom.dcs_cnt = cat_len/(EC_EEPROM_CAT_DC_LEN/2);
                 slv->eeprom.dcs = malloc(EC_EEPROM_CAT_DC_LEN * slv->eeprom.dcs_cnt);
 
