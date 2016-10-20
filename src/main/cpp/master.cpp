@@ -199,8 +199,6 @@ master::master(const std::string& name, const YAML::Node& node)
 
 
         if (_pec->slave_cnt > slave_nr) {
-            log(info, "setting inits for slave %d\n", slave_nr);
-
             for (slave::coe_list_t::iterator it2 = slv->coe_init_cmds.begin();
                     it2 != slv->coe_init_cmds.end(); ++it2) {
                 slave::coe_init_cmd_t *cmd = *it2;
@@ -209,7 +207,7 @@ master::master(const std::string& name, const YAML::Node& node)
                         cmd->ca, cmd->data, cmd->datalen);
             }
         } else {
-            log(info, "setting inits for slave %d, failed. no slave found!\n", slave_nr);
+            log(error, "setting inits for slave %d, failed. no slave found!\n", slave_nr);
         }
                 
         if (slv->dc.has_dc) {

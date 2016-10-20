@@ -457,7 +457,7 @@ int ec_open(ec_t **ppec, const char *ifname, int prio, int cpumask, int eeprom_l
         if (wkc == 0)
             break;  // break here, cause there seems to be no more slave
 
-        ec_log(10, "EC_OPEN", "slave %2d: auto inc %3d, fixed %d\n", 
+        ec_log(100, "EC_OPEN", "slave %2d: auto inc %3d, fixed %d\n", 
                 i, auto_inc, fixed);
 
         pec->slaves[i].assigned_pd_group = -1;
@@ -489,7 +489,6 @@ int ec_open(ec_t **ppec, const char *ifname, int prio, int cpumask, int eeprom_l
 
     for (int slave = 0; slave < pec->slave_cnt; ++slave) {
         ec_slave_t *slv = &pec->slaves[slave]; 
-        ec_slave_state_transition(pec, slave, EC_STATE_INIT);
 
         uint16_t topology = 0;
         ec_fprd(pec, slv->fixed_address, EC_REG_DLSTAT, &topology, sizeof(topology), &wkc);
