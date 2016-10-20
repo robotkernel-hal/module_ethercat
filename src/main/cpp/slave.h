@@ -37,10 +37,11 @@
 #include "ln_messages.h"
 #undef LN_UNREGISTER_SERVICE_IN_BASE_DETOR
 
-#define MEM_ADDRESS(x)          ((x) & 0x0000FFFF)
-#define MEM_TYPE_SLAVE_MEM      0x00000000
-#define MEM_TYPE_SLAVE_EEPROM   0x00010000
-#define MEM_TYPE_MASK           0x000F0000
+//#define MEM_ADDRESS(x)          ((x) & 0x0000FFFF)
+//#define MEM_TYPE_SLAVE_MEM      0x00000000
+//#define MEM_TYPE_SLAVE_EEPROM   0x00010000
+//#define MEM_TYPE_MASK           0x000F0000
+
 
 extern "C" void convert_string_to_hex(std::string input, char **output, size_t *outlen);
 
@@ -105,6 +106,11 @@ typedef enum {
 class slave : public ln_service_set_ec_state_base,
               public ln_service_get_ec_state_base {
     public:
+        typedef enum mem_type {
+            MEM_TYPE_SLAVE_MEM = 0,
+            MEM_TYPE_SLAVE_EEPROM = 1,
+        } mem_type_t;
+
         //! canopen over ethercat init cmd
         typedef struct coe_init_cmd {
             int index;                  //!< canopen dictionary identifier
@@ -221,11 +227,10 @@ class slave : public ln_service_set_ec_state_base,
         //! perform memory request
         /*!
          * \param code request code
+         * \param type memory type (mem or eeprom) 
          * \param memreq memory request structure
-         *               address in range 0x00000000 - 0x0000FFFF slave memory
-         *                       above    0x00010000              eeprom memory
          */
-        void memory_request(int code, memory_t *memreq);
+        void memory_request(int code, mem_type_t type, memory_t *memreq);
 	
         int on_set_ec_state(ln::service_request& req, ln_service_module_ethercat_set_ec_state& svc);
         int on_get_ec_state(ln::service_request& req, ln_service_module_ethercat_get_ec_state& svc);
@@ -239,6 +244,7 @@ class slave : public ln_service_set_ec_state_base,
 
         iface_t     intf_pd;
         iface_t     intf_mi;
+        iface_t     intf_eeprom_mi;
         iface_t     intf_coe;
         iface_t     intf_eeprom_coe;
         iface_t     intf_foe;

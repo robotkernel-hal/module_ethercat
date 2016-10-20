@@ -46,14 +46,15 @@
 #include "libethercat/soe.h"
 #include "libethercat/foe.h"
 
-#define ECAT_SLAVE_ID_GROUP         (0x80000000)
-#define ECAT_SLAVE_ID_DC            (0x20000000)
-#define ECAT_SLAVE_ID_SUB           (0x10000000)
-#define ECAT_SLAVE_ID_EEPROM        (0x01000000)
+#define ECAT_SLAVE_ID_GROUP             (0x80000000)
+#define ECAT_SLAVE_ID_DC                (0x20000000)
+#define ECAT_SLAVE_ID_SUB               (0x10000000)
+#define ECAT_SLAVE_ID_EEPROM            (0x01000000)
             
-#define ECAT_SLAVE_ID_GET_SLAVE(x)  ((x) & 0x0000FFFF)
-#define ECAT_SLAVE_ID_GET_GROUP(x)  ((x) & 0x0000FFFF)
-#define ECAT_SLAVE_ID_GET_SUB(x)    (((x) & 0x00FF0000) >> 16)
+#define ECAT_SLAVE_ID_GET_MEM_TYPE(x)   (((x) & 0x0F000000) >> 24)
+#define ECAT_SLAVE_ID_GET_SLAVE(x)      ((x) & 0x0000FFFF)
+#define ECAT_SLAVE_ID_GET_GROUP(x)      ((x) & 0x0000FFFF)
+#define ECAT_SLAVE_ID_GET_SUB(x)        (((x) & 0x00FF0000) >> 16)
 
 
 //! module_ethercat::

@@ -219,6 +219,7 @@ void slave::_init() {
         
     intf_pd  = NULL;
     intf_mi  = NULL;
+    intf_eeprom_mi = NULL;
     intf_coe = NULL;
     intf_eeprom_coe = NULL;
     intf_foe = NULL;
@@ -457,62 +458,63 @@ bool slave::prepare_state_transition(transition_t transition) {
 //! perform memory request
 /*!
  * \param code request code
+ * \param type memory type (mem or eeprom) 
  * \param memreq memory request structure
- *               address in range 0x00000000 - 0x0000FFFF slave memory
- *                       above    0x00010000              eeprom memory
  */
-void slave::memory_request(int code, memory_t *memreq) {
-    master_dev->log(verbose, "slave %d: incoming memory request\n", index);
+void slave::memory_request(int code, mem_type_t type, memory_t *memreq) {
+    master_dev->log(verbose, "slave %d: incoming memory request, type %d\n", index, type);
     
     switch (code) {
         case MOD_REQUEST_MEMORY_READ: {
-            uint16_t address = MEM_ADDRESS(memreq->address);
             memset(memreq->data, 0, memreq->length);
 
-            switch (memreq->address & MEM_TYPE_MASK) {
+            switch (type) {
                 case MEM_TYPE_SLAVE_EEPROM:
                     master_dev->log(verbose, "slave %d: reading eeprom address 0x%X\n", 
-                            index, address);
-                    ec_eepromread_len(master_dev->_pec, index, address, memreq->data, memreq->length);
+                            index, memreq->address);
+
+                    ec_eepromread_len(master_dev->_pec, index, memreq->address, 
+                            memreq->data, memreq->length);
                     break;
-                case MEM_TYPE_SLAVE_MEM:
-                    {
-                        uint16_t wkc;
-                        master_dev->log(verbose, "slave %d: reading esc memory address 0x%X\n", 
-                                index, address);
+                case MEM_TYPE_SLAVE_MEM: {
+                    uint16_t wkc;
+                    master_dev->log(verbose, "slave %d: reading esc memory address 0x%X\n", 
+                            index, memreq->address);
 
-                        for (unsigned offset = 0; offset < memreq->length; offset+=100) {
-                            uint32_t act_len = min(100, memreq->length - offset);
+                    for (unsigned offset = 0; offset < memreq->length; offset+=100) {
+                        uint32_t act_len = min(100, memreq->length - offset);
 
-                            ec_fprd(master_dev->_pec, master_dev->_pec->slaves[index].fixed_address, 
-                                    address + offset, memreq->data + offset, act_len, &wkc);
-                        }
+                        ec_fprd(master_dev->_pec, master_dev->_pec->slaves[index].fixed_address, 
+                                memreq->address + offset, memreq->data + offset, act_len, &wkc);
                     }
+                    
                     break;
+                }
             }
             break;
         }
         case MOD_REQUEST_MEMORY_WRITE: {
-            uint16_t address = MEM_ADDRESS(memreq->address);
-            switch (memreq->address & MEM_TYPE_MASK) {
+            switch (type) {
                 case MEM_TYPE_SLAVE_EEPROM:
                     master_dev->log(verbose, "slave %d: writing eeprom address 0x%X\n", 
-                            index, address);
-                    ec_eepromwrite_len(master_dev->_pec, index, address, memreq->data, memreq->length);
+                            index, memreq->address);
+
+                    ec_eepromwrite_len(master_dev->_pec, index, 
+                            memreq->address, memreq->data, memreq->length);
                     break;
-                case MEM_TYPE_SLAVE_MEM:
-                    {
-                        uint16_t wkc;
-                        master_dev->log(verbose, "slave %d: writing esc memory address 0x%X, len %d\n", 
-                                index, address, memreq->length);
+                case MEM_TYPE_SLAVE_MEM: {
+                    uint16_t wkc;
+                    master_dev->log(verbose, "slave %d: writing esc memory address 0x%X, len %d\n", 
+                            index, memreq->address, memreq->length);
 
-                        for (unsigned offset = 0; offset < memreq->length; offset+=100) {
-                            uint32_t act_len = min(100, memreq->length - offset);
+                    for (unsigned offset = 0; offset < memreq->length; offset+=100) {
+                        uint32_t act_len = min(100, memreq->length - offset);
 
-                            ec_fpwr(master_dev->_pec, master_dev->_pec->slaves[index].fixed_address, 
-                                    address + offset, memreq->data + offset, act_len, &wkc);
-                        }
+                        ec_fpwr(master_dev->_pec, master_dev->_pec->slaves[index].fixed_address, 
+                                memreq->address + offset, memreq->data + offset, act_len, &wkc);
                     }
+                    break;
+                }
             }
             break;
         }
@@ -545,23 +547,29 @@ void slave::register_interfaces(module_state_t state) {
         kernel::unregister_interface_cb(it->second); \
         (intf_map).erase(it); }
     
-#define INTF_REGISTER(id, so) \
-    if ((id) == NULL) (id) = robotkernel::kernel::register_interface_cb((so), node);
+#define INTF_REGISTER(id, so, dev_name, slave_id) \
+    if ((id) == NULL) { \
+        node["slave_id"] = (slave_id); \
+        node["dev_name"] = (dev_name); \
+        (id) = robotkernel::kernel::register_interface_cb((so), node); }
 
     switch (state) {
         case module_state_boot: 
             if (master_dev->_pec->slaves[index].eeprom.mbx_supported 
                     & EC_EEPROM_MBX_FOE) {
-                INTF_REGISTER(intf_foe, "libinterface_file_protocol.so");
+                INTF_REGISTER(intf_foe, "libinterface_file_protocol.so", 
+                        format_string("slave_%d.mailbox", index), index);
             }
 
             INTF_UNREGISTER(intf_pd);
             INTF_UNREGISTER(intf_coe);
             INTF_UNREGISTER(intf_eeprom_coe);
+            INTF_UNREGISTER(intf_eeprom_mi);
             INTF_MAP_UNREGISTER(intf_atn_pd);
             INTF_MAP_UNREGISTER(intf_atn_soe);
             
-            INTF_REGISTER(intf_mi, "libinterface_memory_inspection.so");
+            INTF_REGISTER(intf_mi, "libinterface_memory_inspection.so",
+                    format_string("slave_%d", index), index);
             break;
         case module_state_init:
             INTF_UNREGISTER(intf_pd);
@@ -571,54 +579,55 @@ void slave::register_interfaces(module_state_t state) {
             INTF_MAP_UNREGISTER(intf_atn_pd);
             INTF_MAP_UNREGISTER(intf_atn_soe);
             
-            INTF_REGISTER(intf_mi, "libinterface_memory_inspection.so");
+            INTF_REGISTER(intf_mi, "libinterface_memory_inspection.so",
+                    format_string("slave_%d.mem", index), index);
+            INTF_REGISTER(intf_eeprom_mi, "libinterface_memory_inspection.so",
+                    format_string("slave_%d.eeprom", index), 
+                    index | ECAT_SLAVE_ID_EEPROM);
             break;
         case module_state_preop: {
             INTF_UNREGISTER(intf_pd);
             INTF_MAP_UNREGISTER(intf_atn_pd);
             
-            INTF_REGISTER(intf_coe, "libinterface_canopen_protocol.so");
-            
             if (master_dev->_pec->slaves[index].eeprom.mbx_supported 
                     & EC_EEPROM_MBX_FOE) {
-                INTF_REGISTER(intf_foe, "libinterface_file_protocol.so");
+                INTF_REGISTER(intf_foe, "libinterface_file_protocol.so",
+                        format_string("slave_%d.mailbox", index), index);
             }
             
-            std::stringstream eeprom_coe_name;
-            eeprom_coe_name << "slave_" << index << ".eeprom";
+            if (master_dev->_pec->slaves[index].eeprom.mbx_supported 
+                    & EC_EEPROM_MBX_COE) {
+                INTF_REGISTER(intf_coe, "libinterface_canopen_protocol.so",
+                        format_string("slave_%d.mailbox", index), index);
+            }
 
-            node["dev_name"] = eeprom_coe_name.str();
-            node["slave_id"] = ECAT_SLAVE_ID_EEPROM | index;
-            INTF_REGISTER(intf_eeprom_coe, "libinterface_canopen_protocol.so");
+            INTF_REGISTER(intf_eeprom_coe, "libinterface_canopen_protocol.so",
+                    format_string("slave_%d.eeprom", index), 
+                    ECAT_SLAVE_ID_EEPROM | index);
             
             int atn;
             for (atn = 0; atn < master_dev->_pec->slaves[index].eeprom.general.soe_channels; ++atn) {
                 if (intf_atn_soe.find(atn) != intf_atn_soe.end())
                     continue; // already registered
                 
-                std::stringstream atn_name;
-                atn_name << "slave_" << index << ".atn_" << atn;
-
-                node["dev_name"] = atn_name.str();
-                node["slave_id"] = ECAT_SLAVE_ID_SUB | (atn << 16) | index;
-                INTF_REGISTER(intf_atn_soe[atn], "libinterface_sercos_protocol.so");
+                INTF_REGISTER(intf_atn_soe[atn], "libinterface_sercos_protocol.so",
+                    format_string("slave_%d.mailbox.atn_%d", index, atn), 
+                    ECAT_SLAVE_ID_SUB | (atn << 16) | index);
             }
             break;
         }
         case module_state_op:
         case module_state_safeop: {
-            INTF_REGISTER(intf_pd, "libinterface_process_data_inspection.so");
+            INTF_REGISTER(intf_pd, "libinterface_process_data_inspection.so",
+                    format_string("slave_%d", index), index);
             int atn;
             for (atn = 0; atn < master_dev->_pec->slaves[index].eeprom.general.soe_channels; ++atn) {
                 if (intf_atn_pd.find(atn) != intf_atn_pd.end())
                     continue; // already registered
                 
-                std::stringstream atn_name;
-                atn_name << "slave_" << index << ".atn_" << atn;
-
-                node["dev_name"] = atn_name.str();
-                node["slave_id"] = ECAT_SLAVE_ID_SUB | (atn << 16) | index;
-                INTF_REGISTER(intf_atn_pd[atn], "libinterface_process_data_inspection.so");
+                INTF_REGISTER(intf_atn_pd[atn], "libinterface_process_data_inspection.so",
+                    format_string("slave_%d.atn_%d", index, atn), 
+                    ECAT_SLAVE_ID_SUB | (atn << 16) | index);
             }
             break;
         }

@@ -168,7 +168,6 @@ void ec_slave_add_init_cmd(ec_t *pec, uint16_t slave,
         int type, int transition, int id, int si_el, int ca_atn,
         char *data, size_t datalen) {
 
-    ec_log(10, "haha", "datalen %d\n", datalen);
     ec_slave_mailbox_init_cmd_t *cmd = ec_slave_mailbox_init_cmd_alloc(
             type, transition, id, si_el, ca_atn, data, datalen);
 
@@ -335,7 +334,6 @@ int ec_slave_prepare_state_transition(ec_t *pec, uint16_t slave, ec_state_t stat
     uint16_t wkc;
     ec_state_t act_state = 0;
     ec_slave_t *slv = &pec->slaves[slave];
-            ec_log(10, "OLD ADR", "slave %d, to %d, adr %d\n", slave, (int)state,slv->sm[3].adr);
 
     // check error state
     wkc = ec_slave_get_state(pec, slave, &act_state, NULL);
@@ -393,9 +391,6 @@ int ec_slave_state_transition(ec_t *pec, uint16_t slave, ec_state_t state) {
     uint16_t wkc;
     ec_state_t act_state = 0;
     ec_slave_t *slv = &pec->slaves[slave];
-
-    if (slv->sm)
-        ec_log(10, "OLD ADR", "slave %d, to %d, adr %d\n", slave, (int)state,slv->sm[3].adr);
 
 #define ec_reg_read(reg, buf, buflen) { uint16_t wkc; \
     ec_fprd(pec, pec->slaves[slave].fixed_address, (reg), (buf), (buflen), &wkc); \
