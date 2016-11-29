@@ -156,12 +156,7 @@ master::master(const std::string& name, const YAML::Node& node)
         }
     }
 
-    string dc_mode_string = get_as<string>(node, "dc_mode", "master_clock");
-    if (dc_mode_string == "ref_clock")
-        _dc_mode = dc_mode_ref_clock;
-    else 
-        _dc_mode = dc_mode_master_clock;
-    
+    _dc_mode_string = get_as<string>(node, "dc_mode", "master_clock");
     _dc_sync.first_run = true;
     _dc_sync.last_diff = 0.;
 
@@ -342,7 +337,10 @@ int master::set_state(module_state_t new_state) {
         case module_state_preop: {
             stop();
             _pec->tx_sync = 1;
-            _pec->dc.mode = (int)_dc_mode;
+            if (_dc_mode_string == "ref_clock")
+                _pec->dc.mode = ec_dc_info::dc_mode_ref_clock;
+            else 
+                _pec->dc.mode = ec_dc_info::dc_mode_master_clock;
             
             ec_set_state(_pec, EC_STATE_PREOP);
 
