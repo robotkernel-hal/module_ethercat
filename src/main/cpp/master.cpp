@@ -237,6 +237,52 @@ master::master(const std::string& name, const YAML::Node& node)
     }
     
     set_state(module_state_init);
+    
+    // -----------------------------------------------------------
+    // set pdo mapping entries
+    for (slave_map_t::iterator it = _slave_info.begin(); 
+            it != _slave_info.end(); ++it) {
+        int slave_nr = it->first;
+        slave *slv = it->second;
+
+        if (_pec->slave_cnt > slave_nr) {
+            if (_pec->slaves[slave_nr].eeprom.mbx_supported & 
+                    EC_EEPROM_MBX_COE) {              
+
+                // generate input mapping for coe
+                int mapping_entries = slv->input_mapping.size();
+                if (mapping_entries > 0) {
+                    uint16_t mapping[mapping_entries + 1];
+                    int mnr = 0;
+                    mapping[mnr++] = mapping_entries;
+                    for (slave::mapping_t::iterator mit = slv->input_mapping.begin(); 
+                            mit != slv->input_mapping.end(); ++mit) {
+                        mapping[mnr++] = *mit;
+                    }
+                
+                    ec_slave_add_init_cmd(_pec, slave_nr, EC_MBX_COE, 0x24, 0x1C13, 
+                            0, 1, (char *)mapping, 2 * (mapping_entries + 1));
+                }
+                
+                // generate output mapping for coe
+                mapping_entries = slv->output_mapping.size();
+                if (mapping_entries > 0) {
+                    uint16_t mapping[mapping_entries + 1];
+                    int mnr = 0;
+                    mapping[mnr++] = mapping_entries;
+                    for (slave::mapping_t::iterator mit = slv->output_mapping.begin(); 
+                            mit != slv->output_mapping.end(); ++mit) {
+                        mapping[mnr++] = *mit;
+                    }
+                
+                    ec_slave_add_init_cmd(_pec, slave_nr, EC_MBX_COE, 0x24, 0x1C12, 
+                            0, 1, (char *)mapping, 2 * (mapping_entries + 1));
+                }
+            }
+        } else {
+            log(error, "setting mapping for slave %d, failed. no slave found!\n", slave_nr);
+        }
+    }
 }
 
 //! destruction 

@@ -155,6 +155,10 @@ class slave : public ln_service_set_ec_state_base,
         coe_list_t coe_init_cmds;   //! canopen over ethercat init commands
         soe_list_t soe_init_cmds;   //! sercos over ethercat init commands
 
+        typedef std::list<int> mapping_t;
+        mapping_t input_mapping;    //! process data input mapping values
+        mapping_t output_mapping;   //! process data output mapping values
+
         //! slave distributed clocks
         struct slave_dc {
             bool has_dc;

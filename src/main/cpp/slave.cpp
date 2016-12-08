@@ -187,6 +187,32 @@ slave::slave(const YAML::Node& node, master *master_dev)
         }
     }
 
+    if (node["mapping"]) {
+        const YAML::Node& mapping_node = node["mapping"];
+        string type = get_as<string>(mapping_node, "type");
+
+        master_dev->log(verbose, 
+                "slave %s parsing mapping type %s\n", 
+                name.c_str(), type.c_str());
+
+        if (type == "coe") {
+            const YAML::Node& pdos_node = mapping_node["pdos"];
+
+            for (YAML::const_iterator it = pdos_node.begin(); 
+                    it != pdos_node.end(); ++it) {
+                int value = it->as<int>();
+                master_dev->log(verbose, 
+                        "slave %s got mapping value 0x%X\n",
+                        name.c_str(), value);
+        
+                if ((value & 0x1A00) == 0x1A00)
+                    input_mapping.push_back(value);    //! process data input mapping values
+                else if ((value & 0x1600) == 0x1600)
+                    output_mapping.push_back(value);   //! process data output mapping values
+            }
+        }
+    }
+
     _init();
 
     master_dev->log(verbose,
