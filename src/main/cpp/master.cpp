@@ -133,7 +133,7 @@ master::master(const std::string& name, const YAML::Node& node)
     dc_timer_override 
                 = get_as<int>(node, "dc_timer_override", -1);
     dc_offset_compensation_max 
-                = get_as<uint64_t>(node, "dc_offset_compensation_max", 1000000);
+                = get_as<uint64_t>(node, "dc_offset_compensation_max", 100000000);
 
     ec_log_func_user = this;
     ec_log_func = log_func;
@@ -398,6 +398,9 @@ int master::set_state(module_state_t new_state) {
                 _pec->dc.offset_compensation_max = dc_offset_compensation_max;
 
             for (nr = 0; nr < _pec->slave_cnt; ++nr) {
+                log(verbose, "slave %d: propagation delay %d [ns]\n", 
+                        nr, _pec->slaves[nr].pdelay);
+
                 // apply sm and fmmu config
                 for (slave::sm_map_t::iterator it = _slave_info[nr]->_sm_map.begin();
                         it != _slave_info[nr]->_sm_map.end(); ++it) {
@@ -1054,6 +1057,9 @@ void master::trigger() {
         if (_pec->dc.have_dc) {
             ec_receive_distributed_clocks_sync(_pec, &dc_timeout);
 
+            if (_pec->dc.offset_compensation_cnt == 0)
+                log(verbose, "dc receive, mode %d\n", _pec->dc.mode);
+
             if (    (_pec->dc.mode == ec_dc_info::dc_mode_ref_clock) && 
                     (_pec->dc.offset_compensation_cnt == 0)) {
                 double diff = (_pec->dc.act_diff / 1E9);
@@ -1063,9 +1069,15 @@ void master::trigger() {
                     kernel::request_cb(trigger_mod_name.c_str(), 
                             MOD_REQUEST_GET_TRIGGER_INTERVAL, &tmp);
 
-                    tmp -= (_dc_sync.last_diff-diff)/(_pec->dc.offset_compensation);
+                    tmp -= (-0.1 * (diff/_pec->dc.offset_compensation) ) + 
+                        (_dc_sync.last_diff - diff)/(_pec->dc.offset_compensation);
+
                     kernel::request_cb(trigger_mod_name.c_str(), 
                             MOD_REQUEST_SET_TRIGGER_INTERVAL, &tmp);
+
+                    log(verbose, "setting new clock %13.10f, last_diff %13.10f, diff %13.10f, "
+                            "offset_comp %d\n", tmp, _dc_sync.last_diff, diff, 
+                            _pec->dc.offset_compensation);
                 }
 
                 _dc_sync.first_run = false;
