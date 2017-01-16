@@ -201,9 +201,8 @@ master::master(const std::string& name, const YAML::Node& node)
                         (int)cmd->transition, cmd->index, cmd->subindex, 
                         cmd->ca, cmd->data, cmd->datalen);
             }
-        } else {
-            log(error, "setting inits for slave %d, failed. no slave found!\n", slave_nr);
-        }
+        } else
+            throw str_exception("setting inits for slave %d, failed. no slave found!\n", slave_nr);
                 
         if (slv->dc.has_dc) {
             _pec->slaves[slave_nr].dc.use_dc        = 1;
