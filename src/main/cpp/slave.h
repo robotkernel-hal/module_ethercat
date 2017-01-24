@@ -33,9 +33,9 @@
 #include "robotkernel/kernel.h"
 #include "interface_memory_inspection/module_intf.h"
 
-#define LN_UNREGISTER_SERVICE_IN_BASE_DETOR  
-#include "ln_messages.h"
-#undef LN_UNREGISTER_SERVICE_IN_BASE_DETOR
+//#define LN_UNREGISTER_SERVICE_IN_BASE_DETOR  
+//#include "ln_messages.h"
+//#undef LN_UNREGISTER_SERVICE_IN_BASE_DETOR
 
 //#define MEM_ADDRESS(x)          ((x) & 0x0000FFFF)
 //#define MEM_TYPE_SLAVE_MEM      0x00000000
@@ -43,7 +43,8 @@
 //#define MEM_TYPE_MASK           0x000F0000
 
 
-extern "C" void convert_string_to_hex(std::string input, char **output, size_t *outlen);
+extern "C" void convert_string_to_hex(std::string input, 
+        char **output, size_t *outlen);
 
 //! module_ethercat::
 namespace module_ethercat {
@@ -103,8 +104,9 @@ typedef enum {
    ECT_BIT8            = 0x0037
 } ec_data_type;
 
-class slave : public ln_service_set_ec_state_base,
-              public ln_service_get_ec_state_base {
+class slave {
+   // : public ln_service_set_ec_state_base,
+   //           public ln_service_get_ec_state_base {
     public:
         typedef enum mem_type {
             MEM_TYPE_SLAVE_MEM = 0,
@@ -236,8 +238,8 @@ class slave : public ln_service_set_ec_state_base,
          */
         void memory_request(int code, mem_type_t type, memory_t *memreq);
 	
-        int on_set_ec_state(ln::service_request& req, ln_service_module_ethercat_set_ec_state& svc);
-        int on_get_ec_state(ln::service_request& req, ln_service_module_ethercat_get_ec_state& svc);
+//        int on_set_ec_state(ln::service_request& req, ln_service_module_ethercat_set_ec_state& svc);
+//        int on_get_ec_state(ln::service_request& req, ln_service_module_ethercat_get_ec_state& svc);
 
     private:
         //! initialize common stuff

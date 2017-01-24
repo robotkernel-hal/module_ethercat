@@ -234,14 +234,14 @@ slave::~slave() {
 //! initialize common stuff
 void slave::_init() {
     kernel& k = *kernel::get_instance();
-    if (k.clnt) {
-        stringstream base;
-        base << k.clnt->name << "." << master_dev->name <<
-            ".slave_" << index;
-
-        register_set_ec_state(k.clnt, base.str() + ".set_ec_state");
-        register_get_ec_state(k.clnt, base.str() + ".get_ec_state");
-    }
+//    if (k.clnt) {
+//        stringstream base;
+//        base << k.clnt->name << "." << master_dev->name <<
+//            ".slave_" << index;
+//
+//        register_set_ec_state(k.clnt, base.str() + ".set_ec_state");
+//        register_get_ec_state(k.clnt, base.str() + ".get_ec_state");
+//    }
         
     intf_pd  = NULL;
     intf_mi  = NULL;
@@ -662,50 +662,50 @@ void slave::register_interfaces(module_state_t state) {
     }
 }
 
-int slave::on_set_ec_state(ln::service_request& req, ln_service_module_ethercat_set_ec_state& svc) {
-    string state_to = string(svc.req.state, svc.req.state_len);
-
-    if (state_to == string("init"))
-        ec_slave_set_state(master_dev->_pec, index, EC_STATE_INIT);
-    else if (state_to == "preop")    
-        ec_slave_set_state(master_dev->_pec, index, EC_STATE_PREOP);
-    else if (state_to == "safeop")    
-        ec_slave_set_state(master_dev->_pec, index, EC_STATE_SAFEOP);
-    else if (state_to == "op")    
-        ec_slave_set_state(master_dev->_pec, index, EC_STATE_OP);
-
-    req.respond();
-    return 0;
-}
-
-int slave::on_get_ec_state(ln::service_request& req, ln_service_module_ethercat_get_ec_state& svc) {
-    ec_state_t state;
-    string state_string;
-    int wkc = ec_slave_get_state(master_dev->_pec,
-            index, &state, NULL);
-
-    if (wkc > 0) {
-        if ((state & 0x000F) == EC_STATE_INIT)
-            state_string = strdup("init");
-        else if ((state & 0x000F) == EC_STATE_PREOP)
-            state_string = strdup("preop");
-        else if ((state & 0x000F) == EC_STATE_SAFEOP)
-            state_string = strdup("safeop");
-        else if ((state & 0x000F) == EC_STATE_OP)
-            state_string = strdup("op");
-        else 
-            state_string = strdup("unknown");
-
-        if ((state & 0x0010) == 0x0010)
-            state_string += " ERROR";
-    } else
-        state_string = "ERROR got no answer on get_state command\n";
-
-    svc.resp.state = strdup(state_string.c_str());
-    svc.resp.state_len = strlen(svc.resp.state);
-
-    req.respond();
-    free(svc.resp.state);
-    return 0;
-}
+//int slave::on_set_ec_state(ln::service_request& req, ln_service_module_ethercat_set_ec_state& svc) {
+//    string state_to = string(svc.req.state, svc.req.state_len);
+//
+//    if (state_to == string("init"))
+//        ec_slave_set_state(master_dev->_pec, index, EC_STATE_INIT);
+//    else if (state_to == "preop")    
+//        ec_slave_set_state(master_dev->_pec, index, EC_STATE_PREOP);
+//    else if (state_to == "safeop")    
+//        ec_slave_set_state(master_dev->_pec, index, EC_STATE_SAFEOP);
+//    else if (state_to == "op")    
+//        ec_slave_set_state(master_dev->_pec, index, EC_STATE_OP);
+//
+//    req.respond();
+//    return 0;
+//}
+//
+//int slave::on_get_ec_state(ln::service_request& req, ln_service_module_ethercat_get_ec_state& svc) {
+//    ec_state_t state;
+//    string state_string;
+//    int wkc = ec_slave_get_state(master_dev->_pec,
+//            index, &state, NULL);
+//
+//    if (wkc > 0) {
+//        if ((state & 0x000F) == EC_STATE_INIT)
+//            state_string = strdup("init");
+//        else if ((state & 0x000F) == EC_STATE_PREOP)
+//            state_string = strdup("preop");
+//        else if ((state & 0x000F) == EC_STATE_SAFEOP)
+//            state_string = strdup("safeop");
+//        else if ((state & 0x000F) == EC_STATE_OP)
+//            state_string = strdup("op");
+//        else 
+//            state_string = strdup("unknown");
+//
+//        if ((state & 0x0010) == 0x0010)
+//            state_string += " ERROR";
+//    } else
+//        state_string = "ERROR got no answer on get_state command\n";
+//
+//    svc.resp.state = strdup(state_string.c_str());
+//    svc.resp.state_len = strlen(svc.resp.state);
+//
+//    req.respond();
+//    free(svc.resp.state);
+//    return 0;
+//}
 	    
