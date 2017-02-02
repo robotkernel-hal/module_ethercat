@@ -127,6 +127,7 @@ master::master(const std::string& name, const YAML::Node& node)
     _log_eeprom_data = get_as<bool>(node, "log_eeprom_data", false);
     _pec             = NULL;
     _trigger_interval= get_as<int>(node, "trigger_interval", 0);
+    bool thr_startup = get_as<bool>(node, "threaded_startup", true);
             
     dc_offset_compensation_cycles 
                 = get_as<int>(node, "dc_offset_compensation_cycles", 250);
@@ -185,6 +186,8 @@ master::master(const std::string& name, const YAML::Node& node)
     if (ret != 0) 
         throw str_exception("ec_open failed: %s!\n", strerror(ret));
         
+    _pec->threaded_startup = thr_startup;
+
     // -----------------------------------------------------------
     // setting init commands and distributed clocks
     for (slave_map_t::iterator it = _slave_info.begin(); 

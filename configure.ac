@@ -67,6 +67,11 @@ AC_CHECK_FUNCS([strdup])
 AC_CHECK_LIB(dl, dlopen, DL_LIBS="-ldl", DL_LIBS=)
 AC_SUBST(DL_LIBS)
 
+# pthread support 
+AC_CHECK_LIB(pthread, pthread_create, [ PTHREAD_LIBS="-lpthread" PTHREAD_CFLAGS="-pthread" ] )
+AC_SUBST(PTHREAD_LIBS)
+AC_SUBST(PTHREAD_CFLAGS)
+
 AC_CONFIG_FILES([Makefile src/main/cpp/Makefile])
 
 AC_OUTPUT
