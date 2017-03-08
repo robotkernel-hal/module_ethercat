@@ -7,17 +7,17 @@ CLEANFILES = ln_messages.h
 
 libmodule_ethercat_la_SOURCES  = master.cpp slave.cpp
 
-libmodule_ethercat_la_CXXFLAGS = -Wall -I$(srcdir) -I$(builddir) -I$(srcdir)/libethercat/include \
-                                 @ROBOTKERNEL_CFLAGS@ @YAML_CPP_CFLAGS@ @LIBSTRING_UTIL_CFLAGS@ \
-                                 @LIBETHERCAT_PIC_CFLAGS@ @LINKS_AND_NODES_CFLAGS@ \
+libmodule_ethercat_la_CXXFLAGS = --std=c++11 -Wall -I$(srcdir) -I$(builddir) -I$(srcdir)/libethercat/include \
+                                 @ROBOTKERNEL_CFLAGS@ @YAML_CPP_RMC_CFLAGS@ @LIBSTRING_UTIL_CFLAGS@ \
+                                 @LIBETHERCAT_PIC_CFLAGS@ \
                                  @INTERFACE_MEMORY_INSPECTION_CFLAGS@ \
                                  @INTERFACE_CANOPEN_PROTOCOL_CFLAGS@ \
                                  @INTERFACE_SERCOS_PROTOCOL_CFLAGS@ \
                                  @INTERFACE_FILE_PROTOCOL_CFLAGS@
 
-libmodule_ethercat_la_CFLAGS   = -std=gnu99 -Wall -I$(srcdir) -I$(builddir) -I$(srcdir)/libethercat/include \
-                                 @ROBOTKERNEL_CFLAGS@ @YAML_CPP_CFLAGS@ @LIBSTRING_UTIL_CFLAGS@ \
-                                 @LIBETHERCAT_PIC_CFLAGS@ @LINKS_AND_NODES_CFLAGS@ \
+libmodule_ethercat_la_CFLAGS   = --std=c++11 -Wall -I$(srcdir) -I$(builddir) -I$(srcdir)/libethercat/include \
+                                 @ROBOTKERNEL_CFLAGS@ @YAML_CPP_RMC_CFLAGS@ @LIBSTRING_UTIL_CFLAGS@ \
+                                 @LIBETHERCAT_PIC_CFLAGS@ \
                                  @INTERFACE_MEMORY_INSPECTION_CFLAGS@ \
                                  @INTERFACE_CANOPEN_PROTOCOL_CFLAGS@ \
                                  @INTERFACE_SERCOS_PROTOCOL_CFLAGS@ \

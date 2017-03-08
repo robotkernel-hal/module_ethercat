@@ -73,7 +73,6 @@ master::group::group(int index, const YAML::Node& node) {
     _divisor        = get_as<int>(node, "divisor");
     _divisor_cnt    = 0;
     _recv_timeout   = get_as<int>(node, "recv_timeout", 1000000);
-    _pd_intf        = NULL;
 
     for (YAML::const_iterator it = node["slaves"].begin(); 
             it != node["slaves"].end(); ++it)
@@ -82,35 +81,23 @@ master::group::group(int index, const YAML::Node& node) {
 
 //! register interfaces for group
 /*!
- * \param ctx ethercat context
- * \return N/A
+ * \param name owner
  */
-void master::group::register_interfaces(std::string name, const loglevel& ll) {
-    if (_pd_intf)
-        return;
-
-    std::stringstream group_name; 
-    group_name << "group_" << _index;
-
-    YAML::Node node;
-    node["mod_name"] = name;
-    node["dev_name"] = group_name.str();
-    node["slave_id"] = (signed int)(_index | ECAT_SLAVE_ID_GROUP);
-    node["loglevel"] = (string)ll;
-
-    _pd_intf = kernel::register_interface_cb(
-            "libinterface_process_data_inspection.so", node);
+void master::group::register_interfaces(const std::string& name) {
+	kernel& k = *kernel::get_instance();
+	k.add_service_requester("process_data_inspection", 
+			name, format_string("group_%d", _index),
+			(signed int)(_index | ECAT_SLAVE_ID_GROUP));
 }
 
 //! unregister interfaces of group
 /*!
- * \return N/A
+ * \param name owner
  */
-void master::group::unregister_interfaces() {
-    if (_pd_intf) {
-        kernel::unregister_interface_cb(_pd_intf);
-        _pd_intf = NULL; 
-    }
+void master::group::unregister_interfaces(const std::string& name) {
+	kernel& k = *kernel::get_instance();
+	k.remove_service_requester("process_data_inspection", 
+			name, (signed int)(_index | ECAT_SLAVE_ID_GROUP));
 }
 
 //! construction
@@ -174,8 +161,9 @@ master::master(const std::string& name, const YAML::Node& node)
 
     log(info, "adding process data inspection for dc info\n");
 
-    dc_pd_intf = kernel::register_interface_cb(
-            "libinterface_process_data_inspection.so", dc_node);
+	kernel& k = *kernel::get_instance();
+	k.add_service_requester("process_data_inspection", name, 
+			"distributed_clocks", ECAT_SLAVE_ID_DC);
 
     pd_cookie = 0;
 
@@ -681,7 +669,7 @@ int master::request(int reqcode, void* ptr) {
             break;
         }
         case MOD_REQUEST_CANOPEN_READ_OBJECT_DESC: {
-            int ret2;
+            int ret2 = 0;
             canopen_object_description *desc = (canopen_object_description *)ptr;
             ec_eeprom_cat_pdo_t *pdo;
 
@@ -740,7 +728,10 @@ int master::request(int reqcode, void* ptr) {
                     // freed by caller
                 }
             }
-                
+			
+			if (ret2 <= 0)
+				ret = -1;
+			
             break;
         }
         case MOD_REQUEST_CANOPEN_READ_ELEMENT_DESC: {
@@ -1160,7 +1151,7 @@ int master::set_pdout(set_pd_t *pdout) {
     // check if we are commanding to slow
     if (difference > _cmd_delay) {
         if (_cmd_mode == user_defined) {
-            throw robotkernel::str_exception("[module_ethercat|%s] commanding to slow"
+            throw str_exception("[module_ethercat|%s] commanding to slow"
                     ": have difference of %llu while configured cmd_delay is %llu\n", 
                     name.c_str(), difference, _cmd_delay);
         }

@@ -234,6 +234,12 @@ slave::~slave() {
 //! initialize common stuff
 void slave::_init() {
     kernel& k = *kernel::get_instance();
+    k.add_service_requester("memory_inspection", 
+            master_dev->name, format_string("slave_%d.memory", index), index);
+    k.add_service_requester("memory_inspection", 
+            master_dev->name, format_string("slave_%d.eeprom", index), 
+            index | ECAT_SLAVE_ID_EEPROM);
+
 //    if (k.clnt) {
 //        stringstream base;
 //        base << k.clnt->name << "." << master_dev->name <<
@@ -242,13 +248,6 @@ void slave::_init() {
 //        register_set_ec_state(k.clnt, base.str() + ".set_ec_state");
 //        register_get_ec_state(k.clnt, base.str() + ".get_ec_state");
 //    }
-        
-    intf_pd  = NULL;
-    intf_mi  = NULL;
-    intf_eeprom_mi = NULL;
-    intf_coe = NULL;
-    intf_eeprom_coe = NULL;
-    intf_foe = NULL;
 }
 
 //! prepare state transitions
@@ -556,104 +555,85 @@ void slave::memory_request(int code, mem_type_t type, memory_t *memreq) {
  * \return N/A
  */
 void slave::register_interfaces(module_state_t state) {
-    std::stringstream slave_name; 
-    slave_name << "slave_" << index;
-    
-    YAML::Node node;
-    node["mod_name"] = master_dev->name;
-    node["dev_name"] = slave_name.str();
-    node["slave_id"] = index;
-    node["loglevel"] = (string)master_dev->ll;
-
-#define INTF_UNREGISTER(id) \
-    if (id) { kernel::unregister_interface_cb(id); (id) = NULL; }
-#define INTF_MAP_UNREGISTER(intf_map) \
-    while(!(intf_map).empty()) { \
-        iface_map_t::iterator it = (intf_map).begin(); \
-        kernel::unregister_interface_cb(it->second); \
-        (intf_map).erase(it); }
-    
-#define INTF_REGISTER(id, so, dev_name, slave_id) \
-    if ((id) == NULL) { \
-        node["slave_id"] = (slave_id); \
-        node["dev_name"] = (dev_name); \
-        (id) = robotkernel::kernel::register_interface_cb((so), node); }
+    uint32_t mbx_sup = master_dev->_pec->slaves[index].eeprom.mbx_supported;
+    uint32_t soe_ch  = master_dev->_pec->slaves[index].eeprom.general.soe_channels;
+    kernel& k = *kernel::get_instance();
 
     switch (state) {
         case module_state_boot: 
-            if (master_dev->_pec->slaves[index].eeprom.mbx_supported 
-                    & EC_EEPROM_MBX_FOE) {
-                INTF_REGISTER(intf_foe, "libinterface_file_protocol.so", 
+            if (mbx_sup & EC_EEPROM_MBX_FOE) {
+                k.add_service_requester("file_protocol", master_dev->name,
                         format_string("slave_%d.mailbox", index), index);
             }
 
-            INTF_UNREGISTER(intf_pd);
-            INTF_UNREGISTER(intf_coe);
-            INTF_UNREGISTER(intf_eeprom_coe);
-            INTF_UNREGISTER(intf_eeprom_mi);
-            INTF_MAP_UNREGISTER(intf_atn_pd);
-            INTF_MAP_UNREGISTER(intf_atn_soe);
-            
-            INTF_REGISTER(intf_mi, "libinterface_memory_inspection.so",
-                    format_string("slave_%d", index), index);
+            k.remove_service_requester("process_data_inspection", 
+                    master_dev->name, index);
+            k.remove_service_requester("canopen_protocol", 
+                    master_dev->name, index);
+            k.remove_service_requester("canopen_protocol", 
+                    master_dev->name, index | ECAT_SLAVE_ID_EEPROM);
+
+            for (unsigned atn = 0; atn < soe_ch; ++atn) {
+                k.remove_service_requester("sercos_protocol", 
+                        master_dev->name, ECAT_SLAVE_ID_SUB | (atn << 16) | index);
+                k.remove_service_requester("process_data_inspection", 
+                        master_dev->name, ECAT_SLAVE_ID_SUB | (atn << 16) | index);
+            }
             break;
         case module_state_init:
-            INTF_UNREGISTER(intf_pd);
-            INTF_UNREGISTER(intf_eeprom_coe);
-            INTF_UNREGISTER(intf_coe);
-            INTF_UNREGISTER(intf_foe);
-            INTF_MAP_UNREGISTER(intf_atn_pd);
-            INTF_MAP_UNREGISTER(intf_atn_soe);
-            
-            INTF_REGISTER(intf_mi, "libinterface_memory_inspection.so",
-                    format_string("slave_%d.mem", index), index);
-            INTF_REGISTER(intf_eeprom_mi, "libinterface_memory_inspection.so",
-                    format_string("slave_%d.eeprom", index), 
-                    index | ECAT_SLAVE_ID_EEPROM);
+            k.remove_service_requester("process_data_inspection", 
+                    master_dev->name, index);
+            k.remove_service_requester("canopen_protocol", 
+                    master_dev->name, index);
+            k.remove_service_requester("canopen_protocol", 
+                    master_dev->name, index | ECAT_SLAVE_ID_EEPROM);
+            k.remove_service_requester("file_protocol", 
+                    master_dev->name, index);
+
+            for (unsigned atn = 0; atn < soe_ch; ++atn) {
+                k.remove_service_requester("sercos_protocol", 
+                        master_dev->name, ECAT_SLAVE_ID_SUB | (atn << 16) | index);
+                k.remove_service_requester("process_data_inspection", 
+                        master_dev->name, ECAT_SLAVE_ID_SUB | (atn << 16) | index);
+            }
             break;
         case module_state_preop: {
-            INTF_UNREGISTER(intf_pd);
-            INTF_MAP_UNREGISTER(intf_atn_pd);
+            k.remove_service_requester("process_data_inspection", 
+                    master_dev->name, index);
             
-            if (master_dev->_pec->slaves[index].eeprom.mbx_supported 
-                    & EC_EEPROM_MBX_FOE) {
-                INTF_REGISTER(intf_foe, "libinterface_file_protocol.so",
-                        format_string("slave_%d.mailbox", index), index);
+            if (mbx_sup & EC_EEPROM_MBX_FOE) {
+                k.add_service_requester("file_protocol", master_dev->name,
+                    format_string("slave_%d.mailbox", index), index);
             }
             
-            if (master_dev->_pec->slaves[index].eeprom.mbx_supported 
-                    & EC_EEPROM_MBX_COE) {
-                INTF_REGISTER(intf_coe, "libinterface_canopen_protocol.so",
-                        format_string("slave_%d.mailbox", index), index);
+            if (mbx_sup & EC_EEPROM_MBX_COE) {
+                k.add_service_requester("canopen_protocol", master_dev->name,
+                    format_string("slave_%d.mailbox", index), index);
             }
 
-            INTF_REGISTER(intf_eeprom_coe, "libinterface_canopen_protocol.so",
-                    format_string("slave_%d.eeprom", index), 
-                    ECAT_SLAVE_ID_EEPROM | index);
+            k.add_service_requester("canopen_protocol", master_dev->name,
+                    format_string("slave_%d.eeprom", index), index | ECAT_SLAVE_ID_EEPROM);
             
-            int atn;
-            for (atn = 0; atn < master_dev->_pec->slaves[index].eeprom.general.soe_channels; ++atn) {
-                if (intf_atn_soe.find(atn) != intf_atn_soe.end())
-                    continue; // already registered
-                
-                INTF_REGISTER(intf_atn_soe[atn], "libinterface_sercos_protocol.so",
-                    format_string("slave_%d.mailbox.atn_%d", index, atn), 
-                    ECAT_SLAVE_ID_SUB | (atn << 16) | index);
+            for (unsigned atn = 0; atn < soe_ch; ++atn) {
+                k.add_service_requester("sercos_protocol", 
+                        master_dev->name, 
+                        format_string("slave_%d.mailbox.atn_%d", index, atn),
+                        ECAT_SLAVE_ID_SUB | (atn << 16) | index);
+                k.remove_service_requester("process_data_inspection", 
+                        master_dev->name, ECAT_SLAVE_ID_SUB | (atn << 16) | index);
             }
             break;
         }
         case module_state_op:
         case module_state_safeop: {
-            INTF_REGISTER(intf_pd, "libinterface_process_data_inspection.so",
-                    format_string("slave_%d", index), index);
-            int atn;
-            for (atn = 0; atn < master_dev->_pec->slaves[index].eeprom.general.soe_channels; ++atn) {
-                if (intf_atn_pd.find(atn) != intf_atn_pd.end())
-                    continue; // already registered
-                
-                INTF_REGISTER(intf_atn_pd[atn], "libinterface_process_data_inspection.so",
-                    format_string("slave_%d.atn_%d", index, atn), 
-                    ECAT_SLAVE_ID_SUB | (atn << 16) | index);
+            k.add_service_requester("process_data_inspection", 
+                    master_dev->name, format_string("slave_%d", index), index);
+            
+            for (unsigned atn = 0; atn < soe_ch; ++atn) {
+                k.add_service_requester("process_data_inspection", 
+                        master_dev->name, 
+                        format_string("slave_%d.mailbox.atn_%d", index, atn),
+                        ECAT_SLAVE_ID_SUB | (atn << 16) | index);
             }
             break;
         }

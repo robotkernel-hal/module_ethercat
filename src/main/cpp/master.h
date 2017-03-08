@@ -75,24 +75,21 @@ class master :  public robotkernel::module_base,
 
             //! register interfaces for slave
             /*!
-             * \param ctx ethercat context
-             * \return N/A
+             * \param name owner 
              */
-            void register_interfaces(std::string name, 
-                    const robotkernel::loglevel& ll);
+            void register_interfaces(const std::string& name);
 
             //! unregister interfaces of slave
             /*!
-             * \return N/A
+			 * \param name owner
              */
-            void unregister_interfaces();
+            void unregister_interfaces(const std::string& name);
 
             int _recv_timeout;
             int _index;
             int _divisor;
             int _divisor_cnt;
             std::list<int> _slaves;
-            robotkernel::kernel::interface_id_t _pd_intf;
             
             ec_timer_t timeout;
         } group_t;
@@ -123,8 +120,6 @@ class master :  public robotkernel::module_base,
 
         int _trigger_interval;
             
-        robotkernel::kernel::interface_id_t dc_pd_intf;
-
         uint64_t pd_cookie;
         pthread_mutex_t pd_lock;
         pthread_cond_t pd_cond;

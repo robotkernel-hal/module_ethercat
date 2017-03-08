@@ -105,8 +105,6 @@ typedef enum {
 } ec_data_type;
 
 class slave {
-   // : public ln_service_set_ec_state_base,
-   //           public ln_service_get_ec_state_base {
     public:
         typedef enum mem_type {
             MEM_TYPE_SLAVE_MEM = 0,
@@ -244,18 +242,6 @@ class slave {
     private:
         //! initialize common stuff
         void _init();
-
-        typedef robotkernel::kernel::interface_id_t iface_t;
-        typedef std::map<int, iface_t> iface_map_t;
-
-        iface_t     intf_pd;
-        iface_t     intf_mi;
-        iface_t     intf_eeprom_mi;
-        iface_t     intf_coe;
-        iface_t     intf_eeprom_coe;
-        iface_t     intf_foe;
-        iface_map_t intf_atn_soe;
-        iface_map_t intf_atn_pd;
 
         module_ethercat::master *master_dev;
 };
