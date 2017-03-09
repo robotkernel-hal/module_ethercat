@@ -590,11 +590,13 @@ void slave::register_interfaces(module_state_t state) {
             k.remove_service_requester("file_protocol", 
                     master_dev->name, index);
 
-            for (unsigned atn = 0; atn < soe_ch; ++atn) {
-                k.remove_service_requester("sercos_protocol", 
-                        master_dev->name, ECAT_SLAVE_ID_SUB | (atn << 16) | index);
-                k.remove_service_requester("process_data_inspection", 
-                        master_dev->name, ECAT_SLAVE_ID_SUB | (atn << 16) | index);
+            if (mbx_sup & EC_EEPROM_MBX_SOE) {
+                for (unsigned atn = 0; atn < soe_ch; ++atn) {
+                    k.remove_service_requester("sercos_protocol", 
+                            master_dev->name, ECAT_SLAVE_ID_SUB | (atn << 16) | index);
+                    k.remove_service_requester("process_data_inspection", 
+                            master_dev->name, ECAT_SLAVE_ID_SUB | (atn << 16) | index);
+                }
             }
             break;
         case module_state_preop: {
@@ -614,13 +616,15 @@ void slave::register_interfaces(module_state_t state) {
             k.add_service_requester("canopen_protocol", master_dev->name,
                     format_string("slave_%d.eeprom", index), index | ECAT_SLAVE_ID_EEPROM);
             
-            for (unsigned atn = 0; atn < soe_ch; ++atn) {
-                k.add_service_requester("sercos_protocol", 
-                        master_dev->name, 
-                        format_string("slave_%d.mailbox.atn_%d", index, atn),
-                        ECAT_SLAVE_ID_SUB | (atn << 16) | index);
-                k.remove_service_requester("process_data_inspection", 
-                        master_dev->name, ECAT_SLAVE_ID_SUB | (atn << 16) | index);
+            if (mbx_sup & EC_EEPROM_MBX_SOE) {
+                for (unsigned atn = 0; atn < soe_ch; ++atn) {
+                    k.add_service_requester("sercos_protocol", 
+                            master_dev->name, 
+                            format_string("slave_%d.mailbox.atn_%d", index, atn),
+                            ECAT_SLAVE_ID_SUB | (atn << 16) | index);
+                    k.remove_service_requester("process_data_inspection", 
+                            master_dev->name, ECAT_SLAVE_ID_SUB | (atn << 16) | index);
+                }
             }
             break;
         }
@@ -629,11 +633,13 @@ void slave::register_interfaces(module_state_t state) {
             k.add_service_requester("process_data_inspection", 
                     master_dev->name, format_string("slave_%d", index), index);
             
-            for (unsigned atn = 0; atn < soe_ch; ++atn) {
-                k.add_service_requester("process_data_inspection", 
-                        master_dev->name, 
-                        format_string("slave_%d.mailbox.atn_%d", index, atn),
-                        ECAT_SLAVE_ID_SUB | (atn << 16) | index);
+            if (mbx_sup & EC_EEPROM_MBX_SOE) {
+                for (unsigned atn = 0; atn < soe_ch; ++atn) {
+                    k.add_service_requester("process_data_inspection", 
+                            master_dev->name, 
+                            format_string("slave_%d.mailbox.atn_%d", index, atn),
+                            ECAT_SLAVE_ID_SUB | (atn << 16) | index);
+                }
             }
             break;
         }
