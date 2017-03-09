@@ -114,6 +114,7 @@ master::master(const std::string& name, const YAML::Node& node)
     _log_eeprom_data = get_as<bool>(node, "log_eeprom_data", false);
     _pec             = NULL;
     _trigger_interval= get_as<int>(node, "trigger_interval", 0);
+    bool thr_startup = get_as<bool>(node, "threaded_startup", true);
             
     dc_offset_compensation_cycles 
                 = get_as<int>(node, "dc_offset_compensation_cycles", 250);
@@ -173,6 +174,8 @@ master::master(const std::string& name, const YAML::Node& node)
     if (ret != 0) 
         throw str_exception("ec_open failed: %s!\n", strerror(ret));
         
+    _pec->threaded_startup = thr_startup;
+
     // -----------------------------------------------------------
     // setting init commands and distributed clocks
     for (slave_map_t::iterator it = _slave_info.begin(); 
@@ -180,19 +183,17 @@ master::master(const std::string& name, const YAML::Node& node)
         int slave_nr = it->first;
         slave *slv = it->second;
 
-        if (slave_nr > _pec->slave_cnt) {
-            log(error, "setting inits for slave %d, failed. no slave found!\n", slave_nr);
-            continue;
-        }
-
-        for (slave::coe_list_t::iterator it2 = slv->coe_init_cmds.begin();
-                it2 != slv->coe_init_cmds.end(); ++it2) {
-            slave::coe_init_cmd_t *cmd = *it2;
-            ec_slave_add_init_cmd(_pec, slave_nr, EC_MBX_COE, 
-                    (int)cmd->transition, cmd->index, cmd->subindex, 
-                    cmd->ca, cmd->data, cmd->datalen);
-        }
-
+        if (_pec->slave_cnt > slave_nr) {
+            for (slave::coe_list_t::iterator it2 = slv->coe_init_cmds.begin();
+                    it2 != slv->coe_init_cmds.end(); ++it2) {
+                slave::coe_init_cmd_t *cmd = *it2;
+                ec_slave_add_init_cmd(_pec, slave_nr, EC_MBX_COE, 
+                        (int)cmd->transition, cmd->index, cmd->subindex, 
+                        cmd->ca, cmd->data, cmd->datalen);
+            }
+        } else
+            throw str_exception("setting inits for slave %d, failed. no slave found!\n", slave_nr);
+                
         if (slv->dc.has_dc) {
             _pec->slaves[slave_nr].dc.use_dc        = 1;
             _pec->slaves[slave_nr].dc.type          = slv->dc.type;
