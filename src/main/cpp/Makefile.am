@@ -10,20 +10,20 @@ libmodule_ethercat_la_SOURCES  = master.cpp slave.cpp
 libmodule_ethercat_la_CXXFLAGS = --std=c++11 -pthread -Wall -I$(srcdir) -I$(builddir) -I$(srcdir)/libethercat/include \
                                  @ROBOTKERNEL_CFLAGS@ @YAML_CPP_RMC_CFLAGS@ @LIBSTRING_UTIL_CFLAGS@ \
                                  @LIBETHERCAT_PIC_CFLAGS@ @PTHREAD_CFLAGS@\
-                                 @INTERFACE_MEMORY_INSPECTION_CFLAGS@ \
-                                 @INTERFACE_CANOPEN_PROTOCOL_CFLAGS@ \
-                                 @INTERFACE_SERCOS_PROTOCOL_CFLAGS@ \
-                                 @INTERFACE_FILE_PROTOCOL_CFLAGS@
+                                 @SERVICE_PROVIDER_MEMORY_INSPECTION_CFLAGS@ \
+                                 @SERVICE_PROVIDER_CANOPEN_PROTOCOL_CFLAGS@ \
+                                 @SERVICE_PROVIDER_SERCOS_PROTOCOL_CFLAGS@ \
+                                 @SERVICE_PROVIDER_FILE_PROTOCOL_CFLAGS@
 
 libmodule_ethercat_la_CFLAGS   = --std=c++11 -pthread -Wall -I$(srcdir) -I$(builddir) -I$(srcdir)/libethercat/include \
                                  @ROBOTKERNEL_CFLAGS@ @YAML_CPP_RMC_CFLAGS@ @LIBSTRING_UTIL_CFLAGS@ \
                                  @LIBETHERCAT_PIC_CFLAGS@ @PTHREAD_CFLAGS@\
-                                 @INTERFACE_MEMORY_INSPECTION_CFLAGS@ \
-                                 @INTERFACE_CANOPEN_PROTOCOL_CFLAGS@ \
-                                 @INTERFACE_SERCOS_PROTOCOL_CFLAGS@ \
-                                 @INTERFACE_FILE_PROTOCOL_CFLAGS@
+                                 @SERVICE_PROVIDER_MEMORY_INSPECTION_CFLAGS@ \
+                                 @SERVICE_PROVIDER_CANOPEN_PROTOCOL_CFLAGS@ \
+                                 @SERVICE_PROVIDER_SERCOS_PROTOCOL_CFLAGS@ \
+                                 @SERVICE_PROVIDER_FILE_PROTOCOL_CFLAGS@
 
-libmodule_ethercat_la_LDFLAGS  = -Wall -release $(PACKAGE_VERSION) @LIBETHERCAT_PIC_LIBS@ @PTHREAD_LIBS@
+libmodule_ethercat_la_LDFLAGS  = -Wall -release $(PACKAGE_VERSION) @LIBETHERCAT_PIC_LIBS@ @PTHREAD_LIBS@ @LIBSTRING_UTIL_LIBS@
 
 VPATH = $(srcdir):$(top_srcdir)/share/ln/message_definitions 
 

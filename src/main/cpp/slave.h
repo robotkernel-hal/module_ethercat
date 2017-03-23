@@ -31,11 +31,12 @@
 
 #include "yaml-cpp/yaml.h"
 #include "robotkernel/kernel.h"
-#include "interface_memory_inspection/module_intf.h"
 
-//#define LN_UNREGISTER_SERVICE_IN_BASE_DETOR  
-//#include "ln_messages.h"
-//#undef LN_UNREGISTER_SERVICE_IN_BASE_DETOR
+
+#include "service_provider/memory_inspection/base.h"
+#include "service_provider/canopen_protocol/base.h"
+#include "service_provider/sercos_protocol/base.h"
+#include "service_provider/file_protocol/base.h"
 
 //#define MEM_ADDRESS(x)          ((x) & 0x0000FFFF)
 //#define MEM_TYPE_SLAVE_MEM      0x00000000
@@ -106,6 +107,60 @@ typedef enum {
 
 class slave {
     public:
+        class mailbox_coe : public service_provider::canopen_protocol::base {
+            public:
+                slave *slv;     //!< owr slave pointer
+
+                mailbox_coe(slave *slv);
+
+                //! return a list with all indices of the object dictionary
+                // derived from service_provider::canopen_protocol::base
+                /*!
+                 * \param list returns the list with all indices
+                 */
+                void get_object_dictionary_list(
+                        service_provider::canopen_protocol::object_dictionary_list_t& list);
+
+                //! return a object description of given index
+                // derived from service_provider::canopen_protocol::base
+                /*!
+                 * \param index requested index
+                 * \param desc returns the object description
+                 */
+                void get_object_description(const uint16_t& index, 
+                        service_provider::canopen_protocol::object_description_t& desc);
+
+                //! return a element description of given index and sub index
+                // derived from service_provider::canopen_protocol::base
+                /*!
+                 * \param index requested index
+                 * \param sub_index requested sub index
+                 * \param desc returns the object description
+                 */
+                void get_element_description(const uint16_t& index, const uint8_t& sub_index,
+                        service_provider::canopen_protocol::element_description_t& desc);
+
+                //! reads one element
+                // derived from service_provider::canopen_protocol::base
+                /*!
+                 * \param index requested index
+                 * \param sub_index requested sub index
+                 * \param value returns read value 
+                 */
+                void read_element(const uint16_t& index, const uint8_t& sub_index,
+                        service_provider::canopen_protocol::element_t& value);
+
+                //! writes one element
+                // derived from service_provider::canopen_protocol::base
+                /*!
+                 * \param index requested index
+                 * \param sub_index requested sub index
+                 * \param value value to write
+                 */
+                void write_element(const uint16_t& index, const uint8_t& sub_index,
+                        const service_provider::canopen_protocol::element_t& value);
+        };
+        
         typedef enum mem_type {
             MEM_TYPE_SLAVE_MEM = 0,
             MEM_TYPE_SLAVE_EEPROM = 1,
@@ -193,8 +248,10 @@ class slave {
         typedef std::map<int, sync_manager_settings_t *> sm_map_t;
         sm_map_t _sm_map;       //! sync manager configs
 
-        std::string name;       //! slave name
-        int index;              //! slave bus index
+        std::string name;       //!< slave name
+        int index;              //!< slave bus index
+        master *master_dev;     //!< master device
+        mailbox_coe *mbx_coe;   //!< coe service requester
 
         //! construction
         /*!
@@ -234,7 +291,7 @@ class slave {
          * \param type memory type (mem or eeprom) 
          * \param memreq memory request structure
          */
-        void memory_request(int code, mem_type_t type, memory_t *memreq);
+//        void memory_request(int code, mem_type_t type, memory_t *memreq);
 	
 //        int on_set_ec_state(ln::service_request& req, ln_service_module_ethercat_set_ec_state& svc);
 //        int on_get_ec_state(ln::service_request& req, ln_service_module_ethercat_get_ec_state& svc);
@@ -242,8 +299,6 @@ class slave {
     private:
         //! initialize common stuff
         void _init();
-
-        module_ethercat::master *master_dev;
 };
 
 //! module_ethercat::
