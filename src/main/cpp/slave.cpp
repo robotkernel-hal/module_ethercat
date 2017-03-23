@@ -138,7 +138,7 @@ slave::sync_manager_settings::sync_manager_settings(const YAML::Node& node) {
  * \param master_dev master device
  */
 slave::slave(int index, master *master_dev) 
-    : index(index), master_dev(master_dev), mbx_coe(NULL) {
+    : index(index), master_dev(master_dev), mbx_coe(NULL), _eeprom_mi(NULL) {
                 
     master_dev->log(verbose, "default slave index %d created\n", index);
     _init();
@@ -150,7 +150,7 @@ slave::slave(int index, master *master_dev)
  * \param master_dev master device
  */
 slave::slave(const YAML::Node& node, master *master_dev)
-    :   master_dev(master_dev), mbx_coe(NULL) {
+    :   master_dev(master_dev), mbx_coe(NULL), _eeprom_mi(NULL) {
     name  = get_as<string>(node, "name");
     index = get_as<int>(node, "index");
 
@@ -232,7 +232,12 @@ slave::~slave() {
         
 //! initialize common stuff
 void slave::_init() {
-//    kernel& k = *kernel::get_instance();
+    if (!_eeprom_mi) 
+        _eeprom_mi = new eeprom_mi(this);
+
+    kernel& k = *kernel::get_instance();
+    k.add_service_requester(std::shared_ptr<slave::eeprom_mi>(_eeprom_mi));
+
 //    k.add_service_requester("memory_inspection", 
 //            master_dev->name, format_string("slave_%d.memory", index), index);
 //    k.add_service_requester("memory_inspection", 
@@ -838,6 +843,42 @@ void slave::mailbox_coe::write_element(const uint16_t& index, const uint8_t& sub
                 "sub index %d returned errorcode 0x%X!\n", slv->index, 
                 index, sub_index, ret);
     }
+}
+
+slave::eeprom_mi::eeprom_mi(slave *slv)
+:   service_provider::memory_inspection::base(slv->master_dev->name, 
+        format_string("slave_%d.eeprom", slv->index)), slv(slv) {
+}
+                
+//! retreave all readable/writeable memory areas
+/*!
+ * \param areas list of areas
+ */
+void slave::eeprom_mi::get_memory_areas(
+        service_provider::memory_inspection::area_list_t& areas) {
+
+}
+
+//! read memory
+/*!
+ * \param address start address
+ * \param length length to read
+ * \param data read data
+ */
+void slave::eeprom_mi::read_memory(const uint64_t& address, 
+        const size_t& length, 
+        service_provider::memory_inspection::data_t& data) {
+}
+
+//! write memory
+/*!
+ * \param address start address
+ * \param length length to read
+ * \param data data to write
+ */
+void slave::eeprom_mi::write_memory(const uint64_t& address, 
+        const size_t& length, 
+        const service_provider::memory_inspection::data_t& data) {
 }
 
 //int slave::on_set_ec_state(ln::service_request& req, ln_service_module_ethercat_set_ec_state& svc) {

@@ -107,6 +107,40 @@ typedef enum {
 
 class slave {
     public:
+        class eeprom_mi : public service_provider::memory_inspection::base {
+            public:
+                slave *slv;     //!< owr slave pointer
+                
+                eeprom_mi(slave *slv);
+
+                //! retreave all readable/writeable memory areas
+                /*!
+                 * \param areas list of areas
+                 */
+                void get_memory_areas(
+                        service_provider::memory_inspection::area_list_t& areas);
+
+                //! read memory
+                /*!
+                 * \param address start address
+                 * \param length length to read
+                 * \param data read data
+                 */
+                void read_memory(const uint64_t& address, 
+                        const size_t& length, 
+                        service_provider::memory_inspection::data_t& data);
+
+                //! write memory
+                /*!
+                 * \param address start address
+                 * \param length length to read
+                 * \param data data to write
+                 */
+                void write_memory(const uint64_t& address, 
+                        const size_t& length, 
+                        const service_provider::memory_inspection::data_t& data);
+        };
+        
         class mailbox_coe : public service_provider::canopen_protocol::base {
             public:
                 slave *slv;     //!< owr slave pointer
@@ -252,6 +286,7 @@ class slave {
         int index;              //!< slave bus index
         master *master_dev;     //!< master device
         mailbox_coe *mbx_coe;   //!< coe service requester
+        eeprom_mi   *_eeprom_mi;
 
         //! construction
         /*!
