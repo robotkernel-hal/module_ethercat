@@ -285,8 +285,10 @@ class slave {
         std::string name;       //!< slave name
         int index;              //!< slave bus index
         master *master_dev;     //!< master device
-        mailbox_coe *mbx_coe;   //!< coe service requester
-        eeprom_mi   *_eeprom_mi;
+
+        // service requesters
+        robotkernel::sp_service_requester_t _mbx_coe;    //!< canopen service requester
+        robotkernel::sp_service_requester_t _eeprom_mi;  //!< memory inspection service requester
 
         //! construction
         /*!

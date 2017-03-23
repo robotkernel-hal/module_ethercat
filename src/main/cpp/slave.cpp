@@ -138,7 +138,7 @@ slave::sync_manager_settings::sync_manager_settings(const YAML::Node& node) {
  * \param master_dev master device
  */
 slave::slave(int index, master *master_dev) 
-    : index(index), master_dev(master_dev), mbx_coe(NULL), _eeprom_mi(NULL) {
+    : index(index), master_dev(master_dev) {
                 
     master_dev->log(verbose, "default slave index %d created\n", index);
     _init();
@@ -150,7 +150,7 @@ slave::slave(int index, master *master_dev)
  * \param master_dev master device
  */
 slave::slave(const YAML::Node& node, master *master_dev)
-    :   master_dev(master_dev), mbx_coe(NULL), _eeprom_mi(NULL) {
+    :   master_dev(master_dev) {
     name  = get_as<string>(node, "name");
     index = get_as<int>(node, "index");
 
@@ -233,10 +233,10 @@ slave::~slave() {
 //! initialize common stuff
 void slave::_init() {
     if (!_eeprom_mi) 
-        _eeprom_mi = new eeprom_mi(this);
+        _eeprom_mi = make_shared<slave::eeprom_mi>(this);
 
     kernel& k = *kernel::get_instance();
-    k.add_service_requester(std::shared_ptr<slave::eeprom_mi>(_eeprom_mi));
+    k.add_service_requester(_eeprom_mi);
 
 //    k.add_service_requester("memory_inspection", 
 //            master_dev->name, format_string("slave_%d.memory", index), index);
@@ -613,10 +613,10 @@ void slave::register_interfaces(module_state_t state) {
 //            }
             
             if (mbx_sup & EC_EEPROM_MBX_COE) {
-                if (!mbx_coe) 
-                    mbx_coe = new mailbox_coe(this);
+                if (!_mbx_coe) 
+                    _mbx_coe = make_shared<slave::mailbox_coe>(this);
 
-                k.add_service_requester(std::shared_ptr<slave::mailbox_coe>(mbx_coe));
+                k.add_service_requester(_mbx_coe);
             }
 
 //            k.add_service_requester("canopen_protocol", master_dev->name,
