@@ -105,13 +105,20 @@ typedef enum {
    ECT_BIT8            = 0x0037
 } ec_data_type;
 
-class slave {
+class slave : public std::enable_shared_from_this<slave> {
     public:
-        class eeprom_mi : public service_provider::memory_inspection::base {
+        enum request_type {
+            request_type_memory,
+            request_type_eeprom,
+            request_type_mailbox
+        };
+
+        class memory_inspection : public service_provider::memory_inspection::base {
             public:
-                slave *slv;     //!< owr slave pointer
+                std::shared_ptr<slave> slv;     //!< our slave pointer
+                request_type type;              //!< request type
                 
-                eeprom_mi(slave *slv);
+                memory_inspection(std::shared_ptr<slave> slv, const request_type& type);
 
                 //! retreave all readable/writeable memory areas
                 /*!
@@ -123,29 +130,26 @@ class slave {
                 //! read memory
                 /*!
                  * \param address start address
-                 * \param length length to read
                  * \param data read data
                  */
                 void read_memory(const uint64_t& address, 
-                        const size_t& length, 
                         service_provider::memory_inspection::data_t& data);
 
                 //! write memory
                 /*!
                  * \param address start address
-                 * \param length length to read
                  * \param data data to write
                  */
                 void write_memory(const uint64_t& address, 
-                        const size_t& length, 
-                        const service_provider::memory_inspection::data_t& data);
+                        service_provider::memory_inspection::data_t& data);
         };
         
-        class mailbox_coe : public service_provider::canopen_protocol::base {
+        class canopen : public service_provider::canopen_protocol::base {
             public:
-                slave *slv;     //!< owr slave pointer
+                std::shared_ptr<slave> slv;     //!< our slave pointer
+                request_type type;              //!< request type
 
-                mailbox_coe(slave *slv);
+                canopen(std::shared_ptr<slave> slv, const request_type& type);
 
                 //! return a list with all indices of the object dictionary
                 // derived from service_provider::canopen_protocol::base
@@ -288,7 +292,9 @@ class slave {
 
         // service requesters
         robotkernel::sp_service_requester_t _mbx_coe;    //!< canopen service requester
-        robotkernel::sp_service_requester_t _eeprom_mi;  //!< memory inspection service requester
+        robotkernel::sp_service_requester_t _eeprom_coe; //!< canopen service requester
+        robotkernel::sp_service_requester_t _eeprom_mi;  //!< eeprom memory inspection service requester
+        robotkernel::sp_service_requester_t _memory_mi;  //!< memory inspection service requester
 
         //! construction
         /*!
