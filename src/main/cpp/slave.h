@@ -328,14 +328,6 @@ class slave : public std::enable_shared_from_this<slave> {
          */
         void register_interfaces(module_state_t state);
 
-        //! perform memory request
-        /*!
-         * \param code request code
-         * \param type memory type (mem or eeprom) 
-         * \param memreq memory request structure
-         */
-//        void memory_request(int code, mem_type_t type, memory_t *memreq);
-	
 //        int on_set_ec_state(ln::service_request& req, ln_service_module_ethercat_set_ec_state& svc);
 //        int on_get_ec_state(ln::service_request& req, ln_service_module_ethercat_get_ec_state& svc);
 

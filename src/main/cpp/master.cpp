@@ -105,14 +105,14 @@ void master::group::unregister_interfaces(const std::string& name) {
 master::master(const std::string& name, const YAML::Node& node) 
     : module_base("module_ethercat", name, node), 
       cmd_delay(node),
-      runnable(node) {
+      runnable(node), _pec(NULL) {
     _ifname          = get_as<string>(node, "ifname");
     _recv_prio       = get_as<int>(node, "recv_prio");
     _recv_mask       = get_as<int>(node, "recv_mask");
     _log_eeprom_data = get_as<bool>(node, "log_eeprom_data", false);
     _pec             = NULL;
     _trigger_interval= get_as<int>(node, "trigger_interval", 0);
-    bool thr_startup = get_as<bool>(node, "threaded_startup", true);
+    _thr_startup     = get_as<bool>(node, "threaded_startup", true);
             
     dc_offset_compensation_cycles 
                 = get_as<int>(node, "dc_offset_compensation_cycles", 250);
@@ -120,6 +120,8 @@ master::master(const std::string& name, const YAML::Node& node)
                 = get_as<int>(node, "dc_timer_override", -1);
     dc_offset_compensation_max 
                 = get_as<uint64_t>(node, "dc_offset_compensation_max", 100000000);
+
+    state = module_state_config;
 
     ec_log_func_user = this;
     ec_log_func = log_func;
@@ -137,7 +139,7 @@ master::master(const std::string& name, const YAML::Node& node)
         // parsing slave configurations
         const YAML::Node& slaves = node["slaves"];
         for (YAML::const_iterator it = slaves.begin(); it != slaves.end(); ++it) {
-            slave *slv = new slave(*it, this);
+            std::shared_ptr<slave> slv = make_shared<slave>(*it, this);
             _slave_info[slv->index] = slv;
         }
     }
@@ -152,19 +154,25 @@ master::master(const std::string& name, const YAML::Node& node)
     pthread_mutex_init(&async_lock, NULL);
     pthread_cond_init(&async_cond, NULL);
 
-    YAML::Node dc_node;
-    dc_node["mod_name"] = name;
-    dc_node["dev_name"] = "distributed_clocks";
-    dc_node["slave_id"] = ECAT_SLAVE_ID_DC;
-    dc_node["loglevel"] = (string)ll;
-
-    log(info, "adding process data inspection for dc info\n");
-
-//	kernel& k = *kernel::get_instance();
-//	k.add_service_requester("process_data_inspection", name, 
-//			"distributed_clocks", ECAT_SLAVE_ID_DC);
+//    YAML::Node dc_node;
+//    dc_node["mod_name"] = name;
+//    dc_node["dev_name"] = "distributed_clocks";
+//    dc_node["slave_id"] = ECAT_SLAVE_ID_DC;
+//    dc_node["loglevel"] = (string)ll;
+//
+//    log(info, "adding process data inspection for dc info\n");
+//
+//    kernel& k = *kernel::get_instance();
+//  k.add_service_requester("process_data_inspection", name, 
+//          "distributed_clocks", ECAT_SLAVE_ID_DC);
 
     pd_cookie = 0;
+
+}
+
+void master::open() {
+    if (_pec)
+        return; // already opened
 
     // -----------------------------------------------------------
     // open ethercat interface
@@ -172,14 +180,14 @@ master::master(const std::string& name, const YAML::Node& node)
     if (ret != 0) 
         throw str_exception("ec_open failed: %s!\n", strerror(ret));
         
-    _pec->threaded_startup = thr_startup;
+    _pec->threaded_startup = _thr_startup;
 
     // -----------------------------------------------------------
     // setting init commands and distributed clocks
     for (slave_map_t::iterator it = _slave_info.begin(); 
             it != _slave_info.end(); ++it) {
         int slave_nr = it->first;
-        slave *slv = it->second;
+        sp_slave_t slv = it->second;
 
         if (_pec->slave_cnt > slave_nr) {
             for (slave::coe_list_t::iterator it2 = slv->coe_init_cmds.begin();
@@ -223,48 +231,50 @@ master::master(const std::string& name, const YAML::Node& node)
         }
     }
     
-    set_state(module_state_init);
-    
     // -----------------------------------------------------------
     // set pdo mapping entries
     for (slave_map_t::iterator it = _slave_info.begin(); 
             it != _slave_info.end(); ++it) {
         int slave_nr = it->first;
-        slave *slv = it->second;
+        sp_slave_t slv = it->second;
+
+        log(verbose, "trying to create mapping for slave %d\n", slave_nr);
 
         if (_pec->slave_cnt > slave_nr) {
-            if (_pec->slaves[slave_nr].eeprom.mbx_supported & 
-                    EC_EEPROM_MBX_COE) {              
+            // generate input mapping for coe
+            int mapping_entries = slv->input_mapping.size();
+            if (mapping_entries > 0) {
+                uint16_t mapping[mapping_entries + 1];
+                int mnr = 0;
+                mapping[mnr++] = mapping_entries;
+                for (slave::mapping_t::iterator mit = slv->input_mapping.begin(); 
+                        mit != slv->input_mapping.end(); ++mit) {
+                    mapping[mnr++] = *mit;
 
-                // generate input mapping for coe
-                int mapping_entries = slv->input_mapping.size();
-                if (mapping_entries > 0) {
-                    uint16_t mapping[mapping_entries + 1];
-                    int mnr = 0;
-                    mapping[mnr++] = mapping_entries;
-                    for (slave::mapping_t::iterator mit = slv->input_mapping.begin(); 
-                            mit != slv->input_mapping.end(); ++mit) {
-                        mapping[mnr++] = *mit;
-                    }
-                
-                    ec_slave_add_init_cmd(_pec, slave_nr, EC_MBX_COE, 0x24, 0x1C13, 
-                            0, 1, (char *)mapping, 2 * (mapping_entries + 1));
+                    log(verbose, "adding input mapping for slave %d: 0x%08X\n", 
+                            slave_nr, *mit);
                 }
-                
-                // generate output mapping for coe
-                mapping_entries = slv->output_mapping.size();
-                if (mapping_entries > 0) {
-                    uint16_t mapping[mapping_entries + 1];
-                    int mnr = 0;
-                    mapping[mnr++] = mapping_entries;
-                    for (slave::mapping_t::iterator mit = slv->output_mapping.begin(); 
-                            mit != slv->output_mapping.end(); ++mit) {
-                        mapping[mnr++] = *mit;
-                    }
-                
-                    ec_slave_add_init_cmd(_pec, slave_nr, EC_MBX_COE, 0x24, 0x1C12, 
-                            0, 1, (char *)mapping, 2 * (mapping_entries + 1));
+
+                ec_slave_add_init_cmd(_pec, slave_nr, EC_MBX_COE, 0x24, 0x1C13, 
+                        0, 1, (char *)mapping, 2 * (mapping_entries + 1));
+            }
+
+            // generate output mapping for coe
+            mapping_entries = slv->output_mapping.size();
+            if (mapping_entries > 0) {
+                uint16_t mapping[mapping_entries + 1];
+                int mnr = 0;
+                mapping[mnr++] = mapping_entries;
+                for (slave::mapping_t::iterator mit = slv->output_mapping.begin(); 
+                        mit != slv->output_mapping.end(); ++mit) {
+                    mapping[mnr++] = *mit;
+
+                    log(verbose, "adding output mapping for slave %d: 0x%08X\n", 
+                            slave_nr, *mit);
                 }
+
+                ec_slave_add_init_cmd(_pec, slave_nr, EC_MBX_COE, 0x24, 0x1C12, 
+                        0, 1, (char *)mapping, 2 * (mapping_entries + 1));
             }
         } else {
             log(error, "setting mapping for slave %d, failed. no slave found!\n", slave_nr);
@@ -338,13 +348,16 @@ int master::set_state(module_state_t new_state) {
 
             ec_set_state(_pec, EC_STATE_BOOT);
             
-            for (nr = 0; nr < _pec->slave_cnt; ++nr)
-                _slave_info[nr]->register_interfaces(module_state_boot);
+            for (nr = 0; nr < _pec->slave_cnt; ++nr) {
+                sp_slave_t slv = _slave_info[nr];
+                slv->register_interfaces(module_state_boot);
+            }
 
             break;
         }
         case module_state_init: {
             stop();
+            open();
             _pec->tx_sync = 1;
 
             ec_set_state(_pec, EC_STATE_INIT);
@@ -353,16 +366,18 @@ int master::set_state(module_state_t new_state) {
                 if (_slave_info.find(nr) == _slave_info.end()) {
                     log(verbose, "slave %d creating empty one\n", nr);
 
-                    slave *slv = new slave(nr, this);
+                    wp_slave_t slv = make_shared<slave>(nr, this);
                     _slave_info[nr] = slv;
                 }
                 
-                if (_slave_info[nr]->dc.has_dc)
+                sp_slave_t slv = _slave_info[nr];
+
+                if (slv->dc.has_dc)
                     _pec->slaves[nr].dc.use_dc = 1;
                 else 
                     _pec->slaves[nr].dc.use_dc = 0;
                 
-                _slave_info[nr]->register_interfaces(module_state_init);
+                slv->register_interfaces(module_state_init);
             }
 
             break;
@@ -388,9 +403,11 @@ int master::set_state(module_state_t new_state) {
                 log(verbose, "slave %d: propagation delay %d [ns]\n", 
                         nr, _pec->slaves[nr].pdelay);
 
+                sp_slave_t slv = _slave_info[nr];
+
                 // apply sm and fmmu config
-                for (slave::sm_map_t::iterator it = _slave_info[nr]->_sm_map.begin();
-                        it != _slave_info[nr]->_sm_map.end(); ++it) {
+                for (slave::sm_map_t::iterator it = slv->_sm_map.begin();
+                        it != slv->_sm_map.end(); ++it) {
                     int sm_nr = it->first;
 
                     if (sm_nr < _pec->slaves[nr].sm_ch) {
@@ -407,8 +424,10 @@ int master::set_state(module_state_t new_state) {
                 }
             }
             
-            for (nr = 0; nr < _pec->slave_cnt; ++nr)
-                _slave_info[nr]->register_interfaces(module_state_preop);
+            for (nr = 0; nr < _pec->slave_cnt; ++nr) {
+                sp_slave_t slv = _slave_info[nr];
+                slv->register_interfaces(module_state_preop);
+            }
 
             break;
         }
@@ -432,8 +451,10 @@ int master::set_state(module_state_t new_state) {
 
             ec_set_state(_pec, EC_STATE_SAFEOP);
             
-            for (nr = 0; nr < _pec->slave_cnt; ++nr)
-                _slave_info[nr]->register_interfaces(module_state_safeop);
+            for (nr = 0; nr < _pec->slave_cnt; ++nr) {
+                sp_slave_t slv = _slave_info[nr];
+                slv->register_interfaces(module_state_safeop);
+            }
 
             start();
             break;
@@ -443,8 +464,10 @@ int master::set_state(module_state_t new_state) {
 
             ec_set_state(_pec, EC_STATE_OP);
             
-            for (nr = 0; nr < _pec->slave_cnt; ++nr)
-                _slave_info[nr]->register_interfaces(module_state_op);
+            for (nr = 0; nr < _pec->slave_cnt; ++nr) {
+                sp_slave_t slv = _slave_info[nr];
+                slv->register_interfaces(module_state_op);
+            }
 
             break;
         default:

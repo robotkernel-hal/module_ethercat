@@ -212,7 +212,7 @@ slave::slave(const YAML::Node& node, master *master_dev)
         }
     }
 
-    _init();
+//    _init();
 
     master_dev->log(verbose,
             "slave %s index %d created\n", name.c_str(), index);
@@ -523,12 +523,20 @@ void slave::register_interfaces(module_state_t state) {
 //            }
             break;
         case module_state_init:
+#define REMOVE_SERVICE_REQUESTER(req) \
+            { if (req) { k.remove_service_requester(req); (req).reset(); } }
+
+#define ADD_SERVICE_REQUESTER(req, cls, type) \
+            { if (!(req)) { (req) = make_shared<cls>(shared_from_this(), (type)); \
+                k.add_service_requester(req); } }
+
+            ADD_SERVICE_REQUESTER(_eeprom_mi, slave::memory_inspection, request_type_eeprom);
+            ADD_SERVICE_REQUESTER(_memory_mi, slave::memory_inspection, request_type_memory);
+            REMOVE_SERVICE_REQUESTER(_mbx_coe);
+            REMOVE_SERVICE_REQUESTER(_eeprom_coe);
+
 //            k.remove_service_requester("process_data_inspection", 
 //                    master_dev->name, index);
-//            k.remove_service_requester("canopen_protocol", 
-//                    master_dev->name, index);
-//            k.remove_service_requester("canopen_protocol", 
-//                    master_dev->name, index | ECAT_SLAVE_ID_EEPROM);
 //            k.remove_service_requester("file_protocol", 
 //                    master_dev->name, index);
 //
@@ -550,21 +558,11 @@ void slave::register_interfaces(module_state_t state) {
 //                    format_string("slave_%d.mailbox", index), index);
 //            }
             
-            if (mbx_sup & EC_EEPROM_MBX_COE) {
-                if (!_mbx_coe) 
-                    _mbx_coe = make_shared<slave::canopen>(shared_from_this(), request_type_mailbox);
+            if (mbx_sup & EC_EEPROM_MBX_COE)
+                ADD_SERVICE_REQUESTER(_mbx_coe, slave::canopen, request_type_mailbox);
 
-                k.add_service_requester(_mbx_coe);
-            }
-
-            if (!_eeprom_coe) 
-                _eeprom_coe = make_shared<slave::canopen>(shared_from_this(), request_type_eeprom);
-
-            k.add_service_requester(_eeprom_coe);
-
-//            k.add_service_requester("canopen_protocol", master_dev->name,
-//                    format_string("slave_%d.eeprom", index), index | ECAT_SLAVE_ID_EEPROM);
-//            
+            ADD_SERVICE_REQUESTER(_eeprom_coe, slave::canopen, request_type_eeprom);
+            
 //            if (mbx_sup & EC_EEPROM_MBX_SOE) {
 //                for (unsigned atn = 0; atn < soe_ch; ++atn) {
 //                    k.add_service_requester("sercos_protocol", 
@@ -599,7 +597,9 @@ void slave::register_interfaces(module_state_t state) {
 
 slave::canopen::canopen(std::shared_ptr<slave> slv, const request_type& type) 
 :   service_provider::canopen_protocol::base(slv->master_dev->name, 
-        format_string("slave_%d.mailbox", slv->index)), slv(slv), type(type) {
+        format_string("slave_%d.%s", slv->index, 
+            type == request_type_eeprom ? "eeprom" : "mailbox")), 
+    slv(slv), type(type) {
 }
         
 //! return a list with all indices of the object dictionary
@@ -975,7 +975,9 @@ void slave::canopen::write_element(const uint16_t& index, const uint8_t& sub_ind
 
 slave::memory_inspection::memory_inspection(std::shared_ptr<slave> slv, const request_type& type)
 :   service_provider::memory_inspection::base(slv->master_dev->name, 
-        format_string("slave_%d.eeprom", slv->index)), slv(slv), type(type) {
+        format_string("slave_%d.%s", slv->index, 
+            type == request_type_eeprom ? "eeprom" : "memory")), 
+    slv(slv), type(type) {
 }
                 
 //! retreave all readable/writeable memory areas

@@ -97,7 +97,9 @@ class master :  public robotkernel::module_base,
         typedef std::map<int, group *> group_map_t;
         group_map_t _group_info;
 
-        typedef std::map<int, slave *> slave_map_t;
+        typedef std::shared_ptr<slave> wp_slave_t;
+        typedef std::shared_ptr<slave> sp_slave_t;
+        typedef std::map<int, wp_slave_t> slave_map_t;
         slave_map_t _slave_info;
 
         std::string _dc_mode_string;
@@ -119,6 +121,7 @@ class master :  public robotkernel::module_base,
         int dc_timer_override;
 
         int _trigger_interval;
+        bool _thr_startup;
             
         uint64_t pd_cookie;
         pthread_mutex_t pd_lock;
@@ -137,6 +140,8 @@ class master :  public robotkernel::module_base,
 
         //! destruction 
         ~master();
+
+        void open();
 
         //! module trigger callback
         void trigger();
