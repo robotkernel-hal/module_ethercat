@@ -498,7 +498,7 @@ bool slave::prepare_state_transition(transition_t transition) {
  */
 void slave::register_interfaces(module_state_t state) {
     uint32_t mbx_sup = master_dev->_pec->slaves[index].eeprom.mbx_supported;
-    uint32_t soe_ch  = master_dev->_pec->slaves[index].eeprom.general.soe_channels;
+    //uint32_t soe_ch  = master_dev->_pec->slaves[index].eeprom.general.soe_channels;
     kernel& k = *kernel::get_instance();
 
     switch (state) {
