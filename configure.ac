@@ -23,7 +23,7 @@ AC_PROG_MAKE_SET
 
 # Check dependencies
 PKG_CHECK_MODULES([ROBOTKERNEL], [robotkernel])
-PKG_CHECK_MODUELS([LIBETHERCAT], [libethercat])
+PKG_CHECK_MODULES([LIBETHERCAT], [libethercat])
 
 # Checks for header files.
 AC_CHECK_HEADERS([stdlib.h string.h])
