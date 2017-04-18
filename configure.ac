@@ -24,6 +24,12 @@ AC_PROG_MAKE_SET
 # Check dependencies
 PKG_CHECK_MODULES([ROBOTKERNEL], [robotkernel])
 PKG_CHECK_MODULES([LIBETHERCAT], [libethercat])
+PKG_CHECK_MODULES([SERVICE_PROVIDER_CANOPEN_PROTOCOL], [service_provider_canopen_protocol])
+PKG_CHECK_MODULES([SERVICE_PROVIDER_FILE_PROTOCOL], [service_provider_file_protocol])
+PKG_CHECK_MODULES([SERVICE_PROVIDER_KEY_VALUE], [service_provider_key_value])
+PKG_CHECK_MODULES([SERVICE_PROVIDER_MEMORY_INSPECTION], [service_provider_memory_inspection])
+PKG_CHECK_MODULES([SERVICE_PROVIDER_PROCESS_DATA_INSPECTION], [service_provider_process_data_inspection])
+PKG_CHECK_MODULES([SERVICE_PROVIDER_SERCOS_PROTOCOL], [service_provider_sercos_protocol])
 
 # Checks for header files.
 AC_CHECK_HEADERS([stdlib.h string.h])
