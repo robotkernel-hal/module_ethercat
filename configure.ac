@@ -24,6 +24,7 @@ AC_PROG_MAKE_SET
 # Check dependencies
 PKG_CHECK_MODULES([ROBOTKERNEL], [robotkernel])
 PKG_CHECK_MODULES([LIBETHERCAT], [libethercat])
+PKG_CHECK_MODULES([LIBSTRING_UTIL], [libstring_util])
 PKG_CHECK_MODULES([SERVICE_PROVIDER_CANOPEN_PROTOCOL], [service_provider_canopen_protocol])
 PKG_CHECK_MODULES([SERVICE_PROVIDER_FILE_PROTOCOL], [service_provider_file_protocol])
 PKG_CHECK_MODULES([SERVICE_PROVIDER_KEY_VALUE], [service_provider_key_value])
