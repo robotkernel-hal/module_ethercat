@@ -166,6 +166,8 @@ master::master(const std::string& name, const YAML::Node& node)
 
     pd_cookie = 0;
 
+    // perform init_2_init transition
+    set_state(module_state_init);
 }
 
 void master::open() {
