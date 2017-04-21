@@ -563,58 +563,6 @@ int master::request(int reqcode, void* ptr) {
         case MOD_REQUEST_GET_PD_COOKIE:
             *(uint64_t **)ptr = &pd_cookie;
             break;
-//        case MOD_REQUEST_FILE_READ: {
-//            file_readwrite_info_t *frwi = (file_readwrite_info_t *)ptr;
-//            uint32_t password = 0;
-//            char file_name[MAX_FILE_NAME_SIZE];
-//            strncpy(file_name, frwi->file_name, MAX_FILE_NAME_SIZE-1);
-//            if (frwi->password)
-//                password = strtol(frwi->password, NULL, 10);
-//
-//            ret = ec_foe_read(
-//                    _pec,                   // ethercat master device
-//                    frwi->slave_id,         // slave index
-//                    password,               // file password
-//                    file_name,              // file name
-//                    &frwi->file_data,       // returns file_data
-//                    &frwi->file_data_len,   // returns file_data_len
-//                    &frwi->error_message);  // returns error_message
-//
-//            break;
-//        }
-//        case MOD_REQUEST_FILE_WRITE: {
-//            file_readwrite_info_t *frwi = (file_readwrite_info_t *)ptr;
-//            uint32_t password = 0;
-//            char file_name[MAX_FILE_NAME_SIZE];
-//            strncpy(file_name, frwi->file_name, MAX_FILE_NAME_SIZE-1);
-//            if (frwi->password)
-//                password = strtol(frwi->password, NULL, 10);
-//
-//            ret = ec_foe_write(
-//                    _pec,                   // ethercat master device
-//                    frwi->slave_id,         // slave index
-//                    password,               // file password
-//                    file_name,              // file name
-//                    frwi->file_data,        // file_data
-//                    frwi->file_data_len,    // file_data_len
-//                    &frwi->error_message);  // returns error_message
-//
-//            break;
-//        }
-//        case MOD_REQUEST_MEMORY_READ:
-//        case MOD_REQUEST_MEMORY_WRITE:
-//        case MOD_REQUEST_MEMORY_GET_INFO: {
-//            memory_t *memory_req = (memory_t *)ptr;
-//            slave::mem_type_t type = (slave::mem_type_t)ECAT_SLAVE_ID_GET_MEM_TYPE(memory_req->slave_id);
-//            int slave_id = ECAT_SLAVE_ID_GET_SLAVE(memory_req->slave_id);
-//
-//            if (_slave_info.find(slave_id) != _slave_info.end())
-//                _slave_info[slave_id]->memory_request(reqcode, type, memory_req);
-//            else 
-//                ret = -1;
-//
-//            break;
-//        }
         case MOD_REQUEST_SET_TRIGGER_CB: {
             set_trigger_cb_t *cb = (set_trigger_cb_t *)ptr;
             if (cb->cb == NULL) {
@@ -643,35 +591,6 @@ int master::request(int reqcode, void* ptr) {
             trigger_mod_name = *mdl_name;
             break;
         }
-//        case MOD_REQUEST_SERCOS_SET_COMMAND: {
-//            sercos_set_command_t *cmd = (sercos_set_command_t *)ptr;
-//            int atn = ECAT_SLAVE_ID_GET_SUB(cmd->slave_id),
-//                slave_id = ECAT_SLAVE_ID_GET_SLAVE(cmd->slave_id);
-//
-//            uint16_t val = 1;
-//            size_t val_len = sizeof(val);
-//            ret = ec_soe_write(_pec, slave_id, atn, cmd->cmd, 0x80 >> 1, 
-//                    (uint8_t *)&val, val_len);
-//            if (ret != 0)
-//                log(warning, "setting command %d returned %d\n", cmd->cmd, ret);
-//
-//            val = 3;
-//            val_len = sizeof(val);
-//            ret = ec_soe_write(_pec, slave_id, atn, cmd->cmd, 0x80 >> 1, 
-//                    (uint8_t *)&val, val_len);
-//            if (ret != 0)
-//                log(warning, "exec command %d returned %d\n", cmd->cmd, ret);
-//            
-//            val = 0;
-//            val_len = sizeof(val);
-//            ret = ec_soe_write(_pec, slave_id, atn, cmd->cmd, 0x80 >> 1, 
-//                    (uint8_t *)&val, val_len);
-//            if (ret != 0)
-//                log(warning, "resetting command %d returned %d\n", cmd->cmd, ret);
-//
-//            ret = 0;
-//            break;            
-//        }
         default:
             ret = -1;
             break;

@@ -199,6 +199,55 @@ class slave : public std::enable_shared_from_this<slave> {
                         const service_provider::canopen_protocol::element_t& value);
         };
         
+        class sercos : public service_provider::sercos_protocol::base {
+            public:
+                std::shared_ptr<slave> slv;     //!< our slave pointer
+                int atn;                        //!< sercos at number
+
+                sercos(std::shared_ptr<slave> slv, int atn);
+                
+                //! read sercos id number
+                /*!
+                 * \param idn id number to read
+                 * \param elements elements to read
+                 * \param data data to read
+                 */
+                void sercos_read_idn(const uint16_t& idn, 
+                        const service_provider::sercos_protocol::sercos_service_elements_t& elements, 
+                        service_provider::sercos_protocol::service_data_t& data);
+
+                //! write sercos id number
+                /*!
+                 * \param idn id number to write
+                 * \param elements elements to write
+                 * \param data data to write
+                 */
+                void sercos_write_idn(const uint16_t& idn, 
+                        const service_provider::sercos_protocol::sercos_service_elements_t& elements, 
+                        service_provider::sercos_protocol::service_data_t& data);
+        };
+
+        class file_protocol : public service_provider::file_protocol::base {
+            public:
+                std::shared_ptr<slave> slv;     //!< our slave pointer
+
+                file_protocol(std::shared_ptr<slave> slv);
+
+                //! read from file
+                /*!
+                 * \param info file info structure
+                 */
+                void file_read(
+                        service_provider::file_protocol::file_readwrite_info_t& info);
+
+                //! write to file
+                /*!
+                 * \param info file info structure
+                 */
+                void file_write(
+                        const service_provider::file_protocol::file_readwrite_info_t& info);
+        };
+
         typedef enum mem_type {
             MEM_TYPE_SLAVE_MEM = 0,
             MEM_TYPE_SLAVE_EEPROM = 1,
