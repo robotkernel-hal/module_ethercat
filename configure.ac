@@ -52,6 +52,6 @@ AC_CHECK_LIB(dl, dlopen)
 AX_CHECK_COMPILE_FLAG([-pthread], [AX_APPEND_FLAG([-pthread])] )
 AC_CHECK_LIB([pthread], [pthread_create])
 
-AC_CONFIG_FILES([Makefile src/main/cpp/Makefile])
+AC_CONFIG_FILES([Makefile src/main/cpp/Makefile module_ethercat.pc])
 
 AC_OUTPUT
