@@ -121,8 +121,6 @@ master::master(const std::string& name, const YAML::Node& node)
     dc_offset_compensation_max 
                 = get_as<uint64_t>(node, "dc_offset_compensation_max", 100000000);
 
-    state = module_state_config;
-
     ec_log_func_user = this;
     ec_log_func = log_func;
 
