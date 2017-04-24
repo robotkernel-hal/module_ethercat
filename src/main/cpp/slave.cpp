@@ -232,18 +232,18 @@ slave::~slave() {
         
 //! initialize common stuff
 void slave::_init() {
-    kernel& k = *kernel::get_instance();
-
-    if (!_eeprom_mi) 
-        _eeprom_mi = make_shared<slave::memory_inspection>(
-                shared_from_this(), request_type_eeprom);
-    
-    if (!_memory_mi) 
-        _memory_mi = make_shared<slave::memory_inspection>(
-                shared_from_this(), request_type_memory);
-    
-    k.add_service_requester(_eeprom_mi);
-    k.add_service_requester(_memory_mi);
+//    kernel& k = *kernel::get_instance();
+//
+//    if (!_eeprom_mi) 
+//        _eeprom_mi = make_shared<slave::memory_inspection>(
+//                shared_from_this(), request_type_eeprom);
+//    
+//    if (!_memory_mi) 
+//        _memory_mi = make_shared<slave::memory_inspection>(
+//                shared_from_this(), request_type_memory);
+//    
+//    k.add_service_requester(_eeprom_mi);
+//    k.add_service_requester(_memory_mi);
 
 //    k.add_service_requester("memory_inspection", 
 //            master_dev->name, format_string("slave_%d.memory", index), index);
@@ -497,6 +497,8 @@ bool slave::prepare_state_transition(transition_t transition) {
  * \return N/A
  */
 void slave::register_interfaces(module_state_t state) {
+    master_dev->log(verbose, "registering interfaces for slave %d, state %d\n", index, state);
+
     uint32_t mbx_sup = master_dev->_pec->slaves[index].eeprom.mbx_supported;
     //uint32_t soe_ch  = master_dev->_pec->slaves[index].eeprom.general.soe_channels;
     kernel& k = *kernel::get_instance();

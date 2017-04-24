@@ -280,6 +280,24 @@ void master::open() {
             log(error, "setting mapping for slave %d, failed. no slave found!\n", slave_nr);
         }
     }
+            
+    for (int nr = 0; nr < _pec->slave_cnt; ++nr) {
+        if (_slave_info.find(nr) == _slave_info.end()) {
+            log(verbose, "slave %d creating empty one\n", nr);
+
+            wp_slave_t slv = make_shared<slave>(nr, this);
+            _slave_info[nr] = slv;
+        }
+
+        sp_slave_t slv = _slave_info[nr];
+
+        if (slv->dc.has_dc)
+            _pec->slaves[nr].dc.use_dc = 1;
+        else 
+            _pec->slaves[nr].dc.use_dc = 0;
+
+        slv->register_interfaces(module_state_init);
+    }
 }
 
 //! destruction 
@@ -296,99 +314,71 @@ master::~master() {
     pthread_cond_destroy(&pd_cond);
 }
 
-#define TRANSITION_INIT_2_UNKNOWN       0x0001FFFE
-#define TRANSITION_INIT_2_ERROR         0x0001FFFF
-#define TRANSITION_INIT_2_BOOT          0x00010000
-#define TRANSITION_INIT_2_INIT          0x00010001
-#define TRANSITION_INIT_2_PREOP         0x00010002
-#define TRANSITION_INIT_2_SAFEOP        0x00010003
-#define TRANSITION_INIT_2_OP            0x00010004
-
-#define TRANSITION_PREOP_2_UNKNOWN      0x0002FFFE
-#define TRANSITION_PREOP_2_ERROR        0x0002FFFF
-#define TRANSITION_PREOP_2_BOOT         0x00020000
-#define TRANSITION_PREOP_2_INIT         0x00020001
-#define TRANSITION_PREOP_2_PREOP        0x00020002
-#define TRANSITION_PREOP_2_SAFEOP       0x00020003
-#define TRANSITION_PREOP_2_OP           0x00020004
-
-#define TRANSITION_SAFEOP_2_UNKNOWN     0x0003FFFE
-#define TRANSITION_SAFEOP_2_ERROR       0x0003FFFF
-#define TRANSITION_SAFEOP_2_BOOT        0x00030000
-#define TRANSITION_SAFEOP_2_INIT        0x00030001
-#define TRANSITION_SAFEOP_2_PREOP       0x00030002
-#define TRANSITION_SAFEOP_2_SAFEOP      0x00030003
-#define TRANSITION_SAFEOP_2_OP          0x00030004
-
-#define TRANSITION_OP_2_UNKNOWN         0x0004FFFE
-#define TRANSITION_OP_2_ERROR           0x0004FFFF
-#define TRANSITION_OP_2_BOOT            0x00040000
-#define TRANSITION_OP_2_INIT            0x00040001
-#define TRANSITION_OP_2_PREOP           0x00040002
-#define TRANSITION_OP_2_SAFEOP          0x00040003
-#define TRANSITION_OP_2_OP              0x00040004
-
 //! set module state machine to defined state
 /*!
  * \param state requested state
  * \return success or failure
  */
-int master::set_state(module_state_t new_state) {
-    int ret = 0, nr;
-
+int master::set_state(module_state_t state) {
     log(info, "setting state from %s to %s\n", 
-            state_to_string(state), state_to_string(new_state));
+            state_to_string(this->state), state_to_string(state));
 
-    switch (new_state) {
-        case module_state_boot: {
-            if (state != module_state_init) {
-                ret = -1;
+    // get transition
+    uint32_t transition = GEN_STATE(this->state, state);
+
+    switch (transition) {
+        case op_2_safeop:
+        case op_2_preop:
+        case op_2_init:
+        case op_2_boot:
+            // ====> stop sending commands
+            if (state == module_state_safeop)
                 break;
-            }
+        case safeop_2_preop:
+        case safeop_2_init:
+        case safeop_2_boot:
+            // ====> stop receiving measurements
+            stop();
+            _pec->tx_sync = 1;
 
+            if (state == module_state_preop)
+                break;
+        case preop_2_init:
+        case preop_2_boot:
+            // ====> deinit devices
+        case init_2_init:
+            // ====> re-/open ethercat device
+            open();
+
+            ec_set_state(_pec, EC_STATE_INIT);
+
+            if (state == module_state_init)
+                break;
+        case init_2_boot:
             ec_set_state(_pec, EC_STATE_BOOT);
             
-            for (nr = 0; nr < _pec->slave_cnt; ++nr) {
+            for (int nr = 0; nr < _pec->slave_cnt; ++nr) {
                 sp_slave_t slv = _slave_info[nr];
                 slv->register_interfaces(module_state_boot);
             }
 
             break;
-        }
-        case module_state_init: {
-            stop();
+        case boot_2_init:
+        case boot_2_preop:
+        case boot_2_safeop:
+        case boot_2_op:
+            // ====> re-/open ethercat device
             open();
-            _pec->tx_sync = 1;
 
             ec_set_state(_pec, EC_STATE_INIT);
 
-            for (nr = 0; nr < _pec->slave_cnt; ++nr) {
-                if (_slave_info.find(nr) == _slave_info.end()) {
-                    log(verbose, "slave %d creating empty one\n", nr);
-
-                    wp_slave_t slv = make_shared<slave>(nr, this);
-                    _slave_info[nr] = slv;
-                }
-                
-                sp_slave_t slv = _slave_info[nr];
-
-                if (slv->dc.has_dc)
-                    _pec->slaves[nr].dc.use_dc = 1;
-                else 
-                    _pec->slaves[nr].dc.use_dc = 0;
-                
-                slv->register_interfaces(module_state_init);
-            }
-
-            break;
-        }
-        case module_state_preop: {
-            stop();
-            _pec->tx_sync = 1;
-            if (_dc_mode_string == "ref_clock") 
-                _pec->dc.mode = ec_dc_info::dc_mode_ref_clock;
-            else
-                _pec->dc.mode = ec_dc_info::dc_mode_master_clock;
+            if (state == module_state_init)
+                break;
+        case init_2_op:
+        case init_2_safeop:
+        case init_2_preop:
+            _pec->dc.mode = _dc_mode_string == "ref_clock" ? 
+                ec_dc_info::dc_mode_ref_clock : ec_dc_info::dc_mode_master_clock;
             
             ec_set_state(_pec, EC_STATE_PREOP);
 
@@ -399,7 +389,7 @@ int master::set_state(module_state_t new_state) {
             if (dc_offset_compensation_max > 0)
                 _pec->dc.offset_compensation_max = dc_offset_compensation_max;
 
-            for (nr = 0; nr < _pec->slave_cnt; ++nr) {
+            for (int nr = 0; nr < _pec->slave_cnt; ++nr) {
                 log(verbose, "slave %d: propagation delay %d [ns]\n", 
                         nr, _pec->slaves[nr].pdelay);
 
@@ -422,16 +412,15 @@ int master::set_state(module_state_t new_state) {
                         _pec->slaves[nr].sm_set_by_user = 1;
                     }
                 }
-            }
-            
-            for (nr = 0; nr < _pec->slave_cnt; ++nr) {
-                sp_slave_t slv = _slave_info[nr];
+                
                 slv->register_interfaces(module_state_preop);
             }
 
-            break;
-        }
-        case module_state_safeop:            
+            // ====> initial devices            
+            if (state == module_state_preop)
+                break;
+        case preop_2_op:
+        case preop_2_safeop:
             _dc_sync.first_run = true;
 
             if (dc_timer_override == -1 && trigger_mod_name != "") {
@@ -445,40 +434,42 @@ int master::set_state(module_state_t new_state) {
                 dc_timer_override = 
                 _pec->dc.timer_override = tmp * 1E9;
             }
+            
             // start cyclic operation via trigger
             _pec->tx_sync = 0;
-            state = module_state_safeop;
+            start();
 
+            this->state = module_state_safeop;
             ec_set_state(_pec, EC_STATE_SAFEOP);
             
-            for (nr = 0; nr < _pec->slave_cnt; ++nr) {
+            for (int nr = 0; nr < _pec->slave_cnt; ++nr) {
                 sp_slave_t slv = _slave_info[nr];
                 slv->register_interfaces(module_state_safeop);
             }
 
-            start();
-            break;
-        case module_state_op:
-            start();
-            _pec->tx_sync = 0;
-
+            // ====> start receiving measurements
+            if (state == module_state_safeop)
+                break;
+        case safeop_2_op:
+            // ====> start sending commands
             ec_set_state(_pec, EC_STATE_OP);
             
-            for (nr = 0; nr < _pec->slave_cnt; ++nr) {
+            for (int nr = 0; nr < _pec->slave_cnt; ++nr) {
                 sp_slave_t slv = _slave_info[nr];
                 slv->register_interfaces(module_state_op);
             }
-
             break;
+        case op_2_op:
+        case safeop_2_safeop:
+        case preop_2_preop:
+            // ====> do nothing
+            break;
+
         default:
-            ret = -1;
             break;
     }
 
-    if (ret == 0)
-        state = new_state;
-
-    return ret;
+    return (this->state = state);
 }
 
 //! send a request to module
