@@ -326,6 +326,11 @@ int master::set_state(module_state_t state) {
     // get transition
     uint32_t transition = GEN_STATE(this->state, state);
 
+#define REGISTER_INTFS(state) { \
+    for (int nr = 0; nr < _pec->slave_cnt; ++nr) { \
+        sp_slave_t slv = _slave_info[nr]; \
+        slv->register_interfaces(state); } } 
+
     switch (transition) {
         case op_2_safeop:
         case op_2_preop:
@@ -351,17 +356,13 @@ int master::set_state(module_state_t state) {
             open();
 
             ec_set_state(_pec, EC_STATE_INIT);
+            REGISTER_INTFS(module_state_init);
 
             if (state == module_state_init)
                 break;
         case init_2_boot:
             ec_set_state(_pec, EC_STATE_BOOT);
-            
-            for (int nr = 0; nr < _pec->slave_cnt; ++nr) {
-                sp_slave_t slv = _slave_info[nr];
-                slv->register_interfaces(module_state_boot);
-            }
-
+            REGISTER_INTFS(module_state_boot);
             break;
         case boot_2_init:
         case boot_2_preop:
@@ -371,6 +372,7 @@ int master::set_state(module_state_t state) {
             open();
 
             ec_set_state(_pec, EC_STATE_INIT);
+            REGISTER_INTFS(module_state_init);
 
             if (state == module_state_init)
                 break;
@@ -381,6 +383,7 @@ int master::set_state(module_state_t state) {
                 ec_dc_info::dc_mode_ref_clock : ec_dc_info::dc_mode_master_clock;
             
             ec_set_state(_pec, EC_STATE_PREOP);
+            REGISTER_INTFS(module_state_preop);
 
             if (dc_offset_compensation_cycles > 0)
                 _pec->dc.offset_compensation = dc_offset_compensation_cycles;
@@ -412,8 +415,6 @@ int master::set_state(module_state_t state) {
                         _pec->slaves[nr].sm_set_by_user = 1;
                     }
                 }
-                
-                slv->register_interfaces(module_state_preop);
             }
 
             // ====> initial devices            
@@ -441,11 +442,7 @@ int master::set_state(module_state_t state) {
 
             this->state = module_state_safeop;
             ec_set_state(_pec, EC_STATE_SAFEOP);
-            
-            for (int nr = 0; nr < _pec->slave_cnt; ++nr) {
-                sp_slave_t slv = _slave_info[nr];
-                slv->register_interfaces(module_state_safeop);
-            }
+            REGISTER_INTFS(module_state_safeop);
 
             // ====> start receiving measurements
             if (state == module_state_safeop)
@@ -453,11 +450,7 @@ int master::set_state(module_state_t state) {
         case safeop_2_op:
             // ====> start sending commands
             ec_set_state(_pec, EC_STATE_OP);
-            
-            for (int nr = 0; nr < _pec->slave_cnt; ++nr) {
-                sp_slave_t slv = _slave_info[nr];
-                slv->register_interfaces(module_state_op);
-            }
+            REGISTER_INTFS(module_state_op);
             break;
         case op_2_op:
         case safeop_2_safeop:

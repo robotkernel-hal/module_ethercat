@@ -138,10 +138,11 @@ slave::sync_manager_settings::sync_manager_settings(const YAML::Node& node) {
  * \param master_dev master device
  */
 slave::slave(int index, master *master_dev) 
-    : index(index), master_dev(master_dev) {
+    : service_provider::process_data_inspection::base(master_dev->name, 
+        format_string("slave_%d", index)),
+    index(index), master_dev(master_dev) {
                 
     master_dev->log(verbose, "default slave index %d created\n", index);
-    _init();
 };
 
 //! construction
@@ -150,7 +151,8 @@ slave::slave(int index, master *master_dev)
  * \param master_dev master device
  */
 slave::slave(const YAML::Node& node, master *master_dev)
-    :   master_dev(master_dev) {
+    : service_provider::process_data_inspection::base(master_dev->name, 
+        format_string("slave_%d", get_as<int>(node, "index"))), master_dev(master_dev) {
     name  = get_as<string>(node, "name");
     index = get_as<int>(node, "index");
 
@@ -212,8 +214,6 @@ slave::slave(const YAML::Node& node, master *master_dev)
         }
     }
 
-//    _init();
-
     master_dev->log(verbose,
             "slave %s index %d created\n", name.c_str(), index);
 }
@@ -228,37 +228,6 @@ slave::~slave() {
             it != soe_init_cmds.end(); ++it)
         delete(*it);
     
-}
-        
-//! initialize common stuff
-void slave::_init() {
-//    kernel& k = *kernel::get_instance();
-//
-//    if (!_eeprom_mi) 
-//        _eeprom_mi = make_shared<slave::memory_inspection>(
-//                shared_from_this(), request_type_eeprom);
-//    
-//    if (!_memory_mi) 
-//        _memory_mi = make_shared<slave::memory_inspection>(
-//                shared_from_this(), request_type_memory);
-//    
-//    k.add_service_requester(_eeprom_mi);
-//    k.add_service_requester(_memory_mi);
-
-//    k.add_service_requester("memory_inspection", 
-//            master_dev->name, format_string("slave_%d.memory", index), index);
-//    k.add_service_requester("memory_inspection", 
-//            master_dev->name, format_string("slave_%d.eeprom", index), 
-//            index | ECAT_SLAVE_ID_EEPROM);
-
-//    if (k.clnt) {
-//        stringstream base;
-//        base << k.clnt->name << "." << master_dev->name <<
-//            ".slave_" << index;
-//
-//        register_set_ec_state(k.clnt, base.str() + ".set_ec_state");
-//        register_get_ec_state(k.clnt, base.str() + ".get_ec_state");
-//    }
 }
 
 //! prepare state transitions
@@ -500,103 +469,111 @@ void slave::register_interfaces(module_state_t state) {
     master_dev->log(verbose, "registering interfaces for slave %d, state %d\n", index, state);
 
     uint32_t mbx_sup = master_dev->_pec->slaves[index].eeprom.mbx_supported;
-    //uint32_t soe_ch  = master_dev->_pec->slaves[index].eeprom.general.soe_channels;
+    uint32_t soe_ch  = master_dev->_pec->slaves[index].eeprom.general.soe_channels;
     kernel& k = *kernel::get_instance();
 
-    switch (state) {
-        case module_state_boot: 
-//            if (mbx_sup & EC_EEPROM_MBX_FOE) {
-//                k.add_service_requester("file_protocol", master_dev->name,
-//                        format_string("slave_%d.mailbox", index), index);
-//            }
-//
-//            k.remove_service_requester("process_data_inspection", 
-//                    master_dev->name, index);
-//            k.remove_service_requester("canopen_protocol", 
-//                    master_dev->name, index);
-//            k.remove_service_requester("canopen_protocol", 
-//                    master_dev->name, index | ECAT_SLAVE_ID_EEPROM);
-//
-//            for (unsigned atn = 0; atn < soe_ch; ++atn) {
-//                k.remove_service_requester("sercos_protocol", 
-//                        master_dev->name, ECAT_SLAVE_ID_SUB | (atn << 16) | index);
-//                k.remove_service_requester("process_data_inspection", 
-//                        master_dev->name, ECAT_SLAVE_ID_SUB | (atn << 16) | index);
-//            }
-            break;
-        case module_state_init:
 #define REMOVE_SERVICE_REQUESTER(req) \
             { if (req) { k.remove_service_requester(req); (req).reset(); } }
 
-#define ADD_SERVICE_REQUESTER(req, cls, type) \
-            { if (!(req)) { (req) = make_shared<cls>(shared_from_this(), (type)); \
-                k.add_service_requester(req); } }
+#define ADD_SERVICE_REQUESTER(req) { \
+                k.add_service_requester(req); }
 
-            ADD_SERVICE_REQUESTER(_eeprom_mi, slave::memory_inspection, request_type_eeprom);
-            ADD_SERVICE_REQUESTER(_memory_mi, slave::memory_inspection, request_type_memory);
+#define ADD_SERVICE_REQUESTER_CLASS(req, cls, ...) \
+            { if (!(req)) { (req) = make_shared<cls>(shared_from_this(), ##__VA_ARGS__); \
+                ADD_SERVICE_REQUESTER(req); } }
+    // get transition
+    uint32_t transition = GEN_STATE(master_dev->state, state);
+
+    switch (transition) {
+        case op_2_safeop:
+        case op_2_preop:
+        case op_2_init:
+        case op_2_boot:
+            // ====> stop sending commands
+            if (state == module_state_safeop)
+                break;
+        case safeop_2_preop:
+        case safeop_2_init:
+        case safeop_2_boot:
+            // ====> stop receiving measurements
+            REMOVE_SERVICE_REQUESTER(shared_from_this()); // process data inspection
+
+            if (state == module_state_preop)
+                break;
+        case preop_2_init:
+        case preop_2_boot:
+            // ====> deinit devices
+            REMOVE_SERVICE_REQUESTER(_mbx_foe);
             REMOVE_SERVICE_REQUESTER(_mbx_coe);
-            REMOVE_SERVICE_REQUESTER(_eeprom_coe);
 
-//            k.remove_service_requester("process_data_inspection", 
-//                    master_dev->name, index);
-//            k.remove_service_requester("file_protocol", 
-//                    master_dev->name, index);
-//
-//            if (mbx_sup & EC_EEPROM_MBX_SOE) {
-//                for (unsigned atn = 0; atn < soe_ch; ++atn) {
-//                    k.remove_service_requester("sercos_protocol", 
-//                            master_dev->name, ECAT_SLAVE_ID_SUB | (atn << 16) | index);
-//                    k.remove_service_requester("process_data_inspection", 
-//                            master_dev->name, ECAT_SLAVE_ID_SUB | (atn << 16) | index);
-//                }
-//            }
+            if (mbx_sup & EC_EEPROM_MBX_SOE) {
+                for (unsigned atn = 0; atn < _mbx_soe_list.size(); ++atn)
+                    REMOVE_SERVICE_REQUESTER(_mbx_soe_list[atn]);
+            }
+        case init_2_init:
+            // ====> re-/open ethercat device
+            ADD_SERVICE_REQUESTER_CLASS(_eeprom_mi, slave::memory_inspection, request_type_eeprom);
+            ADD_SERVICE_REQUESTER_CLASS(_memory_mi, slave::memory_inspection, request_type_memory);
+            ADD_SERVICE_REQUESTER_CLASS(_eeprom_coe, slave::canopen, request_type_eeprom);
+
+            if (state == module_state_init)
+                break;
+        case init_2_boot:
+            ADD_SERVICE_REQUESTER_CLASS(_mbx_foe, slave::file_protocol);
             break;
-        case module_state_preop: {
-//            k.remove_service_requester("process_data_inspection", 
-//                    master_dev->name, index);
-//            
-//            if (mbx_sup & EC_EEPROM_MBX_FOE) {
-//                k.add_service_requester("file_protocol", master_dev->name,
-//                    format_string("slave_%d.mailbox", index), index);
-//            }
+        case boot_2_init:
+        case boot_2_preop:
+        case boot_2_safeop:
+        case boot_2_op:
+            // ====> re-/open ethercat device
+            REMOVE_SERVICE_REQUESTER(_mbx_foe);
+
+            if (state == module_state_init)
+                break;
+        case init_2_op:
+        case init_2_safeop:
+        case init_2_preop:
+        case preop_2_preop:
+            // ====> initial devices            
+            if (mbx_sup & EC_EEPROM_MBX_FOE)
+                ADD_SERVICE_REQUESTER_CLASS(_mbx_foe, slave::file_protocol);
             
             if (mbx_sup & EC_EEPROM_MBX_COE)
-                ADD_SERVICE_REQUESTER(_mbx_coe, slave::canopen, request_type_mailbox);
+                ADD_SERVICE_REQUESTER_CLASS(_mbx_coe, slave::canopen, request_type_mailbox);
 
-            ADD_SERVICE_REQUESTER(_eeprom_coe, slave::canopen, request_type_eeprom);
+            if (mbx_sup & EC_EEPROM_MBX_SOE) {
+                if (_mbx_soe_list.size() != soe_ch)
+                    _mbx_soe_list.resize(soe_ch);
+
+                for (unsigned atn = 0; atn < _mbx_soe_list.size(); ++atn)
+                    ADD_SERVICE_REQUESTER_CLASS(_mbx_soe_list[atn], slave::sercos, atn);
+            }
+
+            if (state == module_state_preop)
+                break;
+        case safeop_2_safeop:
+        case preop_2_op:
+        case preop_2_safeop:
+            // ====> start receiving measurements
+            ADD_SERVICE_REQUESTER(shared_from_this()); // process data inspection
             
-//            if (mbx_sup & EC_EEPROM_MBX_SOE) {
-//                for (unsigned atn = 0; atn < soe_ch; ++atn) {
-//                    k.add_service_requester("sercos_protocol", 
-//                            master_dev->name, 
-//                            format_string("slave_%d.mailbox.atn_%d", index, atn),
-//                            ECAT_SLAVE_ID_SUB | (atn << 16) | index);
-//                    k.remove_service_requester("process_data_inspection", 
-//                            master_dev->name, ECAT_SLAVE_ID_SUB | (atn << 16) | index);
-//                }
-//            }
+            if (mbx_sup & EC_EEPROM_MBX_SOE) {
+                for (unsigned atn = 0; atn < _mbx_soe_list.size(); ++atn) {
+                    // register soe process data inspection
+//                    ADD_SERVICE_REQUESTER_CLASS(_mbx_soe_list[atn], slave_servodrive, atn);
+                }
+            }
+
+            if (state == module_state_safeop)
+                break;
+        case safeop_2_op:
+        case op_2_op:
+            // ====> do nothing
             break;
-        }
-        case module_state_op:
-        case module_state_safeop: {
-//            k.add_service_requester("process_data_inspection", 
-//                    master_dev->name, format_string("slave_%d", index), index);
-//            
-//            if (mbx_sup & EC_EEPROM_MBX_SOE) {
-//                for (unsigned atn = 0; atn < soe_ch; ++atn) {
-//                    k.add_service_requester("process_data_inspection", 
-//                            master_dev->name, 
-//                            format_string("slave_%d.mailbox.atn_%d", index, atn),
-//                            ECAT_SLAVE_ID_SUB | (atn << 16) | index);
-//                }
-//            }
-            break;
-        }
         default:
             break;
     }
 }
-
 
 slave::sercos::sercos(std::shared_ptr<slave> slv, int atn)
 :   service_provider::sercos_protocol::base(slv->master_dev->name, 
@@ -640,52 +617,28 @@ void slave::sercos::sercos_write_idn(const uint16_t& idn,
         service_provider::sercos_protocol::service_data_t& data) {
         // todo implement
 }
-
-
-//int slave::on_set_ec_state(ln::service_request& req, ln_service_module_ethercat_set_ec_state& svc) {
-//    string state_to = string(svc.req.state, svc.req.state_len);
-//
-//    if (state_to == string("init"))
-//        ec_slave_set_state(master_dev->_pec, index, EC_STATE_INIT);
-//    else if (state_to == "preop")    
-//        ec_slave_set_state(master_dev->_pec, index, EC_STATE_PREOP);
-//    else if (state_to == "safeop")    
-//        ec_slave_set_state(master_dev->_pec, index, EC_STATE_SAFEOP);
-//    else if (state_to == "op")    
-//        ec_slave_set_state(master_dev->_pec, index, EC_STATE_OP);
-//
-//    req.respond();
-//    return 0;
-//}
-//
-//int slave::on_get_ec_state(ln::service_request& req, ln_service_module_ethercat_get_ec_state& svc) {
-//    ec_state_t state;
-//    string state_string;
-//    int wkc = ec_slave_get_state(master_dev->_pec,
-//            index, &state, NULL);
-//
-//    if (wkc > 0) {
-//        if ((state & 0x000F) == EC_STATE_INIT)
-//            state_string = strdup("init");
-//        else if ((state & 0x000F) == EC_STATE_PREOP)
-//            state_string = strdup("preop");
-//        else if ((state & 0x000F) == EC_STATE_SAFEOP)
-//            state_string = strdup("safeop");
-//        else if ((state & 0x000F) == EC_STATE_OP)
-//            state_string = strdup("op");
-//        else 
-//            state_string = strdup("unknown");
-//
-//        if ((state & 0x0010) == 0x0010)
-//            state_string += " ERROR";
-//    } else
-//        state_string = "ERROR got no answer on get_state command\n";
-//
-//    svc.resp.state = strdup(state_string.c_str());
-//    svc.resp.state_len = strlen(svc.resp.state);
-//
-//    req.respond();
-//    free(svc.resp.state);
-//    return 0;
-//}
 	    
+//! return input process data (measurements)
+/*!
+ * \param pd return input process data
+ */
+void slave::get_pdin(service_provider::process_data_inspection::pd_t& pd) {
+    ec_slave_t *slv = &master_dev->_pec->slaves[index];
+    pd.resize(slv->pdin.len);
+
+    if (slv->pdin.len)
+        memcpy(&pd[0], slv->pdin.pd, slv->pdin.len);
+}
+
+//! return output process data (commands)
+/*!
+ * \param pd return output process data
+ */
+void slave::get_pdout(service_provider::process_data_inspection::pd_t& pd) {
+    ec_slave_t *slv = &master_dev->_pec->slaves[index];
+    pd.resize(slv->pdout.len);
+
+    if (slv->pdout.len)
+        memcpy(&pd[0], slv->pdout.pd, slv->pdout.len);
+}
+

@@ -37,6 +37,7 @@
 #include "service_provider/canopen_protocol/base.h"
 #include "service_provider/sercos_protocol/base.h"
 #include "service_provider/file_protocol/base.h"
+#include "service_provider/process_data_inspection/base.h"
 
 //#define MEM_ADDRESS(x)          ((x) & 0x0000FFFF)
 //#define MEM_TYPE_SLAVE_MEM      0x00000000
@@ -105,7 +106,10 @@ typedef enum {
    ECT_BIT8            = 0x0037
 } ec_data_type;
 
-class slave : public std::enable_shared_from_this<slave> {
+class slave : 
+    public std::enable_shared_from_this<slave>,
+    public service_provider::process_data_inspection::base 
+{
     public:
         enum request_type {
             request_type_memory,
@@ -340,6 +344,9 @@ class slave : public std::enable_shared_from_this<slave> {
         master *master_dev;     //!< master device
 
         // service requesters
+        robotkernel::sp_service_requester_t _mbx_foe;    //!< file service requester
+        std::vector<robotkernel::sp_service_requester_t> 
+            _mbx_soe_list;                               //!< servodrive service requester
         robotkernel::sp_service_requester_t _mbx_coe;    //!< canopen service requester
         robotkernel::sp_service_requester_t _eeprom_coe; //!< canopen service requester
         robotkernel::sp_service_requester_t _eeprom_mi;  //!< eeprom memory inspection service requester
@@ -377,12 +384,17 @@ class slave : public std::enable_shared_from_this<slave> {
          */
         void register_interfaces(module_state_t state);
 
-//        int on_set_ec_state(ln::service_request& req, ln_service_module_ethercat_set_ec_state& svc);
-//        int on_get_ec_state(ln::service_request& req, ln_service_module_ethercat_get_ec_state& svc);
+        //! return input process data (measurements)
+        /*!
+         * \param pd return input process data
+         */
+        void get_pdin(service_provider::process_data_inspection::pd_t& pd);
 
-    private:
-        //! initialize common stuff
-        void _init();
+        //! return output process data (commands)
+        /*!
+         * \param pd return output process data
+         */
+        void get_pdout(service_provider::process_data_inspection::pd_t& pd);
 };
 
 //! module_ethercat::
