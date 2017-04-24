@@ -369,20 +369,25 @@ class slave :
         //! destruction
         ~slave();
 
+        //! sending slave init commands
+        /*!
+         * \param transition ethercat transition
+         */
+        void send_init_cmds(uint16_t transition);
+
         //! prepare state transitions
         /*!
-         * \param dev ethercat master device
-         * \param transition state transition
-         * \return success
+         * \param from state coming from
+         * \param to state switching to
          */
-        bool prepare_state_transition(transition_t transition);
+        void pre_state_transition(module_state_t from, module_state_t to);
 
         //! register interfaces for slave
         /*!
-         * \param ctx ethercat context
-         * \return N/A
+         * \param from state coming from
+         * \param to state switching to
          */
-        void register_interfaces(module_state_t state);
+        void post_state_transition(module_state_t from, module_state_t to);
 
         //! return input process data (measurements)
         /*!

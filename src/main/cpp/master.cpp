@@ -189,16 +189,17 @@ void master::open() {
         int slave_nr = it->first;
         sp_slave_t slv = it->second;
 
-        if (_pec->slave_cnt > slave_nr) {
-            for (slave::coe_list_t::iterator it2 = slv->coe_init_cmds.begin();
-                    it2 != slv->coe_init_cmds.end(); ++it2) {
-                slave::coe_init_cmd_t *cmd = *it2;
-                ec_slave_add_init_cmd(_pec, slave_nr, EC_MBX_COE, 
-                        (int)cmd->transition, cmd->index, cmd->subindex, 
-                        cmd->ca, cmd->data, cmd->datalen);
-            }
-        } else
-            throw str_exception("setting inits for slave %d, failed. no slave found!\n", slave_nr);
+// not needed here, done in pre_state_transition        
+//        if (_pec->slave_cnt > slave_nr) {
+//            for (slave::coe_list_t::iterator it2 = slv->coe_init_cmds.begin();
+//                    it2 != slv->coe_init_cmds.end(); ++it2) {
+//                slave::coe_init_cmd_t *cmd = *it2;
+//                ec_slave_add_init_cmd(_pec, slave_nr, EC_MBX_COE, 
+//                        (int)cmd->transition, cmd->index, cmd->subindex, 
+//                        cmd->ca, cmd->data, cmd->datalen);
+//            }
+//        } else
+//            throw str_exception("setting inits for slave %d, failed. no slave found!\n", slave_nr);
                 
         if (slv->dc.has_dc) {
             _pec->slaves[slave_nr].dc.use_dc        = 1;
@@ -296,7 +297,7 @@ void master::open() {
         else 
             _pec->slaves[nr].dc.use_dc = 0;
 
-        slv->register_interfaces(module_state_init);
+        slv->post_state_transition(module_state_init, module_state_init);
     }
 }
 
@@ -326,10 +327,10 @@ int master::set_state(module_state_t state) {
     // get transition
     uint32_t transition = GEN_STATE(this->state, state);
 
-#define REGISTER_INTFS(state) { \
+#define STATE_TRANSITION(what, to) { \
     for (int nr = 0; nr < _pec->slave_cnt; ++nr) { \
         sp_slave_t slv = _slave_info[nr]; \
-        slv->register_interfaces(state); } } 
+        slv->what##_state_transition(this->state, to); } } 
 
     switch (transition) {
         case op_2_safeop:
@@ -355,14 +356,16 @@ int master::set_state(module_state_t state) {
             // ====> re-/open ethercat device
             open();
 
+            STATE_TRANSITION(pre, module_state_init);
             ec_set_state(_pec, EC_STATE_INIT);
-            REGISTER_INTFS(module_state_init);
+            STATE_TRANSITION(post, module_state_init);
 
             if (state == module_state_init)
                 break;
         case init_2_boot:
+            STATE_TRANSITION(pre, module_state_boot);
             ec_set_state(_pec, EC_STATE_BOOT);
-            REGISTER_INTFS(module_state_boot);
+            STATE_TRANSITION(post, module_state_boot);
             break;
         case boot_2_init:
         case boot_2_preop:
@@ -371,8 +374,9 @@ int master::set_state(module_state_t state) {
             // ====> re-/open ethercat device
             open();
 
+            STATE_TRANSITION(pre, module_state_init);
             ec_set_state(_pec, EC_STATE_INIT);
-            REGISTER_INTFS(module_state_init);
+            STATE_TRANSITION(post, module_state_init);
 
             if (state == module_state_init)
                 break;
@@ -382,8 +386,9 @@ int master::set_state(module_state_t state) {
             _pec->dc.mode = _dc_mode_string == "ref_clock" ? 
                 ec_dc_info::dc_mode_ref_clock : ec_dc_info::dc_mode_master_clock;
             
+            STATE_TRANSITION(pre, module_state_preop);
             ec_set_state(_pec, EC_STATE_PREOP);
-            REGISTER_INTFS(module_state_preop);
+            STATE_TRANSITION(post, module_state_preop);
 
             if (dc_offset_compensation_cycles > 0)
                 _pec->dc.offset_compensation = dc_offset_compensation_cycles;
@@ -440,17 +445,19 @@ int master::set_state(module_state_t state) {
             _pec->tx_sync = 0;
             start();
 
+            STATE_TRANSITION(pre, module_state_safeop);
             this->state = module_state_safeop;
             ec_set_state(_pec, EC_STATE_SAFEOP);
-            REGISTER_INTFS(module_state_safeop);
+            STATE_TRANSITION(post, module_state_safeop);
 
             // ====> start receiving measurements
             if (state == module_state_safeop)
                 break;
         case safeop_2_op:
             // ====> start sending commands
+            STATE_TRANSITION(pre, module_state_op);
             ec_set_state(_pec, EC_STATE_OP);
-            REGISTER_INTFS(module_state_op);
+            STATE_TRANSITION(post, module_state_op);
             break;
         case op_2_op:
         case safeop_2_safeop:

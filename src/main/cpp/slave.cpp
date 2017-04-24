@@ -230,46 +230,11 @@ slave::~slave() {
     
 }
 
-//! prepare state transitions
+//! sending slave init commands
 /*!
- * \param ctx ethercat master device
- * \param transition state transition
+ * \param transition ethercat transition
  */
-bool slave::prepare_state_transition(transition_t transition) {
-    int state_from = (transition & 0xF0) >> 4,
-        state_to   =  transition & 0x0F;
-
-    if (state_to == 4) {
-        // configure distributed clocks if needed 
-        if (master_dev->_pec->dc.have_dc && dc.has_dc) {
-            if (dc.cycle_time_0 == 0)
-                dc.cycle_time_0 = master_dev->_pec->dc.timer_override; 
-
-            if (dc.type == 1) {
-                if (dc.cycle_time_1 == 0)
-                    dc.cycle_time_1 = master_dev->_pec->dc.timer_override; 
-
-                master_dev->log(verbose, "slave %2d configuring dc sync 01, "
-                        "cycle_times %d/%d, cycle_shift %d\n",
-                        index, dc.cycle_time_0, dc.cycle_time_1, dc.cycle_shift);
-
-                ec_dc_sync01(master_dev->_pec, index, 1, dc.cycle_time_0, dc.cycle_time_1, dc.cycle_shift);
-            } else {
-                master_dev->log(verbose, "slave %2d configuring dc sync 0, "
-                        "cycle_time %d, cycle_shift %d\n",
-                        index, dc.cycle_time_0, dc.cycle_shift);
-
-                ec_dc_sync0(master_dev->_pec, index, 1, dc.cycle_time_0, dc.cycle_shift);
-            }
-        } else
-            ec_dc_sync0(master_dev->_pec, index, 0, 0, 0);
-    }
-
-    master_dev->log(verbose,
-            "slave %2d prepare state transition from 0x%x/%s to 0x%x/%s\n",
-            index, state_from, state_strings[state_from].c_str(),
-            state_to, state_strings[state_to].c_str());
-
+void slave::send_init_cmds(uint16_t transition) {
     for (coe_list_t::iterator it = coe_init_cmds.begin();
             it != coe_init_cmds.end(); ++it) {
 
@@ -456,18 +421,102 @@ bool slave::prepare_state_transition(transition_t transition) {
             }
         } 
     }
+}
 
-    return true;
+//! prepare state transitions
+/*!
+ * \param from state coming from
+ * \param to state switching to
+ */
+void slave::pre_state_transition(module_state_t from, module_state_t to) {
+    // get transition
+    uint32_t transition = GEN_STATE(from, to);
+
+    switch (transition) {
+        case op_2_safeop:
+        case op_2_preop:
+        case op_2_init:
+        case op_2_boot:
+            // ====> stop sending commands
+            if (to == module_state_safeop)
+                break;
+        case safeop_2_preop:
+        case safeop_2_init:
+        case safeop_2_boot:
+            // ====> stop receiving measurements
+            if (to == module_state_preop)
+                break;
+        case preop_2_init:
+        case preop_2_boot:
+            // ====> deinit devices
+        case init_2_init:
+            // ====> re-/open ethercat device
+            if (to == module_state_init)
+                break;
+        case init_2_boot:
+            break;
+        case boot_2_init:
+        case boot_2_preop:
+        case boot_2_safeop:
+        case boot_2_op:
+            // ====> re-/open ethercat device
+            if (to == module_state_init)
+                break;
+        case init_2_op:
+        case init_2_safeop:
+        case init_2_preop:
+        case preop_2_preop:
+            // ====> initial devices            
+            if (to == module_state_preop)
+                break;
+        case safeop_2_safeop:
+        case preop_2_op:
+        case preop_2_safeop:
+            // ====> sending init commands for safeop
+            send_init_cmds(0x24);
+
+            // ====> configure distributed clocks if needed 
+            if (master_dev->_pec->dc.have_dc && dc.has_dc) {
+                if (dc.cycle_time_0 == 0)
+                    dc.cycle_time_0 = master_dev->_pec->dc.timer_override; 
+
+                if (dc.type == 1) {
+                    if (dc.cycle_time_1 == 0)
+                        dc.cycle_time_1 = master_dev->_pec->dc.timer_override; 
+
+                    master_dev->log(verbose, "slave %2d configuring dc sync 01, "
+                            "cycle_times %d/%d, cycle_shift %d\n",
+                            index, dc.cycle_time_0, dc.cycle_time_1, dc.cycle_shift);
+
+                    ec_dc_sync01(master_dev->_pec, index, 1, dc.cycle_time_0, dc.cycle_time_1, dc.cycle_shift);
+                } else {
+                    master_dev->log(verbose, "slave %2d configuring dc sync 0, "
+                            "cycle_time %d, cycle_shift %d\n",
+                            index, dc.cycle_time_0, dc.cycle_shift);
+
+                    ec_dc_sync0(master_dev->_pec, index, 1, dc.cycle_time_0, dc.cycle_shift);
+                }
+            } else
+                ec_dc_sync0(master_dev->_pec, index, 0, 0, 0);
+
+            if (to == module_state_safeop)
+                break;
+        case safeop_2_op:
+        case op_2_op:
+            // ====> sending init commands for op
+            send_init_cmds(0x48);
+            break;
+        default:
+            break;
+    }
 }
 
 //! register interfaces for slave
 /*!
- * \param ctx ethercat context
- * \return N/A
+ * \param ctx ethercat master device
+ * \param transition state transition
  */
-void slave::register_interfaces(module_state_t state) {
-    master_dev->log(verbose, "registering interfaces for slave %d, state %d\n", index, state);
-
+void slave::post_state_transition(module_state_t from, module_state_t to) {
     uint32_t mbx_sup = master_dev->_pec->slaves[index].eeprom.mbx_supported;
     uint32_t soe_ch  = master_dev->_pec->slaves[index].eeprom.general.soe_channels;
     kernel& k = *kernel::get_instance();
@@ -482,7 +531,7 @@ void slave::register_interfaces(module_state_t state) {
             { if (!(req)) { (req) = make_shared<cls>(shared_from_this(), ##__VA_ARGS__); \
                 ADD_SERVICE_REQUESTER(req); } }
     // get transition
-    uint32_t transition = GEN_STATE(master_dev->state, state);
+    uint32_t transition = GEN_STATE(from, to);
 
     switch (transition) {
         case op_2_safeop:
@@ -490,7 +539,7 @@ void slave::register_interfaces(module_state_t state) {
         case op_2_init:
         case op_2_boot:
             // ====> stop sending commands
-            if (state == module_state_safeop)
+            if (to == module_state_safeop)
                 break;
         case safeop_2_preop:
         case safeop_2_init:
@@ -498,7 +547,7 @@ void slave::register_interfaces(module_state_t state) {
             // ====> stop receiving measurements
             REMOVE_SERVICE_REQUESTER(shared_from_this()); // process data inspection
 
-            if (state == module_state_preop)
+            if (to == module_state_preop)
                 break;
         case preop_2_init:
         case preop_2_boot:
@@ -516,7 +565,7 @@ void slave::register_interfaces(module_state_t state) {
             ADD_SERVICE_REQUESTER_CLASS(_memory_mi, slave::memory_inspection, request_type_memory);
             ADD_SERVICE_REQUESTER_CLASS(_eeprom_coe, slave::canopen, request_type_eeprom);
 
-            if (state == module_state_init)
+            if (to == module_state_init)
                 break;
         case init_2_boot:
             ADD_SERVICE_REQUESTER_CLASS(_mbx_foe, slave::file_protocol);
@@ -528,7 +577,7 @@ void slave::register_interfaces(module_state_t state) {
             // ====> re-/open ethercat device
             REMOVE_SERVICE_REQUESTER(_mbx_foe);
 
-            if (state == module_state_init)
+            if (to == module_state_init)
                 break;
         case init_2_op:
         case init_2_safeop:
@@ -549,7 +598,7 @@ void slave::register_interfaces(module_state_t state) {
                     ADD_SERVICE_REQUESTER_CLASS(_mbx_soe_list[atn], slave::sercos, atn);
             }
 
-            if (state == module_state_preop)
+            if (to == module_state_preop)
                 break;
         case safeop_2_safeop:
         case preop_2_op:
@@ -564,7 +613,7 @@ void slave::register_interfaces(module_state_t state) {
                 }
             }
 
-            if (state == module_state_safeop)
+            if (to == module_state_safeop)
                 break;
         case safeop_2_op:
         case op_2_op:
