@@ -26,15 +26,7 @@ m4_ifdef([PKG_PROG_PKG_CONFIG], [PKG_PROG_PKG_CONFIG])
 m4_ifdef([PKG_INSTALLDIR], [PKG_INSTALLDIR], [pkgconfigdir='${libdir}/pkgconfig' AC_SUBST([pkgconfigdir])])
 
 # Check dependencies
-PKG_CHECK_MODULES([ROBOTKERNEL], [robotkernel])
-PKG_CHECK_MODULES([LIBETHERCAT], [libethercat])
-PKG_CHECK_MODULES([LIBSTRING_UTIL], [libstring_util])
-PKG_CHECK_MODULES([SERVICE_PROVIDER_CANOPEN_PROTOCOL], [service_provider_canopen_protocol])
-PKG_CHECK_MODULES([SERVICE_PROVIDER_FILE_PROTOCOL], [service_provider_file_protocol])
-PKG_CHECK_MODULES([SERVICE_PROVIDER_KEY_VALUE], [service_provider_key_value])
-PKG_CHECK_MODULES([SERVICE_PROVIDER_MEMORY_INSPECTION], [service_provider_memory_inspection])
-PKG_CHECK_MODULES([SERVICE_PROVIDER_PROCESS_DATA_INSPECTION], [service_provider_process_data_inspection])
-PKG_CHECK_MODULES([SERVICE_PROVIDER_SERCOS_PROTOCOL], [service_provider_sercos_protocol])
+RK_CHECK_MODULES
 
 # Checks for header files.
 AC_CHECK_HEADERS([stdlib.h string.h])
