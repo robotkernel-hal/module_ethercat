@@ -267,6 +267,8 @@ class slave :
             transition_t transition;    //!< init command transition
             std::string value;          //!< element value
 
+            bool already_added;         //!< already added to ec master
+
             //! construction
             /*!
              * \param node yaml intialization node
@@ -286,6 +288,8 @@ class slave :
             char *data;                 //!< servodrive id data
             size_t datalen;             //!< servodrive id data length
             transition_t transition;    //!< init command transition
+
+            bool already_added;         //!< already added to ec master
 
             //! construction
             /*!
@@ -371,9 +375,8 @@ class slave :
 
         //! sending slave init commands
         /*!
-         * \param transition ethercat transition
          */
-        void send_init_cmds(uint16_t transition);
+        void add_init_cmds();
 
         //! prepare state transitions
         /*!

@@ -165,14 +165,9 @@ master::master(const std::string& name, const YAML::Node& node)
 //          "distributed_clocks", ECAT_SLAVE_ID_DC);
 
     pd_cookie = 0;
-
-    // perform init_2_init transition
-    set_state(module_state_init);
-}
-
-void master::open() {
-    if (_pec)
-        return; // already opened
+    
+//    if (_pec)
+//        return; // already opened
 
     // -----------------------------------------------------------
     // open ethercat interface
@@ -182,6 +177,11 @@ void master::open() {
         
     _pec->threaded_startup = _thr_startup;
 
+    // perform init_2_init transition
+    set_state(module_state_init);
+}
+
+void master::open() {
     // -----------------------------------------------------------
     // setting init commands and distributed clocks
     for (slave_map_t::iterator it = _slave_info.begin(); 
@@ -189,17 +189,18 @@ void master::open() {
         int slave_nr = it->first;
         sp_slave_t slv = it->second;
 
-// not needed here, done in pre_state_transition        
-//        if (_pec->slave_cnt > slave_nr) {
-//            for (slave::coe_list_t::iterator it2 = slv->coe_init_cmds.begin();
-//                    it2 != slv->coe_init_cmds.end(); ++it2) {
-//                slave::coe_init_cmd_t *cmd = *it2;
-//                ec_slave_add_init_cmd(_pec, slave_nr, EC_MBX_COE, 
-//                        (int)cmd->transition, cmd->index, cmd->subindex, 
-//                        cmd->ca, cmd->data, cmd->datalen);
-//            }
-//        } else
-//            throw str_exception("setting inits for slave %d, failed. no slave found!\n", slave_nr);
+        if (_pec->slave_cnt > slave_nr) {
+            for (slave::coe_list_t::iterator it2 = slv->coe_init_cmds.begin();
+                    it2 != slv->coe_init_cmds.end(); ++it2) {
+                slave::coe_init_cmd_t *cmd = *it2;
+                ec_slave_add_init_cmd(_pec, slave_nr, EC_MBX_COE, 
+                        (int)cmd->transition, cmd->index, cmd->subindex, 
+                        cmd->ca, cmd->data, cmd->datalen);
+
+                cmd->already_added = true;
+            }
+        } else
+            throw str_exception("setting inits for slave %d, failed. no slave found!\n", slave_nr);
                 
         if (slv->dc.has_dc) {
             _pec->slaves[slave_nr].dc.use_dc        = 1;
@@ -354,11 +355,12 @@ int master::set_state(module_state_t state) {
             // ====> deinit devices
         case init_2_init:
             // ====> re-/open ethercat device
-            open();
 
             STATE_TRANSITION(pre, module_state_init);
             ec_set_state(_pec, EC_STATE_INIT);
             STATE_TRANSITION(post, module_state_init);
+            
+            open();
 
             if (state == module_state_init)
                 break;
