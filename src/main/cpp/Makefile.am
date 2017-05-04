@@ -1,6 +1,5 @@
 ACLOCAL_AMFLAGS = -I m4
 
-libdir = $(prefix)/lib
 lib_LTLIBRARIES = libmodule_ethercat.la
 
 libmodule_ethercat_la_SOURCES  = master.cpp slave.cpp slave_file_protocol.cpp slave_memory_inspection.cpp \

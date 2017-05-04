@@ -407,3 +407,115 @@ void slave::canopen::write_element(const uint16_t& index, const uint8_t& sub_ind
         }
     }
 }
+
+std::map<uint16_t, std::string> data_type_2_string = {
+    { 0x0000, "null" },
+    { 0x0001, "bool_t" },
+    { 0x0002, "int8_t" },
+    { 0x0003, "int16_t" },
+    { 0x0004, "int32_t" },
+    { 0x0005, "uint8_t" },
+    { 0x0006, "uint16_t" },
+    { 0x0007, "uint32_t" },
+    { 0x0008, "float" },
+    { 0x0009, "string" },
+    { 0x000A, "string" },
+    { 0x000B, "string" },
+    { 0x000C, "time_of_day" },
+    { 0x000D, "time_difference" },
+    { 0x0010, "int24_t" },
+    { 0x0011, "double" },
+    { 0x0012, "int40_t"  },
+    { 0x0013, "int48_t"  },
+    { 0x0014, "int56_t"  },
+    { 0x0015, "int64_t"  },
+    { 0x0016, "uint24_t"  },
+    { 0x0018, "uint40_t"  },
+    { 0x0019, "uint48_t"  },
+    { 0x001A, "uint56_t"  },
+    { 0x001B, "uint64_t"  },
+    { 0x001D, "guid"  },
+    { 0x001E, "uint8_t"  },
+    { 0x001F, "uint16_t"  },
+    { 0x0020, "uint32_t"  },
+    { 0x0021, "pdo_mapping_t"  },
+    { 0x0023, "identity_t"  },
+    { 0x0025, "command_t"  },
+    { 0x0027, "pdocompar_t"  },
+    { 0x0028, "enum_t"  },
+    { 0x0029, "smpar_t"  },
+    { 0x002A, "record_t"  },
+    { 0x002B, "backup_t"  },
+    { 0x002C, "mdp_t"  },
+    { 0x002D, "bitarr8_t"  },
+    { 0x002E, "bitarr16_t"  },
+    { 0x002F, "bitarr32_t"  },
+    { 0x0030, "bit1_t"  },
+    { 0x0031, "bit2_t"  },
+    { 0x0032, "bit3_t"  },
+    { 0x0033, "bit4_t"  },
+    { 0x0034, "bit5_t"  },
+    { 0x0035, "bit6_t"  },
+    { 0x0036, "bit7_t"  },
+    { 0x0037, "bit8_t"  },
+    { 0x0260, "vector/int32_t"  },
+    { 0x0261, "vector/int16_t"  },
+    { 0x0262, "vector/int64_t"  },
+    { 0x0263, "vector/uint64_t"  },
+    { 0x0281, "error_handling_t"  },
+    { 0x0282, "diag_history_t"  },
+    { 0x0283, "sync_status_t"  },
+    { 0x0284, "sync_settings_t"  },
+    { 0x0285, "fsoe_frame_t"  },
+    { 0x0286, "fsoe_commpar_t"  } };
+ 
+//! return process data description yaml string 
+/*!
+ * \param idx pdo index, usually 0x1C12 (RxPDO) or 0x1C13 (TxPDO)
+ */
+string slave::canopen::get_pdo_description(uint16_t idx) {
+    YAML::Emitter out;
+    out << YAML::BeginMap;
+
+    // read mapped pdo count
+    service_provider::canopen_protocol::element_t element;
+    read_element(idx, 0, element);
+    uint8_t entry_cnt = element[0];
+
+    // now read all mapped pdo's to retreave the mapped object lengths
+    for (int i = 1; i <= entry_cnt; ++i) {
+        // read mapped pdo
+        read_element(idx, i, element);
+        uint16_t entry_idx = *(uint16_t *)&element[0];
+
+        // read mapped element count
+        read_element(entry_idx, 0, element);
+        uint8_t entry_cnt_2 = element[0];
+
+        for (int entry_sub_idx = 1; entry_sub_idx <= entry_cnt_2; ++entry_sub_idx) {
+            // read mapped element 
+            read_element(entry_idx, entry_sub_idx, element);
+            uint32_t entry = *(uint32_t *)&element[0];
+
+            service_provider::canopen_protocol::element_description_t desc;
+            get_element_description((entry & 0xFFFF0000) >> 16, 
+                    (entry & 0x0000FF00) >>8, desc);
+
+            if (desc.name == "") 
+                desc.name = format_string("padding_%d", entry_sub_idx);
+
+            string data_type = data_type_2_string[desc.data_type];
+            if (desc.data_type == 0x0000) {
+                stringstream ss;
+                ss << "int" << (entry & 0x000000FF) << "_t";
+                data_type = ss.str();
+            }
+
+            out << YAML::Key << data_type << YAML::Value << desc.name;
+        }                        
+    }
+
+    out << YAML::EndMap;
+    return out.c_str();
+}
+

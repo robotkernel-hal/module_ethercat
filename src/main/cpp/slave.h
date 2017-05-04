@@ -201,6 +201,12 @@ class slave :
                  */
                 void write_element(const uint16_t& index, const uint8_t& sub_index,
                         const service_provider::canopen_protocol::element_t& value);
+
+                //! return process data description yaml string 
+                /*!
+                 * \param idx pdo index, usually 0x1C12 (RxPDO) or 0x1C13 (TxPDO)
+                 */
+                std::string get_pdo_description(uint16_t idx);
         };
         
         class sercos : public service_provider::sercos_protocol::base {
@@ -347,11 +353,15 @@ class slave :
         int index;              //!< slave bus index
         master *master_dev;     //!< master device
 
+        // named process data
+        robotkernel::kernel::sp_process_data_t pdin;
+        robotkernel::kernel::sp_process_data_t pdout;
+
         // service requesters
         robotkernel::sp_service_requester_t _mbx_foe;    //!< file service requester
         std::vector<robotkernel::sp_service_requester_t> 
             _mbx_soe_list;                               //!< servodrive service requester
-        robotkernel::sp_service_requester_t _mbx_coe;    //!< canopen service requester
+        std::shared_ptr<canopen>            mbx_coe;    //!< canopen service requester
         robotkernel::sp_service_requester_t _eeprom_coe; //!< canopen service requester
         robotkernel::sp_service_requester_t _eeprom_mi;  //!< eeprom memory inspection service requester
         robotkernel::sp_service_requester_t _memory_mi;  //!< memory inspection service requester
@@ -372,6 +382,12 @@ class slave :
 
         //! destruction
         ~slave();
+
+        //! process data out handler
+        void pdout_handler();
+        
+        //! process data in handler
+        void pdin_handler();
 
         //! sending slave init commands
         /*!

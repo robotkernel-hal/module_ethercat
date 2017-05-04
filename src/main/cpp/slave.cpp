@@ -524,6 +524,12 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
         case safeop_2_boot:
             // ====> stop receiving measurements
             REMOVE_SERVICE_REQUESTER(shared_from_this()); // process data inspection
+            
+            if (pdin)
+                k.remove_process_data(pdin);
+                
+            if (pdout)
+                k.remove_process_data(pdout);
 
             if (to == module_state_preop)
                 break;
@@ -531,7 +537,7 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
         case preop_2_boot:
             // ====> deinit devices
             REMOVE_SERVICE_REQUESTER(_mbx_foe);
-            REMOVE_SERVICE_REQUESTER(_mbx_coe);
+            REMOVE_SERVICE_REQUESTER(mbx_coe);
 
             if (mbx_sup & EC_EEPROM_MBX_SOE) {
                 for (unsigned atn = 0; atn < _mbx_soe_list.size(); ++atn)
@@ -566,7 +572,7 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                 ADD_SERVICE_REQUESTER_CLASS(_mbx_foe, slave::file_protocol);
             
             if (mbx_sup & EC_EEPROM_MBX_COE)
-                ADD_SERVICE_REQUESTER_CLASS(_mbx_coe, slave::canopen, request_type_mailbox);
+                ADD_SERVICE_REQUESTER_CLASS(mbx_coe, slave::canopen, request_type_mailbox);
 
             if (mbx_sup & EC_EEPROM_MBX_SOE) {
                 if (_mbx_soe_list.size() != soe_ch)
@@ -589,6 +595,28 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                     // register soe process data inspection
 //                    ADD_SERVICE_REQUESTER_CLASS(_mbx_soe_list[atn], slave_servodrive, atn);
                 }
+            }
+    
+            if (master_dev->_pec->slaves[index].pdin.len) {
+                k.remove_process_data(pdin);
+                
+                string pdo_desc = mbx_coe->get_pdo_description(0x1C13);
+                pdin = make_shared<robotkernel::process_data>(
+                        master_dev->_pec->slaves[index].pdin.len, 
+                        master_dev->name, format_string("slave_%d.pd.in", index), pdo_desc);
+                master_dev->log(info, "slave %2d: %p : %d\n", index, pdin.get(), pdin.use_count());
+                
+                k.add_process_data(pdin);
+            }
+            
+            if (master_dev->_pec->slaves[index].pdout.len) {
+                k.remove_process_data(pdout);
+
+                string pdo_desc = mbx_coe->get_pdo_description(0x1C12);
+                pdout = make_shared<robotkernel::process_data>(
+                        master_dev->_pec->slaves[index].pdout.len, 
+                        master_dev->name, format_string("slave_%d.pd.out", index), pdo_desc);
+                k.add_process_data(pdout);
             }
 
             if (to == module_state_safeop)
@@ -667,5 +695,26 @@ void slave::get_pdout(service_provider::process_data_inspection::pd_t& pd) {
 
     if (slv->pdout.len)
         memcpy(&pd[0], slv->pdout.pd, slv->pdout.len);
+}
+
+//! process data out handler
+void slave::pdout_handler() {
+    ec_slave_t *slv = &master_dev->_pec->slaves[index];
+    if (!pdout || (slv->pdout.len == 0))
+        return;
+
+    const auto& buf = pdout->get_read_buffer();
+    memcpy(slv->pdout.pd, &buf[0], slv->pdout.len);
+}
+
+//! process data in handler
+void slave::pdin_handler() {
+    ec_slave_t *slv = &master_dev->_pec->slaves[index];
+    if (!pdin || (slv->pdin.len == 0))
+        return;
+
+    auto& buf = pdin->get_write_buffer();
+    memcpy(&buf[0], slv->pdin.pd, slv->pdin.len);
+    pdin->swap_buffers();
 }
 

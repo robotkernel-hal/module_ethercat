@@ -429,6 +429,7 @@ int master::set_state(module_state_t state) {
                 break;
         case preop_2_op:
         case preop_2_safeop:
+            // ====> start receiving measurements
             _dc_sync.first_run = true;
 
             if (dc_timer_override == -1 && trigger_mod_name != "") {
@@ -452,7 +453,14 @@ int master::set_state(module_state_t state) {
             ec_set_state(_pec, EC_STATE_SAFEOP);
             STATE_TRANSITION(post, module_state_safeop);
 
-            // ====> start receiving measurements
+            // process data is now available, create names process data
+            for (int nr = 0; nr < _pec->slave_cnt; ++nr) {
+                log(verbose, "slave %d: propagation delay %d [ns]\n", 
+                        nr, _pec->slaves[nr].pdelay);
+
+                sp_slave_t slv = _slave_info[nr];
+            }
+                
             if (state == module_state_safeop)
                 break;
         case safeop_2_op:
@@ -604,6 +612,11 @@ void master::trigger() {
             if ((++g->_divisor_cnt % g->_divisor) != 0)
                 continue; 
 
+            for (auto it = g->_slaves.begin(); it != g->_slaves.end(); ++it) {
+                int slave = *it;
+                _slave_info[slave]->pdout_handler();
+            }
+
             // reset divisor cnt and queue datagram
             g->_divisor_cnt = 0;
             ec_send_process_data_group(_pec, i);
@@ -636,8 +649,12 @@ void master::trigger() {
 
             trigger_modules(ECAT_SLAVE_ID_GROUP | g->_index);
 
-            for (std::list<int>::iterator it = g->_slaves.begin(); it != g->_slaves.end(); ++it)
-                trigger_modules(*it);
+            for (auto it = g->_slaves.begin(); it != g->_slaves.end(); ++it) {
+                int slave = *it;
+
+                _slave_info[slave]->pdin_handler();
+                trigger_modules(slave);
+            }
         }
         
         int slave;
