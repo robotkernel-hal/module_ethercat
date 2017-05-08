@@ -330,6 +330,7 @@ int master::set_state(module_state_t state) {
 
 #define STATE_TRANSITION(what, to) { \
     for (int nr = 0; nr < _pec->slave_cnt; ++nr) { \
+        if (_slave_info.find(nr) == _slave_info.end()) continue; \
         sp_slave_t slv = _slave_info[nr]; \
         slv->what##_state_transition(this->state, to); } } 
 

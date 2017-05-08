@@ -603,8 +603,6 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                 pdin = make_shared<robotkernel::process_data>(
                         master_dev->_pec->slaves[index].pdin.len, 
                         master_dev->name, format_string("slave_%d.pd.in", index), pdo_desc);
-                master_dev->log(info, "slave %2d: %p : %d\n", index, pdin.get(), pdin.use_count());
-                
                 k.add_process_data(pdin);
             }
             
