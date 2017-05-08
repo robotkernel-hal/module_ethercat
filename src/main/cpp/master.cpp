@@ -449,7 +449,6 @@ int master::set_state(module_state_t state) {
             start();
 
             STATE_TRANSITION(pre, module_state_safeop);
-            this->state = module_state_safeop;
             ec_set_state(_pec, EC_STATE_SAFEOP);
             STATE_TRANSITION(post, module_state_safeop);
 
@@ -606,98 +605,96 @@ void master::trigger() {
     int64_t max_timeout = 0;
     ec_timer_t dc_timeout;
 
-    if (state >= module_state_safeop) {
-        for (i = 0; i < _pec->pd_group_cnt; ++i) {
-            group *g = _group_info[i];
-            if ((++g->_divisor_cnt % g->_divisor) != 0)
-                continue; 
+    if (!_pec || (_pec->tx_sync == 1))
+        return;
+        
+    for (i = 0; i < _pec->pd_group_cnt; ++i) {
+        group *g = _group_info[i];
+        if ((++g->_divisor_cnt % g->_divisor) != 0)
+            continue; 
 
-            for (auto it = g->_slaves.begin(); it != g->_slaves.end(); ++it) {
-                int slave = *it;
-                _slave_info[slave]->pdout_handler();
-            }
-
-            // reset divisor cnt and queue datagram
-            g->_divisor_cnt = 0;
-            ec_send_process_data_group(_pec, i);
-            ec_timer_init(&g->timeout, g->_recv_timeout);
-
-            if (max_timeout < g->_recv_timeout)
-                max_timeout = g->_recv_timeout;
+        for (auto it = g->_slaves.begin(); it != g->_slaves.end(); ++it) {
+            int slave = *it;
+            _slave_info[slave]->pdout_handler();
         }
 
-        if (_pec->dc.have_dc) {
-            ec_send_distributed_clocks_sync(_pec);
-            ec_timer_init(&dc_timeout, max_timeout);
-        }
+        // reset divisor cnt and queue datagram
+        g->_divisor_cnt = 0;
+        ec_send_process_data_group(_pec, i);
+        ec_timer_init(&g->timeout, g->_recv_timeout);
+
+        if (max_timeout < g->_recv_timeout)
+            max_timeout = g->_recv_timeout;
+    }
+
+    if (_pec->dc.have_dc) {
+        ec_send_distributed_clocks_sync(_pec);
+        ec_timer_init(&dc_timeout, max_timeout);
     }
 
     hw_tx(_pec->phw);
 
-    if (state >= module_state_safeop) {
+    pd_cookie++;
+    pthread_cond_signal(&pd_cond);
 
-        pd_cookie++;
-        pthread_cond_signal(&pd_cond);
+    for (i = 0; i < _pec->pd_group_cnt; ++i) {
+        group *g = _group_info[i];
 
-        for (i = 0; i < _pec->pd_group_cnt; ++i) {
-            group *g = _group_info[i];
+        if (g->_divisor_cnt != 0)
+            continue; 
 
-            if (g->_divisor_cnt != 0)
-                continue; 
+        ec_receive_process_data_group(_pec, i, &g->timeout);
 
-            ec_receive_process_data_group(_pec, i, &g->timeout);
+        trigger_modules(ECAT_SLAVE_ID_GROUP | g->_index);
 
-            trigger_modules(ECAT_SLAVE_ID_GROUP | g->_index);
+        for (auto it = g->_slaves.begin(); it != g->_slaves.end(); ++it) {
+            int slave = *it;
 
-            for (auto it = g->_slaves.begin(); it != g->_slaves.end(); ++it) {
-                int slave = *it;
+            _slave_info[slave]->pdin_handler();
+            trigger_modules(slave);
+        }
+    }
 
-                _slave_info[slave]->pdin_handler();
-                trigger_modules(slave);
+    int slave;
+    for (slave = 0; slave < _pec->slave_cnt; ++slave) {
+        ec_slave_t *slv = &_pec->slaves[slave];
+
+        if (slv->eeprom.mbx_supported && slv->mbx_read.sm_state) {
+            if (*slv->mbx_read.sm_state & 0x08) {
+                pthread_cond_signal(&async_cond);
+                break;
             }
         }
-        
-        int slave;
-        for (slave = 0; slave < _pec->slave_cnt; ++slave) {
-            ec_slave_t *slv = &_pec->slaves[slave];
+    }
 
-            if (slv->eeprom.mbx_supported && slv->mbx_read.sm_state) {
-                if (*slv->mbx_read.sm_state & 0x08) {
-                    pthread_cond_signal(&async_cond);
-                    break;
-                }
+    if (_pec->dc.have_dc) {
+        ec_receive_distributed_clocks_sync(_pec, &dc_timeout);
+
+        if (_pec->dc.offset_compensation_cnt == 0)
+            log(verbose, "dc receive, mode %d\n", _pec->dc.mode);
+
+        if (    (_pec->dc.mode == ec_dc_info::dc_mode_ref_clock) && 
+                (_pec->dc.offset_compensation_cnt == 0)) {
+            double diff = (_pec->dc.act_diff / 1E9);
+
+            if (!_dc_sync.first_run) {
+                double tmp;
+                kernel::request_cb(trigger_mod_name.c_str(), 
+                        MOD_REQUEST_GET_TRIGGER_INTERVAL, &tmp);
+
+                tmp -= (-0.1 * (diff/_pec->dc.offset_compensation) ) + 
+                    (_dc_sync.last_diff - diff)/(_pec->dc.offset_compensation);
+
+                kernel::request_cb(trigger_mod_name.c_str(), 
+                        MOD_REQUEST_SET_TRIGGER_INTERVAL, &tmp);
+
+                log(verbose, "setting new clock %13.10f, last_diff %13.10f, diff %13.10f, "
+                        "offset_comp %d\n", tmp, _dc_sync.last_diff, diff, 
+                        _pec->dc.offset_compensation);
             }
-        }
 
-        if (_pec->dc.have_dc) {
-            ec_receive_distributed_clocks_sync(_pec, &dc_timeout);
-
-            if (_pec->dc.offset_compensation_cnt == 0)
-                log(verbose, "dc receive, mode %d\n", _pec->dc.mode);
-
-            if (    (_pec->dc.mode == ec_dc_info::dc_mode_ref_clock) && 
-                    (_pec->dc.offset_compensation_cnt == 0)) {
-                double diff = (_pec->dc.act_diff / 1E9);
-
-                if (!_dc_sync.first_run) {
-                    double tmp;
-                    kernel::request_cb(trigger_mod_name.c_str(), 
-                            MOD_REQUEST_GET_TRIGGER_INTERVAL, &tmp);
-
-                    tmp -= (-0.1 * (diff/_pec->dc.offset_compensation) ) + 
-                        (_dc_sync.last_diff - diff)/(_pec->dc.offset_compensation);
-
-                    kernel::request_cb(trigger_mod_name.c_str(), 
-                            MOD_REQUEST_SET_TRIGGER_INTERVAL, &tmp);
-
-                    log(verbose, "setting new clock %13.10f, last_diff %13.10f, diff %13.10f, "
-                            "offset_comp %d\n", tmp, _dc_sync.last_diff, diff, 
-                            _pec->dc.offset_compensation);
-                }
-
-                _dc_sync.first_run = false;
-                _dc_sync.last_diff = diff;
-            }
+            _dc_sync.first_run = false;
+            _dc_sync.last_diff = diff;
         }
     }
 }

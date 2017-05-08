@@ -449,7 +449,6 @@ void slave::pre_state_transition(module_state_t from, module_state_t to) {
             // ====> initial devices            
             if (to == module_state_preop)
                 break;
-        case safeop_2_safeop:
         case preop_2_op:
         case preop_2_safeop:
             // ====> sending init commands for safeop
@@ -482,6 +481,7 @@ void slave::pre_state_transition(module_state_t from, module_state_t to) {
             if (to == module_state_safeop)
                 break;
         case safeop_2_op:
+        case safeop_2_safeop:
         case op_2_op:
             break;
         default:
@@ -584,7 +584,6 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
 
             if (to == module_state_preop)
                 break;
-        case safeop_2_safeop:
         case preop_2_op:
         case preop_2_safeop:
             // ====> start receiving measurements
@@ -622,6 +621,7 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
             if (to == module_state_safeop)
                 break;
         case safeop_2_op:
+        case safeop_2_safeop:
         case op_2_op:
             // ====> do nothing
             break;
