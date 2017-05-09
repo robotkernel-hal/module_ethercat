@@ -644,15 +644,17 @@ void master::trigger() {
         if (g->_divisor_cnt != 0)
             continue; 
 
-        ec_receive_process_data_group(_pec, i, &g->timeout);
+        int ret = ec_receive_process_data_group(_pec, i, &g->timeout);
 
-        trigger_modules(ECAT_SLAVE_ID_GROUP | g->_index);
+        if (ret == 0) {
+            trigger_modules(ECAT_SLAVE_ID_GROUP | g->_index);
 
-        for (auto it = g->_slaves.begin(); it != g->_slaves.end(); ++it) {
-            int slave = *it;
+            for (auto it = g->_slaves.begin(); it != g->_slaves.end(); ++it) {
+                int slave = *it;
 
-            _slave_info[slave]->pdin_handler();
-            trigger_modules(slave);
+                _slave_info[slave]->pdin_handler();
+                trigger_modules(slave);
+            }
         }
     }
 
