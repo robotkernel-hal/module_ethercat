@@ -387,7 +387,8 @@ int master::set_state(module_state_t state) {
         case init_2_safeop:
         case init_2_preop:
             _pec->dc.mode = _dc_mode_string == "ref_clock" ? 
-                ec_dc_info::dc_mode_ref_clock : ec_dc_info::dc_mode_master_clock;
+                ec_dc_info::dc_mode_ref_clock : _dc_mode_string == "master_as_ref_clock" ?
+                ec_dc_info::dc_mode_master_as_ref_clock : ec_dc_info::dc_mode_master_clock;
             
             STATE_TRANSITION(pre, module_state_preop);
             ec_set_state(_pec, EC_STATE_PREOP);
@@ -672,9 +673,6 @@ void master::trigger() {
 
     if (_pec->dc.have_dc) {
         ec_receive_distributed_clocks_sync(_pec, &dc_timeout);
-
-        if (_pec->dc.offset_compensation_cnt == 0)
-            log(verbose, "dc receive, mode %d\n", _pec->dc.mode);
 
         if (    (_pec->dc.mode == ec_dc_info::dc_mode_ref_clock) && 
                 (_pec->dc.offset_compensation_cnt == 0)) {
