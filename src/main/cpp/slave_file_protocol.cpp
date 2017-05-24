@@ -49,23 +49,40 @@ slave::file_protocol::file_protocol(std::shared_ptr<slave> slv)
  */
 void slave::file_protocol::file_read(
         service_provider::file_protocol::file_readwrite_info_t& info) {
-//    file_readwrite_info_t *frwi = (file_readwrite_info_t *)ptr;
-//    uint32_t password = 0;
-//    char file_name[MAX_FILE_NAME_SIZE];
-//    strncpy(file_name, frwi->file_name, MAX_FILE_NAME_SIZE-1);
-//    if (info.password)
-//        password = strtol(frwi.password.c_str(), NULL, 10);
-//
-//    ret = ec_foe_read(
-//            _pec,                   // ethercat master device
-//            frwi->slave_id,         // slave index
-//            password,               // file password
-//            file_name,              // file name
-//            &frwi->file_data,       // returns file_data
-//            &frwi->file_data_len,   // returns file_data_len
-//            &frwi->error_message);  // returns error_message
-//
-//    break;
+    // file data buffer
+    uint8_t *buffer = NULL;
+    ssize_t  buffer_len = 0;
+
+    // file name truncation
+    char file_name[MAX_FILE_NAME_SIZE];
+    strncpy(file_name, info.file_name.c_str(), MAX_FILE_NAME_SIZE);
+
+    // others
+    uint32_t password = 0;
+    char *error_message = NULL; 
+
+    ec_foe_read(
+            slv->master_dev->_pec,  // ethercat master device
+            slv->index,             // slave index
+            password,               // file password
+            file_name,              // file name
+            &buffer,                // returns file_data
+            &buffer_len,            // returns file_data_len
+            &error_message);        // returns error_message
+
+    if (error_message) {
+        if (buffer)
+            free(buffer);
+
+        std::string msg = string(error_message);
+        free(error_message);
+        throw str_exception(msg.c_str());
+    }
+
+    if (buffer) {
+        info.file_data.resize(buffer_len);
+        memcpy(&info.file_data[0], buffer, buffer_len);
+    }
 }
 
 //! write to file
@@ -74,24 +91,31 @@ void slave::file_protocol::file_read(
  */
 void slave::file_protocol::file_write(
         const service_provider::file_protocol::file_readwrite_info_t& info) {
-//        case MOD_REQUEST_FILE_WRITE: {
-//            file_readwrite_info_t *frwi = (file_readwrite_info_t *)ptr;
-//            uint32_t password = 0;
-//            char file_name[MAX_FILE_NAME_SIZE];
-//            strncpy(file_name, frwi->file_name, MAX_FILE_NAME_SIZE-1);
-//            if (frwi->password)
-//                password = strtol(frwi->password, NULL, 10);
-//
-//            ret = ec_foe_write(
-//                    _pec,                   // ethercat master device
-//                    frwi->slave_id,         // slave index
-//                    password,               // file password
-//                    file_name,              // file name
-//                    frwi->file_data,        // file_data
-//                    frwi->file_data_len,    // file_data_len
-//                    &frwi->error_message);  // returns error_message
-//
-//            break;
-//        }
+    // file name truncation
+    char file_name[MAX_FILE_NAME_SIZE];
+    strncpy(file_name, info.file_name.c_str(), MAX_FILE_NAME_SIZE);
+
+    // others
+    uint32_t password = 0;
+    char *error_message = NULL; 
+            
+    // local copy, cause it's const
+    auto file_data = info.file_data;
+
+    ec_foe_write(
+            slv->master_dev->_pec,  // ethercat master device
+            slv->index,             // slave index
+            password,               // file password
+            file_name,              // file name
+            &file_data[0],          // file_data
+            file_data.size(),       // file_data_len
+            &error_message);        // returns error_message
+    
+    if (error_message) {
+        std::string msg = string(error_message);
+        free(error_message);
+        throw str_exception(msg.c_str());
+    }
+
 }
 
