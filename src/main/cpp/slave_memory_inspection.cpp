@@ -74,7 +74,7 @@ void slave::memory_inspection::read_memory(const uint64_t& address,
             break;
         case request_type_eeprom: {
             ec_eepromread_len(slv->master_dev->_pec, 
-                    slv->index, address, &data[0], data.size());
+                    slv->index, address/2, &data[0], data.size());
             break;
         }
         case request_type_memory: {

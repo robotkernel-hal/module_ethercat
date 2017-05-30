@@ -32,7 +32,7 @@ using namespace module_ethercat;
 
 slave::file_protocol::file_protocol(std::shared_ptr<slave> slv)
     :   service_provider::file_protocol::base(slv->master_dev->name, 
-            format_string("slave_%d", slv->index)), slv(slv) 
+            format_string("slave_%d.mailbox", slv->index)), slv(slv) 
 {
 }
 
@@ -91,6 +91,8 @@ void slave::file_protocol::file_read(
  */
 void slave::file_protocol::file_write(
         const service_provider::file_protocol::file_readwrite_info_t& info) {
+    slv->master_dev->log(robotkernel::info, "writing file %s\n", info.file_name.c_str());
+
     // file name truncation
     char file_name[MAX_FILE_NAME_SIZE];
     strncpy(file_name, info.file_name.c_str(), MAX_FILE_NAME_SIZE);

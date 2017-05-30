@@ -673,9 +673,6 @@ void master::trigger() {
     if (_pec->dc.have_dc) {
         ec_receive_distributed_clocks_sync(_pec, &dc_timeout);
 
-        if (_pec->dc.offset_compensation_cnt == 0)
-            log(verbose, "dc receive, mode %d\n", _pec->dc.mode);
-
         if (    (_pec->dc.mode == ec_dc_info::dc_mode_ref_clock) && 
                 (_pec->dc.offset_compensation_cnt == 0)) {
             double diff = (_pec->dc.act_diff / 1E9);
