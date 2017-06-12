@@ -51,7 +51,7 @@ void slave::canopen::get_object_dictionary_list(
         case request_type_eeprom: {
             list.push_back(0x1008);     // device name index
 
-            ec_slave_t *ec_slv = &slv->master_dev->_pec->slaves[slv->index];
+            ec_slave_t *ec_slv = &slv->master_dev->pec->slaves[slv->index];
             ec_eeprom_cat_pdo_t *pdo;
 
             // inputs and outputs
@@ -67,7 +67,7 @@ void slave::canopen::get_object_dictionary_list(
         case request_type_mailbox: {
             uint8_t *buf = NULL;
             size_t len = 0;
-            int ret = ec_coe_odlist_read(slv->master_dev->_pec, slv->index, &buf, &len);
+            int ret = ec_coe_odlist_read(slv->master_dev->pec, slv->index, &buf, &len);
 
             if (ret != 0) {
                 throw str_exception("slave %2d: reading CoE object dictionary list "
@@ -99,7 +99,7 @@ void slave::canopen::get_object_description(const uint16_t& index,
         default:
             break;
         case request_type_eeprom: {
-            ec_slave_t *ec_slv = &slv->master_dev->_pec->slaves[slv->index];
+            ec_slave_t *ec_slv = &slv->master_dev->pec->slaves[slv->index];
             ec_eeprom_cat_pdo_t *pdo;
 
             if (index == 0x1008) {
@@ -136,7 +136,7 @@ void slave::canopen::get_object_description(const uint16_t& index,
             // get description
             ec_coe_sdo_desc_t obj_desc;
             memset(&obj_desc, 0, sizeof(obj_desc));
-            int ret = ec_coe_sdo_desc_read(slv->master_dev->_pec, slv->index, index, &obj_desc);
+            int ret = ec_coe_sdo_desc_read(slv->master_dev->pec, slv->index, index, &obj_desc);
 
             if (ret != 0) {
                 // decode ret
@@ -171,7 +171,7 @@ void slave::canopen::get_element_description(const uint16_t& index, const uint8_
         default:
             break;
         case request_type_eeprom: {
-            ec_slave_t *ec_slv = &slv->master_dev->_pec->slaves[slv->index];
+            ec_slave_t *ec_slv = &slv->master_dev->pec->slaves[slv->index];
             ec_eeprom_cat_pdo_t *pdo;
 
             // device name
@@ -232,7 +232,7 @@ void slave::canopen::get_element_description(const uint16_t& index, const uint8_
             // get description
             ec_coe_sdo_entry_desc_t entry_desc;
             memset(&entry_desc, 0, sizeof(entry_desc));
-            int ret = ec_coe_sdo_entry_desc_read(slv->master_dev->_pec, slv->index, index, 
+            int ret = ec_coe_sdo_entry_desc_read(slv->master_dev->pec, slv->index, index, 
                     sub_index, 0x7F, &entry_desc);
 
             if (ret != 0) {
@@ -313,7 +313,7 @@ void slave::canopen::read_element(const uint16_t& index, const uint8_t& sub_inde
         default:
             break;
         case request_type_eeprom: {
-            ec_slave_t *ec_slv = &slv->master_dev->_pec->slaves[slv->index];
+            ec_slave_t *ec_slv = &slv->master_dev->pec->slaves[slv->index];
 
             if (index == 0x1008) {
                 if ((ec_slv->eeprom.strings_cnt > 0) &&
@@ -354,7 +354,7 @@ void slave::canopen::read_element(const uint16_t& index, const uint8_t& sub_inde
             size_t buf_len = 0;
             uint32_t abort_code = 0;
 
-            int ret = ec_coe_sdo_read(slv->master_dev->_pec, slv->index, index, sub_index, 
+            int ret = ec_coe_sdo_read(slv->master_dev->pec, slv->index, index, sub_index, 
                     0, &buf, &buf_len, &abort_code);
 
             if (ret != 0) {
@@ -394,7 +394,7 @@ void slave::canopen::write_element(const uint16_t& index, const uint8_t& sub_ind
         case request_type_mailbox: {
             uint32_t abort_code = 0;
 
-            int ret = ec_coe_sdo_write(slv->master_dev->_pec, slv->index, index, sub_index, 
+            int ret = ec_coe_sdo_write(slv->master_dev->pec, slv->index, index, sub_index, 
                     0, (uint8_t *)&value[0], value.size(), &abort_code);
 
             if (ret != 0) {

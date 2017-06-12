@@ -73,7 +73,7 @@ void slave::memory_inspection::read_memory(const uint64_t& address,
         default:
             break;
         case request_type_eeprom: {
-            ec_eepromread_len(slv->master_dev->_pec, 
+            ec_eepromread_len(slv->master_dev->pec, 
                     slv->index, address/2, &data[0], data.size());
             break;
         }
@@ -82,7 +82,7 @@ void slave::memory_inspection::read_memory(const uint64_t& address,
                 uint32_t act_len = min(100, data.size() - offset);
                 uint16_t wkc;
 
-                ec_fprd(slv->master_dev->_pec, slv->master_dev->_pec->slaves[slv->index].fixed_address, 
+                ec_fprd(slv->master_dev->pec, slv->master_dev->pec->slaves[slv->index].fixed_address, 
                         address + offset, &data[0] + offset, act_len, &wkc);
             }
             break;
@@ -102,7 +102,7 @@ void slave::memory_inspection::write_memory(const uint64_t& address,
         default:
             break;
         case request_type_eeprom: {
-            ec_eepromwrite_len(slv->master_dev->_pec, slv->index, 
+            ec_eepromwrite_len(slv->master_dev->pec, slv->index, 
                     address, &data[0], data.size());
             break;
         }
@@ -111,7 +111,7 @@ void slave::memory_inspection::write_memory(const uint64_t& address,
                 uint32_t act_len = min(100, data.size() - offset);
                 uint16_t wkc;
 
-                ec_fpwr(slv->master_dev->_pec, slv->master_dev->_pec->slaves[slv->index].fixed_address, 
+                ec_fpwr(slv->master_dev->pec, slv->master_dev->pec->slaves[slv->index].fixed_address, 
                     address + offset, &data[0] + offset, act_len, &wkc);
             }
             break;

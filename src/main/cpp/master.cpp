@@ -66,11 +66,14 @@ void log_func(int lvl, void *user, const char *format, ...) {
     e->log(loglvl, buf);
 }
 
-master::group::group(int index, const YAML::Node& node) {
+master::group::group(master *parent, int index, const YAML::Node& node) 
+    : trigger_base(format_string("%s.group_%d.trigger", parent->name.c_str(), index)),
+    parent(parent)
+{
     _index          = index;
     _divisor        = get_as<int>(node, "divisor");
     _divisor_cnt    = 0;
-    _recv_timeout   = get_as<int>(node, "recv_timeout", 1000000);
+    recv_timeout   = get_as<int>(node, "recv_timeout", 1000000);
 
     for (YAML::const_iterator it = node["slaves"].begin(); 
             it != node["slaves"].end(); ++it)
@@ -104,22 +107,20 @@ void master::group::unregister_interfaces(const std::string& name) {
  */
 master::master(const std::string& name, const YAML::Node& node) 
     : module_base("module_ethercat", name, node), 
-      cmd_delay(node),
-      runnable(node), _pec(NULL) {
-    _ifname          = get_as<string>(node, "ifname");
-    _recv_prio       = get_as<int>(node, "recv_prio");
-    _recv_mask       = get_as<int>(node, "recv_mask");
-    _log_eeprom_data = get_as<bool>(node, "log_eeprom_data", false);
-    _pec             = NULL;
-    _trigger_interval= get_as<int>(node, "trigger_interval", 0);
-    _thr_startup     = get_as<bool>(node, "threaded_startup", true);
-            
-    dc_offset_compensation_cycles 
-                = get_as<int>(node, "dc_offset_compensation_cycles", 250);
-    dc_timer_override 
-                = get_as<int>(node, "dc_timer_override", -1);
-    dc_offset_compensation_max 
-                = get_as<uint64_t>(node, "dc_offset_compensation_max", 100000000);
+      cmd_delay(node), runnable(node), pec(NULL) 
+{
+#define get_yaml(t, n, d) \
+    n = get_as<t>(node, #n, d);
+
+    get_yaml(string,   ifname, "");
+    get_yaml(int,      recv_prio, 0);
+    get_yaml(int,      recv_mask, 0xff);
+    get_yaml(bool,     log_eeprom_data, false);
+    get_yaml(int,      trigger_interval, 0);
+    get_yaml(bool,     threaded_startup, true);
+    get_yaml(int,      dc_offset_compensation_cycles, 250);
+    get_yaml(int,      dc_timer_override, -1);
+    get_yaml(uint64_t, dc_offset_compensation_max, 100000000);
 
     ec_log_func_user = this;
     ec_log_func = log_func;
@@ -129,7 +130,8 @@ master::master(const std::string& name, const YAML::Node& node)
         for (YAML::const_iterator it = node["groups"].begin();
                 it != node["groups"].end(); ++it) {
             int g_nr = it->first.as<int>();
-            _group_info[g_nr] = new group(g_nr, it->second);
+            _group_info[g_nr] = make_shared<group>(this, g_nr, it->second);
+            kernel::get_instance()->add_trigger_device(_group_info[g_nr]);
         }
     }
 
@@ -143,8 +145,8 @@ master::master(const std::string& name, const YAML::Node& node)
     }
 
     _dc_mode_string = get_as<string>(node, "dc_mode", "master_clock");
-    _dc_sync.first_run = true;
-    _dc_sync.last_diff = 0.;
+    dc_sync.first_run = true;
+    dc_sync.last_diff = 0.;
 
     pthread_mutex_init(&pd_lock, NULL);
     pthread_cond_init(&pd_cond, NULL);
@@ -166,16 +168,16 @@ master::master(const std::string& name, const YAML::Node& node)
 
     pd_cookie = 0;
     
-//    if (_pec)
+//    if (pec)
 //        return; // already opened
 
     // -----------------------------------------------------------
     // open ethercat interface
-    int ret = ec_open(&_pec, _ifname.c_str(), _recv_prio, _recv_mask, _log_eeprom_data);
+    int ret = ec_open(&pec, ifname.c_str(), recv_prio, recv_mask, log_eeprom_data);
     if (ret != 0) 
         throw str_exception("ec_open failed: %s!\n", strerror(ret));
         
-    _pec->threaded_startup = _thr_startup;
+    pec->threaded_startup = threaded_startup;
 
     // perform init_2_init transition
     set_state(module_state_init);
@@ -189,11 +191,11 @@ void master::open() {
         int slave_nr = it->first;
         sp_slave_t slv = it->second;
 
-        if (_pec->slave_cnt > slave_nr) {
+        if (pec->slave_cnt > slave_nr) {
             for (slave::coe_list_t::iterator it2 = slv->coe_init_cmds.begin();
                     it2 != slv->coe_init_cmds.end(); ++it2) {
                 slave::coe_init_cmd_t *cmd = *it2;
-                ec_slave_add_init_cmd(_pec, slave_nr, EC_MBX_COE, 
+                ec_slave_add_init_cmd(pec, slave_nr, EC_MBX_COE, 
                         (int)cmd->transition, cmd->index, cmd->subindex, 
                         cmd->ca, cmd->data, cmd->datalen);
 
@@ -203,18 +205,18 @@ void master::open() {
             throw str_exception("setting inits for slave %d, failed. no slave found!\n", slave_nr);
                 
         if (slv->dc.has_dc) {
-            _pec->slaves[slave_nr].dc.use_dc        = 1;
-            _pec->slaves[slave_nr].dc.type          = slv->dc.type;
-            _pec->slaves[slave_nr].dc.cycle_time_0  = slv->dc.cycle_time_0;
-            _pec->slaves[slave_nr].dc.cycle_time_1  = slv->dc.cycle_time_1;
-            _pec->slaves[slave_nr].dc.cycle_shift   = slv->dc.cycle_shift;
+            pec->slaves[slave_nr].dc.use_dc        = 1;
+            pec->slaves[slave_nr].dc.type          = slv->dc.type;
+            pec->slaves[slave_nr].dc.cycle_time_0  = slv->dc.cycle_time_0;
+            pec->slaves[slave_nr].dc.cycle_time_1  = slv->dc.cycle_time_1;
+            pec->slaves[slave_nr].dc.cycle_shift   = slv->dc.cycle_shift;
         } else 
-            _pec->slaves[slave_nr].dc.use_dc = 0;
+            pec->slaves[slave_nr].dc.use_dc = 0;
     }
 
     // -----------------------------------------------------------
     // creating and assigning process data groups
-    ec_create_pd_groups(_pec, _group_info.size());
+    ec_create_pd_groups(pec, _group_info.size());
             
     for (group_map_t::iterator it = _group_info.begin(); it != _group_info.end(); ++it) {
         int g_nr = it->first;
@@ -223,13 +225,13 @@ void master::open() {
                 it2 != it->second->_slaves.end(); ++it2) {
 
             int s_nr = *it2;
-            if (_pec->slave_cnt <= s_nr) {
+            if (pec->slave_cnt <= s_nr) {
                 log(warning, "slave %d not connected to ethercat bus, "
                         "not adding to group %d\n", s_nr, g_nr);
                 continue;
             }
 
-            _pec->slaves[s_nr].assigned_pd_group = g_nr;
+            pec->slaves[s_nr].assigned_pd_group = g_nr;
         }
     }
     
@@ -242,7 +244,7 @@ void master::open() {
 
         log(verbose, "trying to create mapping for slave %d\n", slave_nr);
 
-        if (_pec->slave_cnt > slave_nr) {
+        if (pec->slave_cnt > slave_nr) {
             // generate input mapping for coe
             int mapping_entries = slv->input_mapping.size();
             if (mapping_entries > 0) {
@@ -257,7 +259,7 @@ void master::open() {
                             slave_nr, *mit);
                 }
 
-                ec_slave_add_init_cmd(_pec, slave_nr, EC_MBX_COE, 0x24, 0x1C13, 
+                ec_slave_add_init_cmd(pec, slave_nr, EC_MBX_COE, 0x24, 0x1C13, 
                         0, 1, (char *)mapping, 2 * (mapping_entries + 1));
             }
 
@@ -275,7 +277,7 @@ void master::open() {
                             slave_nr, *mit);
                 }
 
-                ec_slave_add_init_cmd(_pec, slave_nr, EC_MBX_COE, 0x24, 0x1C12, 
+                ec_slave_add_init_cmd(pec, slave_nr, EC_MBX_COE, 0x24, 0x1C12, 
                         0, 1, (char *)mapping, 2 * (mapping_entries + 1));
             }
         } else {
@@ -283,7 +285,7 @@ void master::open() {
         }
     }
             
-    for (int nr = 0; nr < _pec->slave_cnt; ++nr) {
+    for (int nr = 0; nr < pec->slave_cnt; ++nr) {
         if (_slave_info.find(nr) == _slave_info.end()) {
             log(verbose, "slave %d creating empty one\n", nr);
 
@@ -294,9 +296,9 @@ void master::open() {
         sp_slave_t slv = _slave_info[nr];
 
         if (slv->dc.has_dc)
-            _pec->slaves[nr].dc.use_dc = 1;
+            pec->slaves[nr].dc.use_dc = 1;
         else 
-            _pec->slaves[nr].dc.use_dc = 0;
+            pec->slaves[nr].dc.use_dc = 0;
 
         slv->post_state_transition(module_state_init, module_state_init);
     }
@@ -304,10 +306,10 @@ void master::open() {
 
 //! destruction 
 master::~master() {
-    if (_pec)
-        ec_close(_pec);
+    if (pec)
+        ec_close(pec);
 
-    _pec = NULL;
+    pec = NULL;
     
     pthread_mutex_destroy(&async_lock);
     pthread_cond_destroy(&async_cond);
@@ -329,7 +331,7 @@ int master::set_state(module_state_t state) {
     uint32_t transition = GEN_STATE(this->state, state);
 
 #define STATE_TRANSITION(what, to) { \
-    for (int nr = 0; nr < _pec->slave_cnt; ++nr) { \
+    for (int nr = 0; nr < pec->slave_cnt; ++nr) { \
         if (_slave_info.find(nr) == _slave_info.end()) continue; \
         sp_slave_t slv = _slave_info[nr]; \
         slv->what##_state_transition(this->state, to); } } 
@@ -347,7 +349,7 @@ int master::set_state(module_state_t state) {
         case safeop_2_boot:
             // ====> stop receiving measurements
             stop();
-            _pec->tx_sync = 1;
+            pec->tx_sync = 1;
 
             if (state == module_state_preop)
                 break;
@@ -358,7 +360,7 @@ int master::set_state(module_state_t state) {
             // ====> re-/open ethercat device
 
             STATE_TRANSITION(pre, module_state_init);
-            ec_set_state(_pec, EC_STATE_INIT);
+            ec_set_state(pec, EC_STATE_INIT);
             STATE_TRANSITION(post, module_state_init);
             
             open();
@@ -367,7 +369,7 @@ int master::set_state(module_state_t state) {
                 break;
         case init_2_boot:
             STATE_TRANSITION(pre, module_state_boot);
-            ec_set_state(_pec, EC_STATE_BOOT);
+            ec_set_state(pec, EC_STATE_BOOT);
             STATE_TRANSITION(post, module_state_boot);
             break;
         case boot_2_init:
@@ -378,7 +380,7 @@ int master::set_state(module_state_t state) {
             open();
 
             STATE_TRANSITION(pre, module_state_init);
-            ec_set_state(_pec, EC_STATE_INIT);
+            ec_set_state(pec, EC_STATE_INIT);
             STATE_TRANSITION(post, module_state_init);
 
             if (state == module_state_init)
@@ -386,23 +388,45 @@ int master::set_state(module_state_t state) {
         case init_2_op:
         case init_2_safeop:
         case init_2_preop:
-            _pec->dc.mode = _dc_mode_string == "ref_clock" ? 
+            pec->dc.mode = _dc_mode_string == "ref_clock" ? 
                 ec_dc_info::dc_mode_ref_clock : ec_dc_info::dc_mode_master_clock;
             
             STATE_TRANSITION(pre, module_state_preop);
-            ec_set_state(_pec, EC_STATE_PREOP);
+            ec_set_state(pec, EC_STATE_PREOP);
             STATE_TRANSITION(post, module_state_preop);
 
             if (dc_offset_compensation_cycles > 0)
-                _pec->dc.offset_compensation = dc_offset_compensation_cycles;
-            if (dc_timer_override > 0)
-                _pec->dc.timer_override = dc_timer_override;
-            if (dc_offset_compensation_max > 0)
-                _pec->dc.offset_compensation_max = dc_offset_compensation_max;
+                pec->dc.offset_compensation = dc_offset_compensation_cycles;
 
-            for (int nr = 0; nr < _pec->slave_cnt; ++nr) {
+            if (dc_timer_override > 0)
+                pec->dc.timer_override = dc_timer_override;
+            else {
+                auto mdl = get_module();
+                if (mdl->triggers.size() != 1) {
+                    log(warning, "we have %d trigger devices set by robotkernel, "
+                            "please use only 1!\n", mdl->triggers.size());
+                } else {
+                    auto et = mdl->triggers.front();
+                    t_divisor = et->divisor;
+                    t_dev = kernel::get_instance()->get_trigger_device(et->dev_name);
+                }
+
+                // trigger devices stores rate in [Hz]
+                double rate = t_dev->get_rate() / t_divisor;
+
+                // ethercat master nees timer interval in [ns]
+                dc_timer_override = 
+                    pec->dc.timer_override = (1.f / rate) * 1E9;
+
+                log(info, "got trigger rate %f Hz\n", rate);
+            }
+            
+            if (dc_offset_compensation_max > 0)
+                pec->dc.offset_compensation_max = dc_offset_compensation_max;
+
+            for (int nr = 0; nr < pec->slave_cnt; ++nr) {
                 log(verbose, "slave %d: propagation delay %d [ns]\n", 
-                        nr, _pec->slaves[nr].pdelay);
+                        nr, pec->slaves[nr].pdelay);
 
                 sp_slave_t slv = _slave_info[nr];
 
@@ -411,16 +435,16 @@ int master::set_state(module_state_t state) {
                         it != slv->_sm_map.end(); ++it) {
                     int sm_nr = it->first;
 
-                    if (sm_nr < _pec->slaves[nr].sm_ch) {
+                    if (sm_nr < pec->slaves[nr].sm_ch) {
                         log(verbose, "slave %d: applying sm%d: adr 0x%X, len %d, flags 0x%X\n",
                                 nr, sm_nr, it->second->_address,
                                 it->second->_length,
                                 it->second->_flags);
 
-                        _pec->slaves[nr].sm[sm_nr].adr = it->second->_address;
-                        _pec->slaves[nr].sm[sm_nr].len = it->second->_length;
-                        _pec->slaves[nr].sm[sm_nr].flags = it->second->_flags;
-                        _pec->slaves[nr].sm_set_by_user = 1;
+                        pec->slaves[nr].sm[sm_nr].adr = it->second->_address;
+                        pec->slaves[nr].sm[sm_nr].len = it->second->_length;
+                        pec->slaves[nr].sm[sm_nr].flags = it->second->_flags;
+                        pec->slaves[nr].sm_set_by_user = 1;
                     }
                 }
             }
@@ -429,44 +453,33 @@ int master::set_state(module_state_t state) {
             if (state == module_state_preop)
                 break;
         case preop_2_op:
-        case preop_2_safeop:
+        case preop_2_safeop: {
             // ====> start receiving measurements
-            _dc_sync.first_run = true;
-
-            if (dc_timer_override == -1 && trigger_mod_name != "") {
-                double tmp;
-                kernel::request_cb(trigger_mod_name.c_str(), 
-                        MOD_REQUEST_GET_TRIGGER_INTERVAL, &tmp);
-
-                log(info, "got trigger interval from our trigger module: %+17.13f\n", 
-                        tmp);
-
-                dc_timer_override = 
-                _pec->dc.timer_override = tmp * 1E9;
-            }
+            dc_sync.first_run = true;
             
             // start cyclic operation via trigger
-            _pec->tx_sync = 0;
+            pec->tx_sync = 0;
             start();
 
             STATE_TRANSITION(pre, module_state_safeop);
-            ec_set_state(_pec, EC_STATE_SAFEOP);
+            ec_set_state(pec, EC_STATE_SAFEOP);
             STATE_TRANSITION(post, module_state_safeop);
 
             // process data is now available, create names process data
-            for (int nr = 0; nr < _pec->slave_cnt; ++nr) {
+            for (int nr = 0; nr < pec->slave_cnt; ++nr) {
                 log(verbose, "slave %d: propagation delay %d [ns]\n", 
-                        nr, _pec->slaves[nr].pdelay);
+                        nr, pec->slaves[nr].pdelay);
 
                 sp_slave_t slv = _slave_info[nr];
             }
                 
             if (state == module_state_safeop)
                 break;
+        }
         case safeop_2_op:
             // ====> start sending commands
             STATE_TRANSITION(pre, module_state_op);
-            ec_set_state(_pec, EC_STATE_OP);
+            ec_set_state(pec, EC_STATE_OP);
             STATE_TRANSITION(post, module_state_op);
             break;
         case op_2_op:
@@ -482,135 +495,17 @@ int master::set_state(module_state_t state) {
     return (this->state = state);
 }
 
-//! send a request to module
-/*!
- * \param reqcode request code
- * \param ptr pointer to request structure
- * \return success or failure
- */
-int master::request(int reqcode, void* ptr) {
-    int ret = 0;
-
-    switch (reqcode) {
-        case MOD_REQUEST_GET_PDIN: {            
-            process_data_t *pd = (process_data_t *)ptr;
-            pd->pd = NULL;
-            pd->len = 0;
-
-            if (pd->slave_id & ECAT_SLAVE_ID_GROUP) {
-                // group case
-                int g_nr = ECAT_SLAVE_ID_GET_GROUP(pd->slave_id);
-                if (g_nr < _pec->pd_group_cnt) {
-                    pd->pd = _pec->pd_groups[g_nr].pd + _pec->pd_groups[g_nr].pdout_len;
-                    pd->len = _pec->pd_groups[g_nr].pdin_len;
-                }
-            } else if (pd->slave_id & ECAT_SLAVE_ID_DC) {
-                pd->pd = &_pec->dc.dc_time;
-                pd->len = (uint8_t *)&_pec->dc.p_de_dc - (uint8_t *)&_pec->dc.dc_time;
-            } else {
-                int sub_slave_id = ECAT_SLAVE_ID_GET_SUB(pd->slave_id),
-                    slave_id = ECAT_SLAVE_ID_GET_SLAVE(pd->slave_id);
-
-                if (slave_id < _pec->slave_cnt) {
-                    if (pd->slave_id & ECAT_SLAVE_ID_SUB) {
-                        if (_pec->slaves[slave_id].subdev_cnt > (unsigned)sub_slave_id) {
-                            pd->pd = _pec->slaves[slave_id].subdevs[sub_slave_id].pdin.pd;
-                            pd->len = _pec->slaves[slave_id].subdevs[sub_slave_id].pdin.len;
-                        }
-                    } else {
-                        pd->pd = _pec->slaves[slave_id].pdin.pd;
-                        pd->len = _pec->slaves[slave_id].pdin.len;
-                    }
-                }
-            }
-
-            log(verbose, "GET_PDIN: %p/%d\n", pd->pd, pd->len);
-            break;
-        }
-        case MOD_REQUEST_GET_PDOUT: {            
-            process_data_t *pd = (process_data_t *)ptr;
-            pd->pd = NULL;
-            pd->len = 0;
-            if (pd->slave_id & ECAT_SLAVE_ID_GROUP) {
-                // group case
-                int g_nr = ECAT_SLAVE_ID_GET_GROUP(pd->slave_id);
-                if (g_nr < _pec->pd_group_cnt) {
-                    pd->pd = _pec->pd_groups[g_nr].pd;
-                    pd->len = _pec->pd_groups[g_nr].pdout_len;
-                }
-            } else {
-                int sub_slave_id = ECAT_SLAVE_ID_GET_SUB(pd->slave_id),
-                    slave_id = ECAT_SLAVE_ID_GET_SLAVE(pd->slave_id);
-
-                if (slave_id < _pec->slave_cnt) {
-                    if (pd->slave_id & ECAT_SLAVE_ID_SUB) {
-                        if (_pec->slaves[slave_id].subdev_cnt > (unsigned)sub_slave_id) {
-                            pd->pd = _pec->slaves[slave_id].subdevs[sub_slave_id].pdout.pd;
-                            pd->len = _pec->slaves[slave_id].subdevs[sub_slave_id].pdout.len;
-                        }
-                    } else {
-                        pd->pd = _pec->slaves[slave_id].pdout.pd;
-                        pd->len = _pec->slaves[slave_id].pdout.len;
-                    }
-                }
-            }
-
-            log(verbose, "GET_PDOUT: %p/%d\n", pd->pd, pd->len);
-            break;
-        }
-        case MOD_REQUEST_SET_PDOUT:
-            ret = set_pdout((set_pd_t *)ptr);
-            break;
-        case MOD_REQUEST_GET_PD_COOKIE:
-            *(uint64_t **)ptr = &pd_cookie;
-            break;
-        case MOD_REQUEST_SET_TRIGGER_CB: {
-            set_trigger_cb_t *cb = (set_trigger_cb_t *)ptr;
-            if (cb->cb == NULL) {
-                log(error, "ERROR could not register, callback is NULL\n");
-                break;
-            }
-
-            add_trigger_module(*cb);
-            break;
-        }
-        case MOD_REQUEST_UNSET_TRIGGER_CB: {
-            set_trigger_cb_t *cb = (set_trigger_cb_t *)ptr;
-
-            if (cb->cb == NULL) {
-                log(error, "ERROR could not remove, callback is NULL\n");
-                break;
-            }
-
-            remove_trigger_module(*cb);
-            break;
-        }
-        case MOD_REQUEST_TRIGGERED_BY: {
-            char **mdl_name = (char **)ptr;
-
-            log(info, "our trigger module is %s\n", *mdl_name);
-            trigger_mod_name = *mdl_name;
-            break;
-        }
-        default:
-            ret = -1;
-            break;
-    }
-
-    return ret;
-}
-
 //! module trigger callback
 void master::trigger() {
     int i = 0;
     int64_t max_timeout = 0;
     ec_timer_t dc_timeout;
 
-    if (!_pec || (_pec->tx_sync == 1))
+    if (!pec || (pec->tx_sync == 1))
         return;
         
-    for (i = 0; i < _pec->pd_group_cnt; ++i) {
-        group *g = _group_info[i];
+    for (i = 0; i < pec->pd_group_cnt; ++i) {
+        auto& g = _group_info[i];
         if ((++g->_divisor_cnt % g->_divisor) != 0)
             continue; 
 
@@ -621,46 +516,38 @@ void master::trigger() {
 
         // reset divisor cnt and queue datagram
         g->_divisor_cnt = 0;
-        ec_send_process_data_group(_pec, i);
-        ec_timer_init(&g->timeout, g->_recv_timeout);
+        ec_send_process_data_group(pec, i);
+        ec_timer_init(&g->timeout, g->recv_timeout);
 
-        if (max_timeout < g->_recv_timeout)
-            max_timeout = g->_recv_timeout;
+        if (max_timeout < g->recv_timeout)
+            max_timeout = g->recv_timeout;
     }
 
-    if (_pec->dc.have_dc) {
-        ec_send_distributed_clocks_sync(_pec);
+    if (pec->dc.have_dc) {
+        ec_send_distributed_clocks_sync(pec);
         ec_timer_init(&dc_timeout, max_timeout);
     }
 
-    hw_tx(_pec->phw);
+    hw_tx(pec->phw);
 
     pd_cookie++;
     pthread_cond_signal(&pd_cond);
 
-    for (i = 0; i < _pec->pd_group_cnt; ++i) {
-        group *g = _group_info[i];
+    for (i = 0; i < pec->pd_group_cnt; ++i) {
+        auto& g = _group_info[i];
 
         if (g->_divisor_cnt != 0)
             continue; 
 
-        int ret = ec_receive_process_data_group(_pec, i, &g->timeout);
+        int ret = ec_receive_process_data_group(pec, i, &g->timeout);
 
-        if (ret == 0) {
-            trigger_modules(ECAT_SLAVE_ID_GROUP | g->_index);
-
-            for (auto it = g->_slaves.begin(); it != g->_slaves.end(); ++it) {
-                int slave = *it;
-
-                _slave_info[slave]->pdin_handler();
-                trigger_modules(slave);
-            }
-        }
+        if (ret == 0)
+            g->trigger_modules();
     }
 
     int slave;
-    for (slave = 0; slave < _pec->slave_cnt; ++slave) {
-        ec_slave_t *slv = &_pec->slaves[slave];
+    for (slave = 0; slave < pec->slave_cnt; ++slave) {
+        ec_slave_t *slv = &pec->slaves[slave];
 
         if (slv->eeprom.mbx_supported && slv->mbx_read.sm_state) {
             if (*slv->mbx_read.sm_state & 0x08) {
@@ -670,31 +557,37 @@ void master::trigger() {
         }
     }
 
-    if (_pec->dc.have_dc) {
-        ec_receive_distributed_clocks_sync(_pec, &dc_timeout);
+    if (pec->dc.have_dc) {
+        ec_receive_distributed_clocks_sync(pec, &dc_timeout);
 
-        if (    (_pec->dc.mode == ec_dc_info::dc_mode_ref_clock) && 
-                (_pec->dc.offset_compensation_cnt == 0)) {
-            double diff = (_pec->dc.act_diff / 1E9);
+        if (    (pec->dc.mode == ec_dc_info::dc_mode_ref_clock) && 
+                (pec->dc.offset_compensation_cnt == 0)) {
+            double diff = (pec->dc.act_diff / 1E9);
 
-            if (!_dc_sync.first_run) {
+            if (!dc_sync.first_run) {
                 double tmp;
-                kernel::request_cb(trigger_mod_name.c_str(), 
-                        MOD_REQUEST_GET_TRIGGER_INTERVAL, &tmp);
+                
+                // trigger devices stores rate in [Hz]
+                double rate = t_dev->get_rate() / t_divisor;
 
-                tmp -= (-0.1 * (diff/_pec->dc.offset_compensation) ) + 
-                    (_dc_sync.last_diff - diff)/(_pec->dc.offset_compensation);
+                // calculate new rate in [s]
+                double act_timer = (1.f / rate);
+                act_timer -= (-0.1 * (diff/pec->dc.offset_compensation) ) + 
+                    (dc_sync.last_diff - diff)/(pec->dc.offset_compensation);
 
-                kernel::request_cb(trigger_mod_name.c_str(), 
-                        MOD_REQUEST_SET_TRIGGER_INTERVAL, &tmp);
+                try {
+                    t_dev->set_rate(1.f / act_timer);
 
-                log(verbose, "setting new clock %13.10f, last_diff %13.10f, diff %13.10f, "
-                        "offset_comp %d\n", tmp, _dc_sync.last_diff, diff, 
-                        _pec->dc.offset_compensation);
+                    log(verbose, "setting new clock %13.10f, last_diff %13.10f, diff %13.10f, "
+                            "offset_comp %d\n", tmp, dc_sync.last_diff, diff, 
+                            pec->dc.offset_compensation);
+                } catch (exception& e) {
+                    log(warning, "setting new clock failed: %s\n", e.what());
+                }
             }
 
-            _dc_sync.first_run = false;
-            _dc_sync.last_diff = diff;
+            dc_sync.first_run = false;
+            dc_sync.last_diff = diff;
         }
     }
 }
@@ -717,8 +610,8 @@ void master::run() {
             continue;
 
         int slave;
-        for (slave = 0; slave < _pec->slave_cnt; ++slave) {
-            ec_slave_t *slv = &_pec->slaves[slave];
+        for (slave = 0; slave < pec->slave_cnt; ++slave) {
+            ec_slave_t *slv = &pec->slaves[slave];
 
             if (slv->eeprom.mbx_supported && slv->mbx_read.sm_state) {
                 if (slv->mbx_read.skip_next == 1) {
@@ -733,7 +626,7 @@ void master::run() {
                     log(verbose, "async worker: slave %d read mailbox is full\n", slave);
 
                     char buf[1024];
-                    int wkc = ec_mbx_receive(_pec, slave, EC_DEFAULT_TIMEOUT_MBX);
+                    int wkc = ec_mbx_receive(pec, slave, EC_DEFAULT_TIMEOUT_MBX);
                     if (wkc) {
                         int cnt = sprintf(buf, "wkc %d: ", wkc);
 
@@ -807,23 +700,23 @@ int master::set_pdout(set_pd_t *pdout) {
         if (pdout->pd[i].slave_id & ECAT_SLAVE_ID_GROUP) {
             // group case
             int g_nr = ECAT_SLAVE_ID_GET_GROUP(pdout->pd[i].slave_id);
-            if (g_nr < _pec->pd_group_cnt) {
-                to = _pec->pd_groups[g_nr].pd;
-                to_len = _pec->pd_groups[g_nr].pdout_len;
+            if (g_nr < pec->pd_group_cnt) {
+                to = pec->pd_groups[g_nr].pd;
+                to_len = pec->pd_groups[g_nr].pdout_len;
             }
         } else {
             int sub_slave_id = ECAT_SLAVE_ID_GET_SUB(pdout->pd[i].slave_id),
                 slave_id = ECAT_SLAVE_ID_GET_SLAVE(pdout->pd[i].slave_id);
 
-            if (slave_id < _pec->slave_cnt) {
+            if (slave_id < pec->slave_cnt) {
                 if (pdout->pd[i].slave_id & ECAT_SLAVE_ID_SUB) {
-                    if (_pec->slaves[slave_id].subdev_cnt > (unsigned)sub_slave_id) {
-                        to = _pec->slaves[slave_id].subdevs[sub_slave_id].pdout.pd;
-                        to_len = _pec->slaves[slave_id].subdevs[sub_slave_id].pdout.len;
+                    if (pec->slaves[slave_id].subdev_cnt > (unsigned)sub_slave_id) {
+                        to = pec->slaves[slave_id].subdevs[sub_slave_id].pdout.pd;
+                        to_len = pec->slaves[slave_id].subdevs[sub_slave_id].pdout.len;
                     }
                 } else {
-                    to = _pec->slaves[slave_id].pdout.pd;
-                    to_len = _pec->slaves[slave_id].pdout.len;
+                    to = pec->slaves[slave_id].pdout.pd;
+                    to_len = pec->slaves[slave_id].pdout.len;
                 }
             }
         }

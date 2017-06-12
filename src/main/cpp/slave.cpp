@@ -250,7 +250,7 @@ void slave::add_init_cmds() {
             // get description
             ec_coe_sdo_entry_desc_t entry_desc;
             entry_desc.data = NULL;
-            int ret2 = ec_coe_sdo_entry_desc_read(master_dev->_pec, index, 
+            int ret2 = ec_coe_sdo_entry_desc_read(master_dev->pec, index, 
                     cmd->index, cmd->subindex, 0x7F, &entry_desc);
 
             if (ret2 > 0) {
@@ -379,7 +379,7 @@ void slave::add_init_cmds() {
         }
         
         if (cmd->data) {
-            ec_slave_add_init_cmd(master_dev->_pec, index, EC_MBX_COE, 
+            ec_slave_add_init_cmd(master_dev->pec, index, EC_MBX_COE, 
                     (int)cmd->transition, cmd->index, cmd->subindex, 
                     cmd->ca, cmd->data, cmd->datalen);
 
@@ -395,7 +395,7 @@ void slave::add_init_cmds() {
         if (cmd->already_added)
             continue;
 
-        ec_slave_add_init_cmd(master_dev->_pec, index, EC_MBX_SOE, 
+        ec_slave_add_init_cmd(master_dev->pec, index, EC_MBX_SOE, 
                 (int)cmd->transition, cmd->idn, cmd->element, 
                 cmd->atn, cmd->data, cmd->datalen);
 
@@ -455,28 +455,28 @@ void slave::pre_state_transition(module_state_t from, module_state_t to) {
             add_init_cmds();
 
             // ====> configure distributed clocks if needed 
-            if (master_dev->_pec->dc.have_dc && dc.has_dc) {
+            if (master_dev->pec->dc.have_dc && dc.has_dc) {
                 if (dc.cycle_time_0 == 0)
-                    dc.cycle_time_0 = master_dev->_pec->dc.timer_override; 
+                    dc.cycle_time_0 = master_dev->pec->dc.timer_override; 
 
                 if (dc.type == 1) {
                     if (dc.cycle_time_1 == 0)
-                        dc.cycle_time_1 = master_dev->_pec->dc.timer_override; 
+                        dc.cycle_time_1 = master_dev->pec->dc.timer_override; 
 
                     master_dev->log(verbose, "slave %2d configuring dc sync 01, "
                             "cycle_times %d/%d, cycle_shift %d\n",
                             index, dc.cycle_time_0, dc.cycle_time_1, dc.cycle_shift);
 
-                    ec_dc_sync01(master_dev->_pec, index, 1, dc.cycle_time_0, dc.cycle_time_1, dc.cycle_shift);
+                    ec_dc_sync01(master_dev->pec, index, 1, dc.cycle_time_0, dc.cycle_time_1, dc.cycle_shift);
                 } else {
                     master_dev->log(verbose, "slave %2d configuring dc sync 0, "
                             "cycle_time %d, cycle_shift %d\n",
                             index, dc.cycle_time_0, dc.cycle_shift);
 
-                    ec_dc_sync0(master_dev->_pec, index, 1, dc.cycle_time_0, dc.cycle_shift);
+                    ec_dc_sync0(master_dev->pec, index, 1, dc.cycle_time_0, dc.cycle_shift);
                 }
             } else
-                ec_dc_sync0(master_dev->_pec, index, 0, 0, 0);
+                ec_dc_sync0(master_dev->pec, index, 0, 0, 0);
 
             if (to == module_state_safeop)
                 break;
@@ -495,8 +495,8 @@ void slave::pre_state_transition(module_state_t from, module_state_t to) {
  * \param transition state transition
  */
 void slave::post_state_transition(module_state_t from, module_state_t to) {
-    uint32_t mbx_sup = master_dev->_pec->slaves[index].eeprom.mbx_supported;
-    uint32_t soe_ch  = master_dev->_pec->slaves[index].eeprom.general.soe_channels;
+    uint32_t mbx_sup = master_dev->pec->slaves[index].eeprom.mbx_supported;
+    uint32_t soe_ch  = master_dev->pec->slaves[index].eeprom.general.soe_channels;
     kernel& k = *kernel::get_instance();
 
 #define REMOVE_SERVICE_REQUESTER(req) \
@@ -596,22 +596,22 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                 }
             }
     
-            if (master_dev->_pec->slaves[index].pdin.len) {
+            if (master_dev->pec->slaves[index].pdin.len) {
                 k.remove_process_data(pdin);
                 
                 string pdo_desc = mbx_coe->get_pdo_description(0x1C13);
                 pdin = make_shared<robotkernel::process_data>(
-                        master_dev->_pec->slaves[index].pdin.len, 
+                        master_dev->pec->slaves[index].pdin.len, 
                         master_dev->name, format_string("slave_%d.pd.in", index), pdo_desc);
                 k.add_process_data(pdin);
             }
             
-            if (master_dev->_pec->slaves[index].pdout.len) {
+            if (master_dev->pec->slaves[index].pdout.len) {
                 k.remove_process_data(pdout);
 
                 string pdo_desc = mbx_coe->get_pdo_description(0x1C12);
                 pdout = make_shared<robotkernel::process_data>(
-                        master_dev->_pec->slaves[index].pdout.len, 
+                        master_dev->pec->slaves[index].pdout.len, 
                         master_dev->name, format_string("slave_%d.pd.out", index), pdo_desc);
                 k.add_process_data(pdout);
             }
@@ -646,7 +646,7 @@ void slave::sercos::sercos_read_idn(const uint16_t& idn,
     size_t buf_len = 0;
     int ret;
         
-    if ((ret = ec_soe_read(slv->master_dev->_pec, slv->index, atn, idn,
+    if ((ret = ec_soe_read(slv->master_dev->pec, slv->index, atn, idn,
                 elements >> 1, buf, &buf_len)) != 0) {
         throw str_exception("slave %2d: reading sercos atn %d idn 0x%X "
                 "elements 0x%X returned errorcode 0x%X!\n", slv->index, 
@@ -676,7 +676,7 @@ void slave::sercos::sercos_write_idn(const uint16_t& idn,
  * \param pd return input process data
  */
 void slave::get_pdin(service_provider::process_data_inspection::pd_t& pd) {
-    ec_slave_t *slv = &master_dev->_pec->slaves[index];
+    ec_slave_t *slv = &master_dev->pec->slaves[index];
     pd.resize(slv->pdin.len);
 
     if (slv->pdin.len)
@@ -688,7 +688,7 @@ void slave::get_pdin(service_provider::process_data_inspection::pd_t& pd) {
  * \param pd return output process data
  */
 void slave::get_pdout(service_provider::process_data_inspection::pd_t& pd) {
-    ec_slave_t *slv = &master_dev->_pec->slaves[index];
+    ec_slave_t *slv = &master_dev->pec->slaves[index];
     pd.resize(slv->pdout.len);
 
     if (slv->pdout.len)
@@ -697,7 +697,7 @@ void slave::get_pdout(service_provider::process_data_inspection::pd_t& pd) {
 
 //! process data out handler
 void slave::pdout_handler() {
-    ec_slave_t *slv = &master_dev->_pec->slaves[index];
+    ec_slave_t *slv = &master_dev->pec->slaves[index];
     if (!pdout || (slv->pdout.len == 0))
         return;
 
@@ -707,7 +707,7 @@ void slave::pdout_handler() {
 
 //! process data in handler
 void slave::pdin_handler() {
-    ec_slave_t *slv = &master_dev->_pec->slaves[index];
+    ec_slave_t *slv = &master_dev->pec->slaves[index];
     if (!pdin || (slv->pdin.len == 0))
         return;
 

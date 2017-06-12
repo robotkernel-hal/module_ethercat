@@ -64,14 +64,13 @@ class slave;
 extern const std::string state_strings[];
 
 class master :  public robotkernel::module_base, 
-                public robotkernel::trigger_base,
                 public robotkernel::cmd_delay,
                 public robotkernel::runnable {
     friend class slave;
 
     public:
-        typedef struct group {
-            group(int index, const YAML::Node& node);
+        typedef struct group : public robotkernel::trigger_base {
+            group(master *parent, int index, const YAML::Node& node);
 
             //! register interfaces for slave
             /*!
@@ -85,16 +84,17 @@ class master :  public robotkernel::module_base,
              */
             void unregister_interfaces(const std::string& name);
 
-            int _recv_timeout;
+            int recv_timeout;
             int _index;
             int _divisor;
             int _divisor_cnt;
             std::list<int> _slaves;
             
             ec_timer_t timeout;
+            master *parent;
         } group_t;
 
-        typedef std::map<int, group *> group_map_t;
+        typedef std::map<int, std::shared_ptr<group>> group_map_t;
         group_map_t _group_info;
 
         typedef std::shared_ptr<slave> wp_slave_t;
@@ -107,21 +107,21 @@ class master :  public robotkernel::module_base,
         struct {
             bool first_run;
             double last_diff;
-        } _dc_sync;
+        } dc_sync;
 
-        ec_t *_pec;
+        ec_t *pec;
 
-        int _recv_prio;
-        int _recv_mask;
-        std::string _ifname;
-        bool _log_eeprom_data;
+        int recv_prio;
+        int recv_mask;
+        std::string ifname;
+        bool log_eeprom_data;
 
         int dc_offset_compensation_cycles;
         int dc_offset_compensation_max;
         int dc_timer_override;
 
-        int _trigger_interval;
-        bool _thr_startup;
+        int trigger_interval;
+        bool threaded_startup;
             
         uint64_t pd_cookie;
         pthread_mutex_t pd_lock;
@@ -131,6 +131,9 @@ class master :  public robotkernel::module_base,
         pthread_cond_t async_cond;
 
         std::string trigger_mod_name;
+
+        int t_divisor;                                       //!< trigger divisor
+        robotkernel::kernel::sp_trigger_device_t t_dev;      //!< trigger device
     public:
         //! construction
         /*!
@@ -152,14 +155,6 @@ class master :  public robotkernel::module_base,
          * \return success or failure
          */
         int set_state(module_state_t state);
-
-        //! send a request to module
-        /*!
-         * \param reqcode request code
-         * \param ptr pointer to request structure
-         * \return success or failure
-         */
-        int request(int reqcode, void* ptr);
 
         //! async handler thread
         void run();
