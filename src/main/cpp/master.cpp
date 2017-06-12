@@ -541,8 +541,14 @@ void master::trigger() {
 
         int ret = ec_receive_process_data_group(pec, i, &g->timeout);
 
-        if (ret == 0)
+        if (ret == 0) {
+            for (auto it = g->_slaves.begin(); it != g->_slaves.end(); ++it) {
+                int slave = *it;
+                _slave_info[slave]->pdin_handler();
+            }
+
             g->trigger_modules();
+        }
     }
 
     int slave;
