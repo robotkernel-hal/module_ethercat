@@ -132,8 +132,8 @@ class master :  public robotkernel::module_base,
 
         std::string trigger_mod_name;
 
-        int t_divisor;                                       //!< trigger divisor
-        robotkernel::kernel::sp_trigger_device_t t_dev;      //!< trigger device
+        int t_divisor;                               //!< trigger divisor
+        robotkernel::sp_trigger_device_t t_dev;      //!< trigger device
     public:
         //! construction
         /*!

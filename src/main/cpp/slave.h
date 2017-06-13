@@ -354,8 +354,8 @@ class slave :
         master *master_dev;     //!< master device
 
         // named process data
-        robotkernel::kernel::sp_process_data_t pdin;
-        robotkernel::kernel::sp_process_data_t pdout;
+        robotkernel::sp_process_data_t pdin;
+        robotkernel::sp_process_data_t pdout;
 
         // service requesters
         robotkernel::sp_service_requester_t _mbx_foe;    //!< file service requester
