@@ -1,8 +1,6 @@
 //! robotkernel module ethercat slave
 /*!
- * author: Robert Burger
- *
- * $Id$
+ * author: Robert Burger <robert.burger@dlr.de>
  */
 
 /*
@@ -30,11 +28,11 @@ using namespace robotkernel;
 using namespace string_util;
 using namespace module_ethercat;
 
-slave::canopen::canopen(std::shared_ptr<slave> slv, const request_type& type) 
-:   service_provider::canopen_protocol::base(slv->master_dev->name, 
-        format_string("slave_%d.%s", slv->index, 
-            type == request_type_eeprom ? "eeprom" : "mailbox")), 
-    slv(slv), type(type) {
+slave::canopen::canopen(std::shared_ptr<slave> slv, const request_type& type) :
+    service_provider::canopen_protocol::base(slv->master_dev->name, format_string(
+                "slave_%d.%s", slv->index, type == request_type_eeprom ? "eeprom" : "mailbox")), 
+    slv(slv), type(type) 
+{
 }
         
 //! return a list with all indices of the object dictionary

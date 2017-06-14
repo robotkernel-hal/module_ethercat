@@ -1,8 +1,6 @@
 //! robotkernel module ethercat slave
 /*!
- * author: Robert Burger
- *
- * $Id$
+ * author: Robert Burger <robert.burger@dlr.de>
  */
 
 /*
@@ -36,13 +34,6 @@ slave::file_protocol::file_protocol(std::shared_ptr<slave> slv)
 {
 }
 
-        //! file read 
-        //        typedef struct file_readwrite_info {
-        //                    std::string          password;   //! [in]     file password
-        //                                std::string          file_name;  //! [in]     file name
-        //                                            std::vector<uint8_t> file_data;  //! [in/out] file data
-        //                                                    } file_readwrite_info_t;
-        //
 //! read from file
 /*!
  * \param info file info structure

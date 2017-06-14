@@ -66,40 +66,6 @@ void log_func(int lvl, void *user, const char *format, ...) {
     e->log(loglvl, buf);
 }
 
-master::group::group(master *parent, int index, const YAML::Node& node) 
-    : trigger_base(format_string("%s.group_%d.trigger", parent->name.c_str(), index)),
-    parent(parent)
-{
-    _index          = index;
-    _divisor        = get_as<int>(node, "divisor");
-    _divisor_cnt    = 0;
-    recv_timeout   = get_as<int>(node, "recv_timeout", 1000000);
-
-    for (YAML::const_iterator it = node["slaves"].begin(); 
-            it != node["slaves"].end(); ++it)
-        _slaves.push_back(it->as<int>());
-}
-
-//! register interfaces for group
-/*!
- * \param name owner
- */
-void master::group::register_interfaces(const std::string& name) {
-//	kernel& k = *kernel::get_instance();
-//	k.add_service_requester("process_data_inspection", 
-//			name, format_string("group_%d", _index),
-//			(signed int)(_index | ECAT_SLAVE_ID_GROUP));
-}
-
-//! unregister interfaces of group
-/*!
- * \param name owner
- */
-void master::group::unregister_interfaces(const std::string& name) {
-//	kernel& k = *kernel::get_instance();
-//	k.remove_service_requester("process_data_inspection", 
-//			name, (signed int)(_index | ECAT_SLAVE_ID_GROUP));
-}
 
 //! construction
 /*!
@@ -130,8 +96,8 @@ master::master(const std::string& name, const YAML::Node& node)
         for (YAML::const_iterator it = node["groups"].begin();
                 it != node["groups"].end(); ++it) {
             int g_nr = it->first.as<int>();
-            _group_info[g_nr] = make_shared<group>(this, g_nr, it->second);
-            kernel::get_instance()->add_trigger_device(_group_info[g_nr]);
+            groups[g_nr] = make_shared<group>(this, g_nr, it->second);
+            kernel::get_instance()->add_trigger_device(groups[g_nr]);
         }
     }
 
@@ -216,9 +182,9 @@ void master::open() {
 
     // -----------------------------------------------------------
     // creating and assigning process data groups
-    ec_create_pd_groups(pec, _group_info.size());
+    ec_create_pd_groups(pec, groups.size());
             
-    for (group_map_t::iterator it = _group_info.begin(); it != _group_info.end(); ++it) {
+    for (group_map_t::iterator it = groups.begin(); it != groups.end(); ++it) {
         int g_nr = it->first;
 
         for (std::list<int>::iterator it2 = it->second->_slaves.begin();
@@ -324,6 +290,8 @@ master::~master() {
  * \return success or failure
  */
 int master::set_state(module_state_t state) {
+    kernel& k = *kernel::get_instance();
+
     log(info, "setting state from %s to %s\n", 
             state_to_string(this->state), state_to_string(state));
 
@@ -348,6 +316,11 @@ int master::set_state(module_state_t state) {
         case safeop_2_init:
         case safeop_2_boot:
             // ====> stop receiving measurements
+
+            // remove group trigger devices
+            for (const auto& kv : groups)
+                k.remove_trigger_device(kv.second);
+
             stop();
             pec->tx_sync = 1;
 
@@ -414,7 +387,7 @@ int master::set_state(module_state_t state) {
                 // trigger devices stores rate in [Hz]
                 double rate = t_dev->get_rate() / t_divisor;
 
-                // ethercat master nees timer interval in [ns]
+                // ethercat master need timer interval in [ns]
                 dc_timer_override = 
                     pec->dc.timer_override = (1.f / rate) * 1E9;
 
@@ -472,6 +445,10 @@ int master::set_state(module_state_t state) {
 
                 sp_slave_t slv = _slave_info[nr];
             }
+
+            // add group trigger devices
+            for (const auto& kv : groups)
+                k.add_trigger_device(kv.second);
                 
             if (state == module_state_safeop)
                 break;
@@ -505,14 +482,12 @@ void master::trigger() {
         return;
         
     for (i = 0; i < pec->pd_group_cnt; ++i) {
-        auto& g = _group_info[i];
+        auto& g = groups[i];
         if ((++g->_divisor_cnt % g->_divisor) != 0)
             continue; 
 
-        for (auto it = g->_slaves.begin(); it != g->_slaves.end(); ++it) {
-            int slave = *it;
+        for (const auto& slave : g->_slaves)
             _slave_info[slave]->pdout_handler();
-        }
 
         // reset divisor cnt and queue datagram
         g->_divisor_cnt = 0;
@@ -534,7 +509,7 @@ void master::trigger() {
     pthread_cond_signal(&pd_cond);
 
     for (i = 0; i < pec->pd_group_cnt; ++i) {
-        auto& g = _group_info[i];
+        auto& g = groups[i];
 
         if (g->_divisor_cnt != 0)
             continue; 
@@ -571,7 +546,7 @@ void master::trigger() {
             double diff = (pec->dc.act_diff / 1E9);
 
             if (!dc_sync.first_run) {
-                double tmp;
+                double tmp = 0.;
                 
                 // trigger devices stores rate in [Hz]
                 double rate = t_dev->get_rate() / t_divisor;
@@ -654,6 +629,7 @@ void master::run() {
     log(info, "async handler thread stopped\n");
 }
 
+#if oldcode
 //! set new pdout pointers
 /*!
  * \param pdout new pdout pointers
@@ -733,4 +709,4 @@ int master::set_pdout(set_pd_t *pdout) {
 
     return 0;
 }
-
+#endif

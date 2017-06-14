@@ -1,8 +1,6 @@
 //! robotkernel module ethercat slave
 /*!
- * author: Robert Burger
- *
- * $Id$
+ * author: Robert Burger <robert.burger@dlr.de>
  */
 
 /*
@@ -38,12 +36,6 @@
 #include "service_provider/sercos_protocol/base.h"
 #include "service_provider/file_protocol/base.h"
 #include "service_provider/process_data_inspection/base.h"
-
-//#define MEM_ADDRESS(x)          ((x) & 0x0000FFFF)
-//#define MEM_TYPE_SLAVE_MEM      0x00000000
-//#define MEM_TYPE_SLAVE_EEPROM   0x00010000
-//#define MEM_TYPE_MASK           0x000F0000
-
 
 extern "C" void convert_string_to_hex(std::string input, 
         char **output, size_t *outlen);

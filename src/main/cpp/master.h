@@ -1,8 +1,6 @@
 //! robotkernel module ethercat master
 /*!
- * author: Robert Burger
- *
- * $Id$
+ * author: Robert Burger <robert.burger@dlr.de>
  */
 
 /*
@@ -36,6 +34,8 @@
 #include "robotkernel/module_base.h"
 #include "robotkernel/cmd_delay.h"
 #include "robotkernel/exceptions.h"
+
+#include "group.h"
 #include "slave.h"
 
 #include "libethercat/ec.h"
@@ -46,128 +46,103 @@
 #include "libethercat/soe.h"
 #include "libethercat/foe.h"
 
-#define ECAT_SLAVE_ID_GROUP             (0x80000000)
-#define ECAT_SLAVE_ID_DC                (0x20000000)
-#define ECAT_SLAVE_ID_SUB               (0x10000000)
-#define ECAT_SLAVE_ID_EEPROM            (0x01000000)
-            
-#define ECAT_SLAVE_ID_GET_MEM_TYPE(x)   (((x) & 0x0F000000) >> 24)
-#define ECAT_SLAVE_ID_GET_SLAVE(x)      ((x) & 0x0000FFFF)
-#define ECAT_SLAVE_ID_GET_GROUP(x)      ((x) & 0x0000FFFF)
-#define ECAT_SLAVE_ID_GET_SUB(x)        (((x) & 0x00FF0000) >> 16)
-
-
 //! module_ethercat::
 namespace module_ethercat {
+#ifdef EMACS
+}
+#endif
 
 class slave;
 extern const std::string state_strings[];
 
-class master :  public robotkernel::module_base, 
-                public robotkernel::cmd_delay,
-                public robotkernel::runnable {
+class master :
+    public robotkernel::module_base, 
+    public robotkernel::cmd_delay,
+    public robotkernel::runnable 
+{
     friend class slave;
 
     public:
-        typedef struct group : public robotkernel::trigger_base {
-            group(master *parent, int index, const YAML::Node& node);
 
-            //! register interfaces for slave
-            /*!
-             * \param name owner 
-             */
-            void register_interfaces(const std::string& name);
+    typedef std::map<int, std::shared_ptr<group>> group_map_t;
+    group_map_t groups;
 
-            //! unregister interfaces of slave
-            /*!
-			 * \param name owner
-             */
-            void unregister_interfaces(const std::string& name);
+    typedef std::shared_ptr<slave> wp_slave_t;
+    typedef std::shared_ptr<slave> sp_slave_t;
+    typedef std::map<int, wp_slave_t> slave_map_t;
+    slave_map_t _slave_info;
 
-            int recv_timeout;
-            int _index;
-            int _divisor;
-            int _divisor_cnt;
-            std::list<int> _slaves;
-            
-            ec_timer_t timeout;
-            master *parent;
-        } group_t;
+    std::string _dc_mode_string;
 
-        typedef std::map<int, std::shared_ptr<group>> group_map_t;
-        group_map_t _group_info;
+    struct {
+        bool first_run;
+        double last_diff;
+    } dc_sync;
 
-        typedef std::shared_ptr<slave> wp_slave_t;
-        typedef std::shared_ptr<slave> sp_slave_t;
-        typedef std::map<int, wp_slave_t> slave_map_t;
-        slave_map_t _slave_info;
+    ec_t *pec;
 
-        std::string _dc_mode_string;
+    int recv_prio;
+    int recv_mask;
+    std::string ifname;
+    bool log_eeprom_data;
 
-        struct {
-            bool first_run;
-            double last_diff;
-        } dc_sync;
+    int dc_offset_compensation_cycles;
+    int dc_offset_compensation_max;
+    int dc_timer_override;
 
-        ec_t *pec;
+    int trigger_interval;
+    bool threaded_startup;
 
-        int recv_prio;
-        int recv_mask;
-        std::string ifname;
-        bool log_eeprom_data;
+    uint64_t pd_cookie;
+    pthread_mutex_t pd_lock;
+    pthread_cond_t pd_cond;
 
-        int dc_offset_compensation_cycles;
-        int dc_offset_compensation_max;
-        int dc_timer_override;
+    pthread_mutex_t async_lock;
+    pthread_cond_t async_cond;
 
-        int trigger_interval;
-        bool threaded_startup;
-            
-        uint64_t pd_cookie;
-        pthread_mutex_t pd_lock;
-        pthread_cond_t pd_cond;
+    std::string trigger_mod_name;
 
-        pthread_mutex_t async_lock;
-        pthread_cond_t async_cond;
-
-        std::string trigger_mod_name;
-
-        int t_divisor;                               //!< trigger divisor
-        robotkernel::sp_trigger_device_t t_dev;      //!< trigger device
+    int t_divisor;                               //!< trigger divisor
+    robotkernel::sp_trigger_device_t t_dev;      //!< trigger device
     public:
-        //! construction
-        /*!
-         * \param node yaml intialization node
-         */
-        master(const std::string& name, const YAML::Node& node);
+    //! construction
+    /*!
+     * \param node yaml intialization node
+     */
+    master(const std::string& name, const YAML::Node& node);
 
-        //! destruction 
-        ~master();
+    //! destruction 
+    ~master();
 
-        void open();
+    void open();
 
-        //! module trigger callback
-        void trigger();
+    //! module trigger callback
+    void trigger();
 
-        //! set module state machine to defined state
-        /*!
-         * \param state requested state
-         * \return success or failure
-         */
-        int set_state(module_state_t state);
+    //! set module state machine to defined state
+    /*!
+     * \param state requested state
+     * \return success or failure
+     */
+    int set_state(module_state_t state);
 
-        //! async handler thread
-        void run();
+    //! async handler thread
+    void run();
 
-        //! set new pdout pointers
-        /*!
-         * \param pdout new pdout pointers
-         * \return 0 on success
-         */
-        int set_pdout(set_pd_t *pdout);
+#if oldcode
+    //! set new pdout pointers
+    /*!
+     * \param pdout new pdout pointers
+     * \return 0 on success
+     */
+    int set_pdout(set_pd_t *pdout);
+#endif
 };
 
 //! module_ethercat::
+#ifdef EMACS
+{
+#endif
 };
 
 #endif // __MASTER_H__
