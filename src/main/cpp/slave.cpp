@@ -499,15 +499,15 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
     uint32_t soe_ch  = master_dev->pec->slaves[index].eeprom.general.soe_channels;
     kernel& k = *kernel::get_instance();
 
-#define REMOVE_SERVICE_REQUESTER(req) \
-            { if (req) { k.remove_service_requester(req); (req).reset(); } }
+#define REMOVE_SERVICE_COLLECTOR(req) \
+            { if (req) { k.remove_device(req); (req).reset(); } }
 
-#define ADD_SERVICE_REQUESTER(req) { \
-                k.add_service_requester(req); }
+#define ADD_SERVICE_COLLECTOR(req) { \
+                k.add_device(req); }
 
-#define ADD_SERVICE_REQUESTER_CLASS(req, cls, ...) \
+#define ADD_SERVICE_COLLECTOR_CLASS(req, cls, ...) \
             { if (!(req)) { (req) = make_shared<cls>(shared_from_this(), ##__VA_ARGS__); \
-                ADD_SERVICE_REQUESTER(req); } }
+                ADD_SERVICE_COLLECTOR(req); } }
     // get transition
     uint32_t transition = GEN_STATE(from, to);
 
@@ -523,43 +523,40 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
         case safeop_2_init:
         case safeop_2_boot:
             // ====> stop receiving measurements
-            REMOVE_SERVICE_REQUESTER(shared_from_this()); // process data inspection
+            REMOVE_SERVICE_COLLECTOR(shared_from_this()); // process data inspection
             
-            if (pdin)
-                k.remove_process_data(pdin);
-                
-            if (pdout)
-                k.remove_process_data(pdout);
+            if (pdin)  k.remove_device(pdin);
+            if (pdout) k.remove_device(pdout);
 
             if (to == module_state_preop)
                 break;
         case preop_2_init:
         case preop_2_boot:
             // ====> deinit devices
-            REMOVE_SERVICE_REQUESTER(_mbx_foe);
-            REMOVE_SERVICE_REQUESTER(mbx_coe);
+            REMOVE_SERVICE_COLLECTOR(_mbx_foe);
+            REMOVE_SERVICE_COLLECTOR(mbx_coe);
 
             if (mbx_sup & EC_EEPROM_MBX_SOE) {
                 for (unsigned atn = 0; atn < _mbx_soe_list.size(); ++atn)
-                    REMOVE_SERVICE_REQUESTER(_mbx_soe_list[atn]);
+                    REMOVE_SERVICE_COLLECTOR(_mbx_soe_list[atn]);
             }
         case init_2_init:
             // ====> re-/open ethercat device
-            ADD_SERVICE_REQUESTER_CLASS(_eeprom_mi, slave::memory_inspection, request_type_eeprom);
-            ADD_SERVICE_REQUESTER_CLASS(_memory_mi, slave::memory_inspection, request_type_memory);
-            ADD_SERVICE_REQUESTER_CLASS(_eeprom_coe, slave::canopen, request_type_eeprom);
+            ADD_SERVICE_COLLECTOR_CLASS(_eeprom_mi, slave::memory_inspection, request_type_eeprom);
+            ADD_SERVICE_COLLECTOR_CLASS(_memory_mi, slave::memory_inspection, request_type_memory);
+            ADD_SERVICE_COLLECTOR_CLASS(_eeprom_coe, slave::canopen, request_type_eeprom);
 
             if (to == module_state_init)
                 break;
         case init_2_boot:
-            ADD_SERVICE_REQUESTER_CLASS(_mbx_foe, slave::file_protocol);
+            ADD_SERVICE_COLLECTOR_CLASS(_mbx_foe, slave::file_protocol);
             break;
         case boot_2_init:
         case boot_2_preop:
         case boot_2_safeop:
         case boot_2_op:
             // ====> re-/open ethercat device
-            REMOVE_SERVICE_REQUESTER(_mbx_foe);
+            REMOVE_SERVICE_COLLECTOR(_mbx_foe);
 
             if (to == module_state_init)
                 break;
@@ -569,17 +566,17 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
         case preop_2_preop:
             // ====> initial devices            
             if (mbx_sup & EC_EEPROM_MBX_FOE)
-                ADD_SERVICE_REQUESTER_CLASS(_mbx_foe, slave::file_protocol);
+                ADD_SERVICE_COLLECTOR_CLASS(_mbx_foe, slave::file_protocol);
             
             if (mbx_sup & EC_EEPROM_MBX_COE)
-                ADD_SERVICE_REQUESTER_CLASS(mbx_coe, slave::canopen, request_type_mailbox);
+                ADD_SERVICE_COLLECTOR_CLASS(mbx_coe, slave::canopen, request_type_mailbox);
 
             if (mbx_sup & EC_EEPROM_MBX_SOE) {
                 if (_mbx_soe_list.size() != soe_ch)
                     _mbx_soe_list.resize(soe_ch);
 
                 for (unsigned atn = 0; atn < _mbx_soe_list.size(); ++atn)
-                    ADD_SERVICE_REQUESTER_CLASS(_mbx_soe_list[atn], slave::sercos, atn);
+                    ADD_SERVICE_COLLECTOR_CLASS(_mbx_soe_list[atn], slave::sercos, atn);
             }
 
             if (to == module_state_preop)
@@ -587,33 +584,35 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
         case preop_2_op:
         case preop_2_safeop:
             // ====> start receiving measurements
-            ADD_SERVICE_REQUESTER(shared_from_this()); // process data inspection
+            ADD_SERVICE_COLLECTOR(shared_from_this()); // process data inspection
             
             if (mbx_sup & EC_EEPROM_MBX_SOE) {
                 for (unsigned atn = 0; atn < _mbx_soe_list.size(); ++atn) {
                     // register soe process data inspection
-//                    ADD_SERVICE_REQUESTER_CLASS(_mbx_soe_list[atn], slave_servodrive, atn);
+//                    ADD_SERVICE_COLLECTOR_CLASS(_mbx_soe_list[atn], slave_servodrive, atn);
                 }
             }
     
             if (master_dev->pec->slaves[index].pdin.len) {
-                k.remove_process_data(pdin);
+                if (pdin)
+                    k.remove_device(pdin);
                 
                 string pdo_desc = mbx_coe->get_pdo_description(0x1C13);
-                pdin = make_shared<robotkernel::process_data>(
+                pdin = make_shared<robotkernel::process_data_device>(
                         master_dev->pec->slaves[index].pdin.len, 
                         master_dev->name, format_string("slave_%d.pd.in", index), pdo_desc);
-                k.add_process_data(pdin);
+                k.add_device(pdin);
             }
             
             if (master_dev->pec->slaves[index].pdout.len) {
-                k.remove_process_data(pdout);
+                if (pdout)
+                    k.remove_device(pdout);
 
                 string pdo_desc = mbx_coe->get_pdo_description(0x1C12);
-                pdout = make_shared<robotkernel::process_data>(
+                pdout = make_shared<robotkernel::process_data_device>(
                         master_dev->pec->slaves[index].pdout.len, 
                         master_dev->name, format_string("slave_%d.pd.out", index), pdo_desc);
-                k.add_process_data(pdout);
+                k.add_device(pdout);
             }
 
             if (to == module_state_safeop)

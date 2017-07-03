@@ -36,7 +36,7 @@ using namespace string_util;
  * \param node configuration node
  */
 group::group(master *parent, int index, const YAML::Node& node) :
-    trigger_device(format_string("%s.group_%d.trigger", parent->name.c_str(), index)),
+    trigger_device(parent->name, format_string("group_%d.trigger", index)),
     parent(parent)
 {
     _index          = index;

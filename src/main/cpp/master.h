@@ -27,13 +27,14 @@
 #include <string>
 #include <stdint.h>
 
-#include "yaml-cpp/yaml.h"
 #include "robotkernel/kernel.h"
 #include "robotkernel/trigger_base.h"
 #include "robotkernel/module_intf.h"
 #include "robotkernel/module_base.h"
 #include "robotkernel/cmd_delay.h"
 #include "robotkernel/exceptions.h"
+
+#include "yaml-cpp/yaml.h"
 
 #include "group.h"
 #include "slave.h"

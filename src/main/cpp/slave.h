@@ -346,17 +346,17 @@ class slave :
         master *master_dev;     //!< master device
 
         // named process data
-        robotkernel::sp_process_data_t pdin;
-        robotkernel::sp_process_data_t pdout;
+        robotkernel::sp_process_data_device_t pdin;
+        robotkernel::sp_process_data_device_t pdout;
 
         // service requesters
-        robotkernel::sp_service_requester_t _mbx_foe;    //!< file service requester
-        std::vector<robotkernel::sp_service_requester_t> 
+        robotkernel::sp_service_collector_device_t _mbx_foe;    //!< file service requester
+        std::vector<robotkernel::sp_service_collector_device_t> 
             _mbx_soe_list;                               //!< servodrive service requester
         std::shared_ptr<canopen>            mbx_coe;    //!< canopen service requester
-        robotkernel::sp_service_requester_t _eeprom_coe; //!< canopen service requester
-        robotkernel::sp_service_requester_t _eeprom_mi;  //!< eeprom memory inspection service requester
-        robotkernel::sp_service_requester_t _memory_mi;  //!< memory inspection service requester
+        robotkernel::sp_service_collector_device_t _eeprom_coe; //!< canopen service requester
+        robotkernel::sp_service_collector_device_t _eeprom_mi;  //!< eeprom memory inspection service requester
+        robotkernel::sp_service_collector_device_t _memory_mi;  //!< memory inspection service requester
 
         //! construction
         /*!

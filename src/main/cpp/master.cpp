@@ -97,7 +97,7 @@ master::master(const std::string& name, const YAML::Node& node)
                 it != node["groups"].end(); ++it) {
             int g_nr = it->first.as<int>();
             groups[g_nr] = make_shared<group>(this, g_nr, it->second);
-            kernel::get_instance()->add_trigger_device(groups[g_nr]);
+            kernel::get_instance()->add_device(groups[g_nr]);
         }
     }
 
@@ -319,7 +319,7 @@ int master::set_state(module_state_t state) {
 
             // remove group trigger devices
             for (const auto& kv : groups)
-                k.remove_trigger_device(kv.second);
+                k.remove_device(kv.second);
 
             stop();
             pec->tx_sync = 1;
@@ -448,7 +448,7 @@ int master::set_state(module_state_t state) {
 
             // add group trigger devices
             for (const auto& kv : groups)
-                k.add_trigger_device(kv.second);
+                k.add_device(kv.second);
                 
             if (state == module_state_safeop)
                 break;
