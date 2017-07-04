@@ -41,7 +41,7 @@ class master;
 
 class group : 
     public std::enable_shared_from_this<group>,
-    public robotkernel::trigger_device
+    public robotkernel::trigger
 {
     public:
 

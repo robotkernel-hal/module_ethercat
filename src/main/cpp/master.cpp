@@ -381,7 +381,7 @@ int master::set_state(module_state_t state) {
                 } else {
                     auto et = mdl->triggers.front();
                     t_divisor = et->divisor;
-                    t_dev = kernel::get_instance()->get_trigger_device(et->dev_name);
+                    t_dev = kernel::get_instance()->get_trigger(et->dev_name);
                 }
 
                 // trigger devices stores rate in [Hz]
