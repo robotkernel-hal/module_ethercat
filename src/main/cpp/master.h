@@ -118,7 +118,7 @@ class master :
     void open();
 
     //! module trigger callback
-    void trigger();
+    void tick();
 
     //! set module state machine to defined state
     /*!

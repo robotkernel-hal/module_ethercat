@@ -473,7 +473,7 @@ int master::set_state(module_state_t state) {
 }
 
 //! module trigger callback
-void master::trigger() {
+void master::tick() {
     int i = 0;
     int64_t max_timeout = 0;
     ec_timer_t dc_timeout;
