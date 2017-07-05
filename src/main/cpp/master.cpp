@@ -120,23 +120,8 @@ master::master(const std::string& name, const YAML::Node& node)
     pthread_mutex_init(&async_lock, NULL);
     pthread_cond_init(&async_cond, NULL);
 
-//    YAML::Node dc_node;
-//    dc_node["mod_name"] = name;
-//    dc_node["dev_name"] = "distributed_clocks";
-//    dc_node["slave_id"] = ECAT_SLAVE_ID_DC;
-//    dc_node["loglevel"] = (string)ll;
-//
-//    log(info, "adding process data inspection for dc info\n");
-//
-//    kernel& k = *kernel::get_instance();
-//  k.add_service_requester("process_data_inspection", name, 
-//          "distributed_clocks", ECAT_SLAVE_ID_DC);
-
     pd_cookie = 0;
     
-//    if (pec)
-//        return; // already opened
-
     // -----------------------------------------------------------
     // open ethercat interface
     int ret = ec_open(&pec, ifname.c_str(), recv_prio, recv_mask, log_eeprom_data);
@@ -276,6 +261,13 @@ master::~master() {
         ec_close(pec);
 
     pec = NULL;
+    for (auto& kv : _slave_info) {
+        kv.second->clean_up();
+        kv.second = nullptr;
+    }
+
+    for (auto& kv : groups)
+        kv.second = nullptr;
     
     pthread_mutex_destroy(&async_lock);
     pthread_cond_destroy(&async_cond);
@@ -329,6 +321,7 @@ int master::set_state(module_state_t state) {
         case preop_2_init:
         case preop_2_boot:
             // ====> deinit devices
+            t_dev = nullptr;
         case init_2_init:
             // ====> re-/open ethercat device
 

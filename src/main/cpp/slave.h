@@ -375,6 +375,9 @@ class slave :
         //! destruction
         ~slave();
 
+        // perform robotkernel clean up
+        void clean_up();
+
         //! process data out handler
         void pdout_handler();
         

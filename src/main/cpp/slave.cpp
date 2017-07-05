@@ -231,7 +231,18 @@ slave::~slave() {
     for (soe_list_t::iterator it = soe_init_cmds.begin();
             it != soe_init_cmds.end(); ++it)
         delete(*it);
-    
+}
+ 
+// perform robotkernel clean up
+void slave::clean_up() {
+    kernel& k = *kernel::get_instance();
+    k.remove_device(_eeprom_mi);
+    k.remove_device(_memory_mi);
+    k.remove_device(_eeprom_coe);
+
+    _eeprom_mi = nullptr;
+    _memory_mi = nullptr;
+    _eeprom_coe = nullptr;
 }
 
 //! sending slave init commands
@@ -500,7 +511,7 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
     kernel& k = *kernel::get_instance();
 
 #define REMOVE_SERVICE_COLLECTOR(req) \
-            { if (req) { k.remove_device(req); (req).reset(); } }
+            { if (req) { k.remove_device(req); (req) = nullptr; } }
 
 #define ADD_SERVICE_COLLECTOR(req) { \
                 k.add_device(req); }
