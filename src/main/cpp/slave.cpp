@@ -611,7 +611,7 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                 string pdo_desc = mbx_coe->get_pdo_description(0x1C13);
                 pdin = make_shared<robotkernel::process_data>(
                         master_dev->pec->slaves[index].pdin.len, 
-                        master_dev->name, format_string("slave_%d.pd.in", index), pdo_desc);
+                        master_dev->name, format_string("slave_%d.inputs", index), pdo_desc);
                 k.add_device(pdin);
             }
             
@@ -622,7 +622,7 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                 string pdo_desc = mbx_coe->get_pdo_description(0x1C12);
                 pdout = make_shared<robotkernel::process_data>(
                         master_dev->pec->slaves[index].pdout.len, 
-                        master_dev->name, format_string("slave_%d.pd.out", index), pdo_desc);
+                        master_dev->name, format_string("slave_%d.outputs", index), pdo_desc);
                 k.add_device(pdout);
             }
 
@@ -688,9 +688,7 @@ void slave::sercos::sercos_write_idn(const uint16_t& idn,
 void slave::get_pdin(service_provider::process_data_inspection::pd_t& pd) {
     ec_slave_t *slv = &master_dev->pec->slaves[index];
     pd.resize(slv->pdin.len);
-
-    if (slv->pdin.len)
-        memcpy(&pd[0], slv->pdin.pd, slv->pdin.len);
+    memcpy(&pd[0], slv->pdin.pd, slv->pdin.len);
 }
 
 //! return output process data (commands)
@@ -700,9 +698,7 @@ void slave::get_pdin(service_provider::process_data_inspection::pd_t& pd) {
 void slave::get_pdout(service_provider::process_data_inspection::pd_t& pd) {
     ec_slave_t *slv = &master_dev->pec->slaves[index];
     pd.resize(slv->pdout.len);
-
-    if (slv->pdout.len)
-        memcpy(&pd[0], slv->pdout.pd, slv->pdout.len);
+    memcpy(&pd[0], slv->pdout.pd, slv->pdout.len);
 }
 
 //! process data out handler
@@ -711,8 +707,7 @@ void slave::pdout_handler() {
     if (!pdout || (slv->pdout.len == 0))
         return;
 
-    const auto& buf = pdout->get_read_buffer();
-    memcpy(slv->pdout.pd, &buf[0], slv->pdout.len);
+    pdout->read(slv->pdout.pd, slv->pdout.len);
 }
 
 //! process data in handler
@@ -721,8 +716,6 @@ void slave::pdin_handler() {
     if (!pdin || (slv->pdin.len == 0))
         return;
 
-    auto& buf = pdin->get_write_buffer();
-    memcpy(&buf[0], slv->pdin.pd, slv->pdin.len);
-    pdin->swap_buffers();
+    pdin->write(slv->pdin.pd, slv->pdin.len);
 }
 
