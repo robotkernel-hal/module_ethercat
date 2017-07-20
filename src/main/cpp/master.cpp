@@ -73,7 +73,7 @@ void log_func(int lvl, void *user, const char *format, ...) {
  */
 master::master(const std::string& name, const YAML::Node& node) 
     : module_base("module_ethercat", name, node), 
-      cmd_delay(node), runnable(node), pec(NULL) 
+      runnable(node), pec(NULL) 
 {
 #define get_yaml(t, n, d) \
     n = get_as<t>(node, #n, d);
@@ -152,8 +152,10 @@ void master::open() {
 
                 cmd->already_added = true;
             }
-        } else
-            throw str_exception("setting inits for slave %d, failed. no slave found!\n", slave_nr);
+        } else {
+            log(warning, "setting inits for slave %2d failed. no slave found!\n", slave_nr);
+            continue;
+        }
                 
         if (slv->dc.has_dc) {
             pec->slaves[slave_nr].dc.use_dc        = 1;
@@ -290,11 +292,15 @@ int master::set_state(module_state_t state) {
     // get transition
     uint32_t transition = GEN_STATE(this->state, state);
 
-#define STATE_TRANSITION(what, to) { \
+#define STATE_TRANSITION(slave_func, to) { \
     for (int nr = 0; nr < pec->slave_cnt; ++nr) { \
         if (_slave_info.find(nr) == _slave_info.end()) continue; \
         sp_slave_t slv = _slave_info[nr]; \
-        slv->what##_state_transition(this->state, to); } } 
+        try { \
+        slv->slave_func##_state_transition(this->state, to); \
+        } catch (exception& e) { \
+            log(warning, e.what()); \
+        }}} 
 
     switch (transition) {
         case op_2_safeop:
@@ -329,7 +335,12 @@ int master::set_state(module_state_t state) {
             ec_set_state(pec, EC_STATE_INIT);
             STATE_TRANSITION(post, module_state_init);
             
-            open();
+            try {
+                open();
+            } catch (exception& e) {
+                log(error, e.what());
+                state = module_state_init;
+            }
 
             if (state == module_state_init)
                 break;
@@ -343,7 +354,12 @@ int master::set_state(module_state_t state) {
         case boot_2_safeop:
         case boot_2_op:
             // ====> re-/open ethercat device
-            open();
+            try {
+                open();
+            } catch (exception& e) {
+                log(error, e.what());
+                state = module_state_init;
+            }
 
             STATE_TRANSITION(pre, module_state_init);
             ec_set_state(pec, EC_STATE_INIT);

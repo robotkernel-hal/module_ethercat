@@ -31,7 +31,6 @@
 #include "robotkernel/trigger_base.h"
 #include "robotkernel/module_intf.h"
 #include "robotkernel/module_base.h"
-#include "robotkernel/cmd_delay.h"
 #include "robotkernel/exceptions.h"
 
 #include "yaml-cpp/yaml.h"
@@ -58,7 +57,6 @@ extern const std::string state_strings[];
 
 class master :
     public robotkernel::module_base, 
-    public robotkernel::cmd_delay,
     public robotkernel::runnable 
 {
     friend class slave;
