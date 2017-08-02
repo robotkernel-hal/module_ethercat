@@ -59,82 +59,86 @@ class master :
     public robotkernel::module_base, 
     public robotkernel::runnable 
 {
-    friend class slave;
+    public:
+        friend class slave;
+
+
+        typedef std::map<int, std::shared_ptr<group>> group_map_t;
+        group_map_t groups;
+
+        typedef std::shared_ptr<slave> wp_slave_t;
+        typedef std::shared_ptr<slave> sp_slave_t;
+        typedef std::map<int, wp_slave_t> slave_map_t;
+        slave_map_t _slave_info;
+
+        std::string _dc_mode_string;
+
+        struct {
+            bool first_run;
+            double last_diff;
+        } dc_sync;
+
+        ec_t *pec;
+
+        int recv_prio;
+        int recv_mask;
+        std::string ifname;
+        bool log_eeprom_data;
+
+        int dc_offset_compensation_cycles;
+        int dc_offset_compensation_max;
+        int dc_timer_override;
+
+        int trigger_interval;
+        bool threaded_startup;
+
+        uint64_t pd_cookie;
+        pthread_mutex_t pd_lock;
+        pthread_cond_t pd_cond;
+
+        pthread_mutex_t async_lock;
+        pthread_cond_t async_cond;
+
+        std::string trigger_mod_name;
+
+        int t_divisor;                        //!< trigger divisor
+        robotkernel::sp_trigger_t t_dev;      //!< trigger device
+
+        //! named process data for distributed clocks info
+        robotkernel::sp_process_data_t pdin_dc;
 
     public:
+        //! construction
+        /*!
+         * \param node yaml intialization node
+         */
+        master(const std::string& name, const YAML::Node& node);
 
-    typedef std::map<int, std::shared_ptr<group>> group_map_t;
-    group_map_t groups;
+        //! destruction 
+        ~master();
 
-    typedef std::shared_ptr<slave> wp_slave_t;
-    typedef std::shared_ptr<slave> sp_slave_t;
-    typedef std::map<int, wp_slave_t> slave_map_t;
-    slave_map_t _slave_info;
+        void open();
 
-    std::string _dc_mode_string;
+        //! module trigger callback
+        void tick();
 
-    struct {
-        bool first_run;
-        double last_diff;
-    } dc_sync;
+        //! set module state machine to defined state
+        /*!
+         * \param state requested state
+         * \return success or failure
+         */
+        int set_state(module_state_t state);
 
-    ec_t *pec;
-
-    int recv_prio;
-    int recv_mask;
-    std::string ifname;
-    bool log_eeprom_data;
-
-    int dc_offset_compensation_cycles;
-    int dc_offset_compensation_max;
-    int dc_timer_override;
-
-    int trigger_interval;
-    bool threaded_startup;
-
-    uint64_t pd_cookie;
-    pthread_mutex_t pd_lock;
-    pthread_cond_t pd_cond;
-
-    pthread_mutex_t async_lock;
-    pthread_cond_t async_cond;
-
-    std::string trigger_mod_name;
-
-    int t_divisor;                        //!< trigger divisor
-    robotkernel::sp_trigger_t t_dev;      //!< trigger device
-    public:
-    //! construction
-    /*!
-     * \param node yaml intialization node
-     */
-    master(const std::string& name, const YAML::Node& node);
-
-    //! destruction 
-    ~master();
-
-    void open();
-
-    //! module trigger callback
-    void tick();
-
-    //! set module state machine to defined state
-    /*!
-     * \param state requested state
-     * \return success or failure
-     */
-    int set_state(module_state_t state);
-
-    //! async handler thread
-    void run();
+        //! async handler thread
+        void run();
 
 #if oldcode
-    //! set new pdout pointers
-    /*!
-     * \param pdout new pdout pointers
-     * \return 0 on success
-     */
-    int set_pdout(set_pd_t *pdout);
+        //! set new pdout pointers
+        /*!
+         * \param pdout new pdout pointers
+         * \return 0 on success
+         */
+        int set_pdout(set_pd_t *pdout);
 #endif
 };
 

@@ -23,6 +23,7 @@
  */
 
 #include "master.h"
+#include <robotkernel/rt_helper.h>
 
 MODULE_DEF(module_ethercat, module_ethercat::master)
 
@@ -88,6 +89,8 @@ master::master(const std::string& name, const YAML::Node& node)
     get_yaml(int,      dc_timer_override, -1);
     get_yaml(uint64_t, dc_offset_compensation_max, 100000000);
 
+    thread_name = format_string("%s.mbxhandler", name.c_str());
+
     ec_log_func_user = this;
     ec_log_func = log_func;
 
@@ -97,7 +100,9 @@ master::master(const std::string& name, const YAML::Node& node)
                 it != node["groups"].end(); ++it) {
             int g_nr = it->first.as<int>();
             groups[g_nr] = make_shared<group>(this, g_nr, it->second);
-            kernel::get_instance()->add_device(groups[g_nr]);
+            
+            // add trigger device from group
+            kernel::get_instance()->add_device(groups[g_nr]); 
         }
     }
 
@@ -128,6 +133,11 @@ master::master(const std::string& name, const YAML::Node& node)
     if (ret != 0) 
         throw str_exception("ec_open failed: %s!\n", strerror(ret));
         
+    robotkernel::set_thread_name(pec->phw->rxthread, 
+            format_string("%s.rxthread", name.c_str()));
+    robotkernel::set_thread_name(pec->async_loop->loop_tid, 
+            format_string("%s.asyncthread", name.c_str()));
+
     pec->threaded_startup = threaded_startup;
 
     // perform init_2_init transition
@@ -314,6 +324,10 @@ int master::set_state(module_state_t state) {
         case safeop_2_init:
         case safeop_2_boot:
             // ====> stop receiving measurements
+            if (pdin_dc) {
+                k.remove_device(pdin_dc);
+                pdin_dc = nullptr;
+            }
 
             // remove group trigger devices
             for (const auto& kv : groups)
@@ -459,6 +473,35 @@ int master::set_state(module_state_t state) {
             for (const auto& kv : groups)
                 k.add_device(kv.second);
                 
+            // distributed clock info process data
+            if (pdin_dc)
+                k.remove_device(pdin_dc);
+
+            string pdo_desc = 
+                "uint64_t: dc_time\n"
+                "uint64_t: dc_cycle_sum\n"
+                "uint64_t: dc_cycle\n"
+                "int32_t: dc_cycle_cnt\n"
+                "int64_t: dc_sto\n"
+                "uint64_t: rtc_sto\n"
+                "uint64_t: rtc_time\n"
+                "uint64_t: rtc_cycle_sum\n"
+                "uint64_t: rtc_cycle\n"
+                "int32_t: rtc_count\n"
+                "int32_t: act_diff\n"
+                "int64_t: prev_rtc\n"
+                "int64_t: prev_dc\n"
+                "int32_t: offset_compensation\n"
+                "int32_t: offset_compensation_cnt\n"
+                "int32_t: offset_compensation_max\n"
+                "int32_t: timer_override\n"
+                "int64_t: timer_prev\n";
+
+            pdin_dc = make_shared<robotkernel::process_data>(
+                    (uint8_t *)&pec->dc.p_de_dc - (uint8_t *)&pec->dc.dc_time, 
+                    name, "dc.inputs", pdo_desc);
+            k.add_device(pdin_dc);
+            
             if (state == module_state_safeop)
                 break;
         }
@@ -578,7 +621,11 @@ void master::tick() {
 
             dc_sync.first_run = false;
             dc_sync.last_diff = diff;
-        }
+        }        
+
+        if (pdin_dc)
+            pdin_dc->write((uint8_t *)&pec->dc.dc_time, 
+                    (size_t)((uint8_t *)&pec->dc.p_de_dc - (uint8_t *)&pec->dc.dc_time));
     }
 }
 
