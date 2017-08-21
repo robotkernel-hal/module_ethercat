@@ -383,7 +383,7 @@ int master::set_state(module_state_t state) {
                 break;
         case init_2_op:
         case init_2_safeop:
-        case init_2_preop:
+        case init_2_preop: {
             pec->dc.mode = _dc_mode_string == "ref_clock" ? 
                 ec_dc_info::dc_mode_ref_clock : ec_dc_info::dc_mode_master_clock;
             
@@ -392,21 +392,21 @@ int master::set_state(module_state_t state) {
             STATE_TRANSITION(post, module_state_preop);
 
             if (dc_offset_compensation_cycles > 0)
-                pec->dc.offset_compensation = dc_offset_compensation_cycles;
+                pec->dc.offset_compensation_cycles = dc_offset_compensation_cycles;
+
+            auto mdl = get_module();
+            if (mdl->triggers.size() != 1) {
+                log(warning, "we have %d trigger devices set by robotkernel, "
+                        "please use only 1!\n", mdl->triggers.size());
+            } else {
+                auto et = mdl->triggers.front();
+                t_divisor = et->divisor;
+                t_dev = kernel::get_instance()->get_trigger(et->dev_name);
+            }
 
             if (dc_timer_override > 0)
                 pec->dc.timer_override = dc_timer_override;
             else {
-                auto mdl = get_module();
-                if (mdl->triggers.size() != 1) {
-                    log(warning, "we have %d trigger devices set by robotkernel, "
-                            "please use only 1!\n", mdl->triggers.size());
-                } else {
-                    auto et = mdl->triggers.front();
-                    t_divisor = et->divisor;
-                    t_dev = kernel::get_instance()->get_trigger(et->dev_name);
-                }
-
                 // trigger devices stores rate in [Hz]
                 double rate = t_dev->get_rate() / t_divisor;
 
@@ -448,6 +448,7 @@ int master::set_state(module_state_t state) {
             // ====> initial devices            
             if (state == module_state_preop)
                 break;
+        }
         case preop_2_op:
         case preop_2_safeop: {
             // ====> start receiving measurements
@@ -491,13 +492,13 @@ int master::set_state(module_state_t state) {
                 "int32_t: act_diff\n"
                 "int64_t: prev_rtc\n"
                 "int64_t: prev_dc\n"
-                "int32_t: offset_compensation\n"
+                "int32_t: offset_compensation_cycles\n"
                 "int32_t: offset_compensation_cnt\n"
                 "int32_t: offset_compensation_max\n"
                 "int32_t: timer_override\n"
                 "int64_t: timer_prev\n";
 
-            pdin_dc = make_shared<robotkernel::process_data>(
+            pdin_dc = make_shared<robotkernel::triple_buffer>(
                     (uint8_t *)&pec->dc.p_de_dc - (uint8_t *)&pec->dc.dc_time, 
                     name, "dc.inputs", pdo_desc);
             k.add_device(pdin_dc);
@@ -597,34 +598,36 @@ void master::tick() {
                 (pec->dc.offset_compensation_cnt == 0)) {
             double diff = (pec->dc.act_diff / 1E9);
 
-            if (!dc_sync.first_run) {
-                double tmp = 0.;
-                
                 // trigger devices stores rate in [Hz]
                 double rate = t_dev->get_rate() / t_divisor;
-
-                // calculate new rate in [s]
                 double act_timer = (1.f / rate);
-                act_timer -= (-0.1 * (diff/pec->dc.offset_compensation) ) + 
+
+            if (!dc_sync.first_run) {
+                // calculate new rate in [s]
+                act_timer -= (-0.9 * (diff/pec->dc.offset_compensation) ) + 
                     (dc_sync.last_diff - diff)/(pec->dc.offset_compensation);
+
+            } else {
+                act_timer -= (-0.9 * (diff/pec->dc.offset_compensation) );
+
+            }
 
                 try {
                     t_dev->set_rate(1.f / act_timer);
 
                     log(verbose, "setting new clock %13.10f, last_diff %13.10f, diff %13.10f, "
-                            "offset_comp %d\n", tmp, dc_sync.last_diff, diff, 
+                            "offset_comp %d\n", act_timer, dc_sync.last_diff, diff, 
                             pec->dc.offset_compensation);
                 } catch (exception& e) {
                     log(warning, "setting new clock failed: %s\n", e.what());
                 }
-            }
 
             dc_sync.first_run = false;
             dc_sync.last_diff = diff;
         }        
 
         if (pdin_dc)
-            pdin_dc->write((uint8_t *)&pec->dc.dc_time, 
+            pdin_dc->write(0, (uint8_t *)&pec->dc.dc_time, 
                     (size_t)((uint8_t *)&pec->dc.p_de_dc - (uint8_t *)&pec->dc.dc_time));
     }
 }

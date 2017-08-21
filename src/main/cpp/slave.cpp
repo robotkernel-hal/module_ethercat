@@ -609,7 +609,7 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                     k.remove_device(pdin);
                 
                 string pdo_desc = mbx_coe->get_pdo_description(0x1C13);
-                pdin = make_shared<robotkernel::process_data>(
+                pdin = make_shared<robotkernel::triple_buffer>(
                         master_dev->pec->slaves[index].pdin.len, 
                         master_dev->name, format_string("slave_%d.inputs", index), pdo_desc);
                 k.add_device(pdin);
@@ -620,7 +620,7 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                     k.remove_device(pdout);
 
                 string pdo_desc = mbx_coe->get_pdo_description(0x1C12);
-                pdout = make_shared<robotkernel::process_data>(
+                pdout = make_shared<robotkernel::triple_buffer>(
                         master_dev->pec->slaves[index].pdout.len, 
                         master_dev->name, format_string("slave_%d.outputs", index), pdo_desc);
                 k.add_device(pdout);
@@ -707,7 +707,7 @@ void slave::pdout_handler() {
     if (!pdout || (slv->pdout.len == 0))
         return;
 
-    pdout->read(slv->pdout.pd, slv->pdout.len);
+    pdout->read(0, slv->pdout.pd, slv->pdout.len);
 }
 
 //! process data in handler
@@ -716,6 +716,6 @@ void slave::pdin_handler() {
     if (!pdin || (slv->pdin.len == 0))
         return;
 
-    pdin->write(slv->pdin.pd, slv->pdin.len);
+    pdin->write(0, slv->pdin.pd, slv->pdin.len);
 }
 

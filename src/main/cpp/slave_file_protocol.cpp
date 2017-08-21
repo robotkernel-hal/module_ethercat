@@ -107,8 +107,12 @@ void slave::file_protocol::file_write(
     if (error_message) {
         std::string msg = string(error_message);
         free(error_message);
+        slv->master_dev->log(robotkernel::error, "writing file failed: %s\n", 
+                msg.c_str());
+
         throw str_exception(msg.c_str());
     }
 
+    slv->master_dev->log(robotkernel::info, "writing file succeeded!\n");
 }
 
