@@ -536,8 +536,8 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
             // ====> stop receiving measurements
             REMOVE_SERVICE_COLLECTOR(shared_from_this()); // process data inspection
             
-            if (pdin)  k.remove_device(pdin);
-            if (pdout) k.remove_device(pdout);
+            if (pdin)  { k.remove_device(pdin); pdin = nullptr; }
+            if (pdout) { k.remove_device(pdout); pdout = nullptr; }
 
             if (to == module_state_preop)
                 break;
@@ -717,5 +717,6 @@ void slave::pdin_handler() {
         return;
 
     pdin->write(0, slv->pdin.pd, slv->pdin.len);
+    pdin->pd_cookie++;
 }
 

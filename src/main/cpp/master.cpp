@@ -118,6 +118,11 @@ master::master(const std::string& name, const YAML::Node& node)
     _dc_mode_string = get_as<string>(node, "dc_mode", "master_clock");
     dc_sync.first_run = true;
     dc_sync.last_diff = 0.;
+    dc_sync.diffsum   = 0.;
+
+    get_yaml(double,    dc_sync.kp, 0.1);
+    get_yaml(double,    dc_sync.ki, 0.001);
+    get_yaml(double,    dc_sync.kd, 0.1);
 
     pthread_mutex_init(&pd_lock, NULL);
     pthread_cond_init(&pd_cond, NULL);
@@ -318,6 +323,10 @@ int master::set_state(module_state_t state) {
         case op_2_init:
         case op_2_boot:
             // ====> stop sending commands
+            STATE_TRANSITION(pre, module_state_safeop);
+            ec_set_state(pec, EC_STATE_SAFEOP);
+            STATE_TRANSITION(post, module_state_safeop);
+
             if (state == module_state_safeop)
                 break;
         case safeop_2_preop:
@@ -335,6 +344,10 @@ int master::set_state(module_state_t state) {
 
             stop();
             pec->tx_sync = 1;
+
+            STATE_TRANSITION(pre, module_state_preop);
+            ec_set_state(pec, EC_STATE_PREOP);
+            STATE_TRANSITION(post, module_state_preop);
 
             if (state == module_state_preop)
                 break;
@@ -416,9 +429,6 @@ int master::set_state(module_state_t state) {
 
                 log(info, "got trigger rate %f Hz\n", rate);
             }
-            
-            if (dc_offset_compensation_max > 0)
-                pec->dc.offset_compensation_max = dc_offset_compensation_max;
 
             for (int nr = 0; nr < pec->slave_cnt; ++nr) {
                 log(verbose, "slave %d: propagation delay %d [ns]\n", 
@@ -598,29 +608,34 @@ void master::tick() {
                 (pec->dc.offset_compensation_cnt == 0)) {
             double diff = (pec->dc.act_diff / 1E9);
 
-                // trigger devices stores rate in [Hz]
-                double rate = t_dev->get_rate() / t_divisor;
-                double act_timer = (1.f / rate);
+            // trigger devices stores rate in [Hz]
+            double rate = t_dev->get_rate() / t_divisor;
+            double act_timer = (1.f / rate);
+
+            // sum it up for integral part
+            dc_sync.diffsum += diff;
 
             if (!dc_sync.first_run) {
                 // calculate new rate in [s]
-                act_timer -= (-0.9 * (diff/pec->dc.offset_compensation) ) + 
-                    (dc_sync.last_diff - diff)/(pec->dc.offset_compensation);
+                act_timer += 
+                    (dc_sync.kp * (diff/pec->dc.offset_compensation_cycles)) + 
+                    (dc_sync.ki * (dc_sync.diffsum/pec->dc.offset_compensation_cycles)) +
+                    (dc_sync.kd * (diff - dc_sync.last_diff)/(pec->dc.offset_compensation_cycles));
 
             } else {
-                act_timer -= (-0.9 * (diff/pec->dc.offset_compensation) );
+                act_timer += (dc_sync.kp * (diff/pec->dc.offset_compensation_cycles) );
 
             }
 
-                try {
-                    t_dev->set_rate(1.f / act_timer);
+            try {
+                t_dev->set_rate(1.f / act_timer);
 
-                    log(verbose, "setting new clock %13.10f, last_diff %13.10f, diff %13.10f, "
-                            "offset_comp %d\n", act_timer, dc_sync.last_diff, diff, 
-                            pec->dc.offset_compensation);
-                } catch (exception& e) {
-                    log(warning, "setting new clock failed: %s\n", e.what());
-                }
+                log(verbose, "setting new clock %13.10f, last_diff %13.10f, diff %13.10f, "
+                        "offset_comp %d\n", act_timer, dc_sync.last_diff, diff, 
+                        pec->dc.offset_compensation_cycles);
+            } catch (exception& e) {
+                log(warning, "setting new clock failed: %s\n", e.what());
+            }
 
             dc_sync.first_run = false;
             dc_sync.last_diff = diff;

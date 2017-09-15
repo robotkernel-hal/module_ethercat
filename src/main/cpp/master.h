@@ -76,6 +76,11 @@ class master :
         struct {
             bool first_run;
             double last_diff;
+            double diffsum;
+
+            double kp;
+            double ki;
+            double kd;
         } dc_sync;
 
         ec_t *pec;
