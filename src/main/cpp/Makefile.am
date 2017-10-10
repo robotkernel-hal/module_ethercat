@@ -9,7 +9,7 @@ libmodule_ethercat_la_SOURCES  = master.cpp slave.cpp
 
 libmodule_ethercat_la_CXXFLAGS = @PTHREAD_CFLAGS@ -Wall -I$(srcdir) -I$(builddir) -I$(srcdir)/libethercat/include \
                                  @ROBOTKERNEL_CFLAGS@ @YAML_CPP_CFLAGS@ @LIBSTRING_UTIL_CFLAGS@ \
-                                 @LIBETHERCAT_PIC_CFLAGS@ @LINKS_AND_NODES_CFLAGS@ \
+                                 @LIBETHERCAT_CFLAGS@ @LINKS_AND_NODES_CFLAGS@ \
                                  @INTERFACE_MEMORY_INSPECTION_CFLAGS@ \
                                  @INTERFACE_CANOPEN_PROTOCOL_CFLAGS@ \
                                  @INTERFACE_SERCOS_PROTOCOL_CFLAGS@ \
@@ -17,13 +17,13 @@ libmodule_ethercat_la_CXXFLAGS = @PTHREAD_CFLAGS@ -Wall -I$(srcdir) -I$(builddir
 
 libmodule_ethercat_la_CFLAGS   = @PTHREAD_CFLAGS@ -std=gnu99 -Wall -I$(srcdir) -I$(builddir) -I$(srcdir)/libethercat/include \
                                  @ROBOTKERNEL_CFLAGS@ @YAML_CPP_CFLAGS@ @LIBSTRING_UTIL_CFLAGS@ \
-                                 @LIBETHERCAT_PIC_CFLAGS@ @LINKS_AND_NODES_CFLAGS@ \
+                                 @LIBETHERCAT_CFLAGS@ @LINKS_AND_NODES_CFLAGS@ \
                                  @INTERFACE_MEMORY_INSPECTION_CFLAGS@ \
                                  @INTERFACE_CANOPEN_PROTOCOL_CFLAGS@ \
                                  @INTERFACE_SERCOS_PROTOCOL_CFLAGS@ \
                                  @INTERFACE_FILE_PROTOCOL_CFLAGS@
 
-libmodule_ethercat_la_LDFLAGS  = -Wall -release $(PACKAGE_VERSION) @LIBETHERCAT_PIC_LIBS@ @PTHREAD_LIBS@
+libmodule_ethercat_la_LDFLAGS  = -Wall -release $(PACKAGE_VERSION) @LIBETHERCAT_LIBS@ @PTHREAD_LIBS@
 
 VPATH = $(srcdir):$(top_srcdir)/share/ln/message_definitions 
 

@@ -240,6 +240,52 @@ master::master(const std::string& name, const YAML::Node& node)
     
     set_state(module_state_init);
     
+    for (group_map_t::iterator it = _group_info.begin(); it != _group_info.end(); ++it) {
+        int g_nr = it->first;
+
+        for (std::list<int>::iterator it2 = it->second->_slaves.begin();
+                it2 != it->second->_slaves.end(); ++it2) {
+
+            int s_nr = *it2;
+            if (_pec->slave_cnt <= s_nr) {
+                log(warning, "slave %d not connected to ethercat bus, "
+                        "not adding to group %d\n", s_nr, g_nr);
+                continue;
+            }
+
+            _pec->slaves[s_nr].assigned_pd_group = g_nr;
+        }
+    }
+    
+    // -----------------------------------------------------------
+    // setting init commands and distributed clocks
+    for (slave_map_t::iterator it = _slave_info.begin(); 
+            it != _slave_info.end(); ++it) {
+        int slave_nr = it->first;
+        slave *slv = it->second;
+
+
+        if (_pec->slave_cnt > slave_nr) {
+            for (slave::coe_list_t::iterator it2 = slv->coe_init_cmds.begin();
+                    it2 != slv->coe_init_cmds.end(); ++it2) {
+                slave::coe_init_cmd_t *cmd = *it2;
+                ec_slave_add_init_cmd(_pec, slave_nr, EC_MBX_COE, 
+                        (int)cmd->transition, cmd->index, cmd->subindex, 
+                        cmd->ca, cmd->data, cmd->datalen);
+            }
+        } else
+            throw str_exception("setting inits for slave %d, failed. no slave found!\n", slave_nr);
+                
+        if (slv->dc.has_dc) {
+            _pec->slaves[slave_nr].dc.use_dc        = 1;
+            _pec->slaves[slave_nr].dc.type          = slv->dc.type;
+            _pec->slaves[slave_nr].dc.cycle_time_0  = slv->dc.cycle_time_0;
+            _pec->slaves[slave_nr].dc.cycle_time_1  = slv->dc.cycle_time_1;
+            _pec->slaves[slave_nr].dc.cycle_shift   = slv->dc.cycle_shift;
+        } else 
+            _pec->slaves[slave_nr].dc.use_dc = 0;
+    }
+
     // -----------------------------------------------------------
     // set pdo mapping entries
     for (slave_map_t::iterator it = _slave_info.begin(); 
@@ -393,11 +439,7 @@ int master::set_state(module_state_t new_state) {
             ec_set_state(_pec, EC_STATE_PREOP);
 
             if (dc_offset_compensation_cycles > 0)
-                _pec->dc.offset_compensation = dc_offset_compensation_cycles;
-            if (dc_timer_override > 0)
-                _pec->dc.timer_override = dc_timer_override;
-            if (dc_offset_compensation_max > 0)
-                _pec->dc.offset_compensation_max = dc_offset_compensation_max;
+                _pec->dc.offset_compensation_cycles = dc_offset_compensation_cycles;
 
             for (nr = 0; nr < _pec->slave_cnt; ++nr) {
                 log(verbose, "slave %d: propagation delay %d [ns]\n", 
@@ -665,9 +707,9 @@ int master::request(int reqcode, void* ptr) {
                 }
             } else {
                 if (_pec->slaves[list->slave_id].eeprom.mbx_supported & EC_EEPROM_MBX_COE) {
-                    uint8_t buf[512];
-                    size_t len = sizeof(buf);
-                    int ret = ec_coe_odlist_read(_pec, list->slave_id, buf, &len);
+                    uint8_t *buf;
+                    size_t len;
+                    int ret = ec_coe_odlist_read(_pec, list->slave_id, &buf, &len);
 
                     if (ret <= 0)
                         break;
@@ -677,6 +719,8 @@ int master::request(int reqcode, void* ptr) {
                         list->indices_cnt = len/2;
                     } else
                         list->indices_cnt = len/2;
+
+                    free(buf);
                 }
             }
 
@@ -908,9 +952,15 @@ int master::request(int reqcode, void* ptr) {
                 ret = -1;
             } else {
                 if (_pec->slaves[value->slave_id].eeprom.mbx_supported & EC_EEPROM_MBX_COE) {
+                    uint8_t *buf = NULL;
                     ec_coe_sdo_read(_pec, value->slave_id, value->index, value->sub_index, 
-                            0, (uint8_t *)value->value, &size, &abort_code);
-                    value->value_len = size;
+                            0, &buf, &size, &abort_code);
+
+                    if (buf) {
+                        memcpy(value->value, buf, size);
+                        value->value_len = size;
+                        free(buf);
+                    }
                     ret = abort_code;
                 } 
             }
@@ -932,7 +982,7 @@ int master::request(int reqcode, void* ptr) {
 
             if (_pec->slaves[value->slave_id].eeprom.mbx_supported & EC_EEPROM_MBX_COE) {
                 ec_coe_sdo_write(_pec, value->slave_id, value->index, value->sub_index, 
-                        0, (uint8_t *)value->value, &size, &abort_code);
+                        0, (uint8_t *)value->value, size, &abort_code);
                 value->value_len = size;
                 ret = abort_code;
             } else // search in eeprom entries
@@ -1071,15 +1121,15 @@ void master::trigger() {
                     kernel::request_cb(trigger_mod_name.c_str(), 
                             MOD_REQUEST_GET_TRIGGER_INTERVAL, &tmp);
 
-                    tmp -= (-0.1 * (diff/_pec->dc.offset_compensation) ) + 
-                        (_dc_sync.last_diff - diff)/(_pec->dc.offset_compensation);
+                    tmp -= (-0.1 * (diff/_pec->dc.offset_compensation_cycles) ) + 
+                        (_dc_sync.last_diff - diff)/(_pec->dc.offset_compensation_cycles);
 
                     kernel::request_cb(trigger_mod_name.c_str(), 
                             MOD_REQUEST_SET_TRIGGER_INTERVAL, &tmp);
 
                     log(verbose, "setting new clock %13.10f, last_diff %13.10f, diff %13.10f, "
                             "offset_comp %d\n", tmp, _dc_sync.last_diff, diff, 
-                            _pec->dc.offset_compensation);
+                            _pec->dc.offset_compensation_cycles);
                 }
 
                 _dc_sync.first_run = false;

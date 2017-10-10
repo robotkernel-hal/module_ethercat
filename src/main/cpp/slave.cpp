@@ -306,7 +306,7 @@ bool slave::prepare_state_transition(transition_t transition) {
                 uint32_t abort_code = 0;
 
                 int wkc = ec_coe_sdo_write(master_dev->_pec, index, cmd->index, 
-                        cmd->subindex, cmd->ca, buf, &buf_len, &abort_code);
+                        cmd->subindex, cmd->ca, buf, buf_len, &abort_code);
                 if (!wkc) {
                     master_dev->log(info, "writing sdo, %s\n",
                             "todo");//ecx_elist2string(ctx));
@@ -445,7 +445,7 @@ bool slave::prepare_state_transition(transition_t transition) {
                     printf("\n");
                     uint32_t abort_code = 0;
                     int wkc = ec_coe_sdo_write(master_dev->_pec, index, cmd->index, 
-                            cmd->subindex, cmd->ca, data, &data_len, &abort_code);
+                            cmd->subindex, cmd->ca, data, data_len, &abort_code);
                     if (!wkc) {
                         master_dev->log(info, "writing sdo, %s\n",
                                 "todo");//ecx_elist2string(ctx));
