@@ -707,20 +707,22 @@ int master::request(int reqcode, void* ptr) {
                 }
             } else {
                 if (_pec->slaves[list->slave_id].eeprom.mbx_supported & EC_EEPROM_MBX_COE) {
-                    uint8_t *buf;
-                    size_t len;
+                    uint8_t *buf = NULL;
+                    size_t len = 0;
                     int ret = ec_coe_odlist_read(_pec, list->slave_id, &buf, &len);
 
-                    if (ret <= 0)
+                    if (ret != 0) {
+                        log(error, "got return code 0x%X from ec_coe_odlist_read\n", ret);
                         break;
+                    }
 
-                    if (list->indices) {
+                    if (list->indices)
                         memcpy(list->indices, buf, len);
-                        list->indices_cnt = len/2;
-                    } else
-                        list->indices_cnt = len/2;
 
-                    free(buf);
+                    list->indices_cnt = len/2;
+                    
+                    if (buf)
+                        free(buf);
                 }
             }
 
@@ -869,16 +871,9 @@ int master::request(int reqcode, void* ptr) {
                     entry_desc.data = NULL;
                     ret2 = ec_coe_sdo_entry_desc_read(_pec, desc->slave_id, desc->index, 
                             desc->sub_index, 0x7F, &entry_desc);
-                    if (ret2 <= 0) {
-                        ret = -1;
-                        break;
-                    }
-
-                    entry_desc.data = (uint8_t *)malloc(entry_desc.data_len);
-                    ret2 = ec_coe_sdo_entry_desc_read(_pec, desc->slave_id, desc->index, 
-                            desc->sub_index, 0x7F, &entry_desc);
-                    if (ret2 <= 0) {
-                        ret = -1;
+                    
+                    if (ret2 != 0) {
+                        log(error, "got return code 0x%X from ec_coe_sdo_entry_desc_read\n", ret2);
                         break;
                     }
 
