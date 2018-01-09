@@ -579,14 +579,15 @@ void master::tick() {
 
         int ret = ec_receive_process_data_group(pec, i, &g->timeout);
 
-        if (ret == 0) {
-            for (auto it = g->_slaves.begin(); it != g->_slaves.end(); ++it) {
-                int slave = *it;
-                _slave_info[slave]->pdin_handler();
-            }
+        if ((ret == -1) && (errno == ETIMEDOUT))
+            continue;
 
-            g->trigger_modules();
+        for (auto it = g->_slaves.begin(); it != g->_slaves.end(); ++it) {
+            int slave = *it;
+            _slave_info[slave]->pdin_handler();
         }
+
+        g->trigger_modules();
     }
 
     int slave;
