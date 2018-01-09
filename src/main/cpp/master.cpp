@@ -622,10 +622,8 @@ void master::tick() {
                     (dc_sync.kp * (diff/pec->dc.offset_compensation_cycles)) + 
                     (dc_sync.ki * (dc_sync.diffsum/pec->dc.offset_compensation_cycles)) +
                     (dc_sync.kd * (diff - dc_sync.last_diff)/(pec->dc.offset_compensation_cycles));
-
             } else {
                 act_timer += (dc_sync.kp * (diff/pec->dc.offset_compensation_cycles) );
-
             }
 
             try {
