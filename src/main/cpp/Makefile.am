@@ -13,7 +13,7 @@ libmodule_ethercat_la_CXXFLAGS = -Wall -Wno-deprecated-declarations -I$(srcdir) 
                                  @SERVICE_PROVIDER_FILE_PROTOCOL_CFLAGS@ \
                                  @SERVICE_PROVIDER_PROCESS_DATA_INSPECTION_CFLAGS@
 
-libmodule_ethercat_la_LDFLAGS  = -Wall -release $(PACKAGE_VERSION) @LIBETHERCAT_LIBS@ @ROBOTKERNEL_LIBS@ 
+libmodule_ethercat_la_LDFLAGS  = -Wall -release $(PACKAGE_VERSION) @LIBETHERCAT_LIBS@
 
 install-exec-hook:
 	mkdir -p $(prefix)/share/ln
