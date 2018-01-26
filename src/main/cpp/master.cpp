@@ -124,12 +124,6 @@ master::master(const std::string& name, const YAML::Node& node)
     get_yaml(double,    dc_sync.ki, 0.001);
     get_yaml(double,    dc_sync.kd, 0.1);
 
-    pthread_mutex_init(&pd_lock, NULL);
-    pthread_cond_init(&pd_cond, NULL);
-   
-    pthread_mutex_init(&async_lock, NULL);
-    pthread_cond_init(&async_cond, NULL);
-
     pd_cookie = 0;
     
     // -----------------------------------------------------------
@@ -285,12 +279,6 @@ master::~master() {
 
     for (auto& kv : groups)
         kv.second = nullptr;
-    
-    pthread_mutex_destroy(&async_lock);
-    pthread_cond_destroy(&async_cond);
-    
-    pthread_mutex_destroy(&pd_lock);
-    pthread_cond_destroy(&pd_cond);
 }
 
 //! set module state machine to defined state
@@ -569,7 +557,7 @@ void master::tick() {
     hw_tx(pec->phw);
 
     pd_cookie++;
-    pthread_cond_signal(&pd_cond);
+    pd_cond.notify_all();
 
     for (i = 0; i < pec->pd_group_cnt; ++i) {
         auto& g = groups[i];
@@ -596,7 +584,7 @@ void master::tick() {
 
         if (slv->eeprom.mbx_supported && slv->mbx_read.sm_state) {
             if (*slv->mbx_read.sm_state & 0x08) {
-                pthread_cond_signal(&async_cond);
+                async_cond.notify_all();
                 break;
             }
         }
@@ -650,17 +638,11 @@ void master::tick() {
 void master::run() {
     log(info, "async handler thread running\n");
 
-    pthread_mutex_lock(&async_lock);
+    std::unique_lock<std::mutex> lock(async_mtx);
 
     while (running()) {
-        struct timespec timeout;
-        ec_timer_t abstime;
-        ec_timer_init(&abstime, 100000000);
-        timeout.tv_sec = abstime.sec;
-        timeout.tv_nsec = abstime.nsec;
-//        log(info, "running %d, run_flag %d\n", running(), this->run_flag);
-
-        if (pthread_cond_timedwait(&async_cond, &async_lock, &timeout) != 0)
+        if (async_cond.wait_for(async_lock, std::chrono::seconds(1)),
+                == std::cv_status::timeout)
             continue;
 
         int slave;
@@ -697,8 +679,6 @@ void master::run() {
         }
     }
 
-    pthread_mutex_unlock(&async_lock);
-
     log(info, "async handler thread stopped\n");
 }
 
@@ -731,22 +711,16 @@ int master::set_pdout(set_pd_t *pdout) {
                 (unsigned int)_cmd_delay);
     }
 
-    pthread_mutex_lock(&pd_lock);
+    pd_mtx.lock();
 
     while (difference < _cmd_delay) {
         // need to wait until mdt cnt is big enough
-        struct timespec timeout;
-        ec_timer_t abstime;
-        ec_timer_init(&abstime, 100000000);
-        timeout.tv_sec = abstime.sec;
-        timeout.tv_nsec = abstime.nsec;
-
-        pthread_cond_timedwait(&pd_cond, &pd_lock, &timeout);
+        pd_cond.wait_for(lock, std::chrono::seconds(1));
         
         difference = pd_cookie - pdout->pd_cookie;
     }
 
-    pthread_mutex_unlock(&pd_lock);
+    pd_mtx.unlock();
 
     for (i = 0; i < pdout->cnt; ++i) {
         uint8_t *to = NULL;

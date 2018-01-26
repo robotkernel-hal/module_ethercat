@@ -35,8 +35,6 @@ using namespace robotkernel;
 using namespace string_util;
 using namespace module_ethercat;
 
-pthread_mutex_t slave_lock = PTHREAD_MUTEX_INITIALIZER;
-
 //! forward declaration ethercat state string
 extern const string module_ethercat::state_strings[];
 
@@ -615,7 +613,7 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                         master_dev->name, 
                         format_string("slave_%d.inputs", index), 
                         pdo_desc,
-                        format_string("%s.group_%d.trigger", master_dev->name.c_str(), slv->assigned_pd_group);;
+                        format_string("%s.group_%d.trigger", master_dev->name.c_str(), slv->assigned_pd_group));;
                 k.add_device(pdin);
             }
             

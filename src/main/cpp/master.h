@@ -98,11 +98,11 @@ class master :
         bool threaded_startup;
 
         uint64_t pd_cookie;
-        pthread_mutex_t pd_lock;
-        pthread_cond_t pd_cond;
+        std::mutex pd_mtx;
+        std::condition_variable pd_cond;
 
-        pthread_mutex_t async_lock;
-        pthread_cond_t async_cond;
+        std::mutex async_mtx;
+        std::condition_variable async_cond;
 
         std::string trigger_mod_name;
 
