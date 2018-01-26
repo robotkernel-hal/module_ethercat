@@ -509,6 +509,7 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
     uint32_t mbx_sup = master_dev->pec->slaves[index].eeprom.mbx_supported;
     uint32_t soe_ch  = master_dev->pec->slaves[index].eeprom.general.soe_channels;
     kernel& k = *kernel::get_instance();
+    auto *slv = &(master_dev->pec->slaves[index]);
 
 #define REMOVE_SERVICE_COLLECTOR(req) \
             { if (req) { k.remove_device(req); (req) = nullptr; } }
@@ -604,24 +605,27 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                 }
             }
     
-            if (master_dev->pec->slaves[index].pdin.len) {
+            if (slv->pdin.len) {
                 if (pdin)
                     k.remove_device(pdin);
                 
                 string pdo_desc = mbx_coe->get_pdo_description(0x1C13);
                 pdin = make_shared<robotkernel::triple_buffer>(
-                        master_dev->pec->slaves[index].pdin.len, 
-                        master_dev->name, format_string("slave_%d.inputs", index), pdo_desc);
+                        slv->pdin.len, 
+                        master_dev->name, 
+                        format_string("slave_%d.inputs", index), 
+                        pdo_desc,
+                        format_string("%s.group_%d.trigger", master_dev->name.c_str(), slv->assigned_pd_group);;
                 k.add_device(pdin);
             }
             
-            if (master_dev->pec->slaves[index].pdout.len) {
+            if (slv->pdout.len) {
                 if (pdout)
                     k.remove_device(pdout);
 
                 string pdo_desc = mbx_coe->get_pdo_description(0x1C12);
                 pdout = make_shared<robotkernel::triple_buffer>(
-                        master_dev->pec->slaves[index].pdout.len, 
+                        slv->pdout.len, 
                         master_dev->name, format_string("slave_%d.outputs", index), pdo_desc);
                 k.add_device(pdout);
             }

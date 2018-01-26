@@ -468,6 +468,10 @@ int master::set_state(module_state_t state) {
             pec->tx_sync = 0;
             start();
 
+            // add group trigger devices
+            for (const auto& kv : groups)
+                k.add_device(kv.second);
+                
             STATE_TRANSITION(pre, module_state_safeop);
             ec_set_state(pec, EC_STATE_SAFEOP);
             STATE_TRANSITION(post, module_state_safeop);
@@ -480,10 +484,6 @@ int master::set_state(module_state_t state) {
                 sp_slave_t slv = _slave_info[nr];
             }
 
-            // add group trigger devices
-            for (const auto& kv : groups)
-                k.add_device(kv.second);
-                
             // distributed clock info process data
             if (pdin_dc)
                 k.remove_device(pdin_dc);
