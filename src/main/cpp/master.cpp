@@ -641,7 +641,7 @@ void master::run() {
     std::unique_lock<std::mutex> lock(async_mtx);
 
     while (running()) {
-        if (async_cond.wait_for(async_lock, std::chrono::seconds(1)),
+        if (async_cond.wait_for(lock, std::chrono::seconds(1))
                 == std::cv_status::timeout)
             continue;
 
