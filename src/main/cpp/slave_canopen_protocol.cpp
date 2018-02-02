@@ -473,7 +473,7 @@ std::map<uint16_t, std::string> data_type_2_string = {
  */
 string slave::canopen::get_pdo_description(uint16_t idx) {
     YAML::Emitter out;
-    out << YAML::BeginMap;
+    out << YAML::BeginSeq;
 
     // read mapped pdo count
     service_provider::canopen_protocol::element_t element;
@@ -508,12 +508,14 @@ string slave::canopen::get_pdo_description(uint16_t idx) {
                 ss << "int" << (entry & 0x000000FF) << "_t";
                 data_type = ss.str();
             }
-
+    
+            out << YAML::BeginMap;
             out << YAML::Key << data_type << YAML::Value << desc.name;
+            out << YAML::EndMap;
         }                        
     }
 
-    out << YAML::EndMap;
+    out << YAML::EndSeq;
     return out.c_str();
 }
 
