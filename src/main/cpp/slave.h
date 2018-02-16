@@ -347,7 +347,9 @@ class slave :
 
         // named process data
         robotkernel::sp_process_data_t pdin;
+        std::size_t provider_hash;
         robotkernel::sp_process_data_t pdout;
+        std::size_t consumer_hash;
 
         // service requesters
         robotkernel::sp_service_interface_t _mbx_foe;    //!< file service requester

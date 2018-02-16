@@ -56,6 +56,7 @@ class slave;
 extern const std::string state_strings[];
 
 class master :
+    public std::enable_shared_from_this<master>,
     public robotkernel::module_base, 
     public robotkernel::runnable 
 {
@@ -111,6 +112,7 @@ class master :
 
         //! named process data for distributed clocks info
         robotkernel::sp_process_data_t pdin_dc;
+        std::size_t dc_provider_hash;
 
     public:
         //! construction
@@ -136,15 +138,6 @@ class master :
 
         //! async handler thread
         void run();
-
-#if oldcode
-        //! set new pdout pointers
-        /*!
-         * \param pdout new pdout pointers
-         * \return 0 on success
-         */
-        int set_pdout(set_pd_t *pdout);
-#endif
 };
 
 //! module_ethercat::

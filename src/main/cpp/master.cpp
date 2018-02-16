@@ -477,28 +477,29 @@ int master::set_state(module_state_t state) {
                 k.remove_device(pdin_dc);
 
             string pdo_desc = 
-                "uint64_t: dc_time\n"
-                "uint64_t: dc_cycle_sum\n"
-                "uint64_t: dc_cycle\n"
-                "int32_t: dc_cycle_cnt\n"
-                "int64_t: dc_sto\n"
-                "uint64_t: rtc_sto\n"
-                "uint64_t: rtc_time\n"
-                "uint64_t: rtc_cycle_sum\n"
-                "uint64_t: rtc_cycle\n"
-                "int32_t: rtc_count\n"
-                "int32_t: act_diff\n"
-                "int64_t: prev_rtc\n"
-                "int64_t: prev_dc\n"
-                "int32_t: offset_compensation_cycles\n"
-                "int32_t: offset_compensation_cnt\n"
-                "int32_t: offset_compensation_max\n"
-                "int32_t: timer_override\n"
-                "int64_t: timer_prev\n";
+                "- uint64_t: dc_time\n"
+                "- uint64_t: dc_cycle_sum\n"
+                "- uint64_t: dc_cycle\n"
+                "- int32_t: dc_cycle_cnt\n"
+                "- int64_t: dc_sto\n"
+                "- uint64_t: rtc_sto\n"
+                "- uint64_t: rtc_time\n"
+                "- uint64_t: rtc_cycle_sum\n"
+                "- uint64_t: rtc_cycle\n"
+                "- int32_t: rtc_count\n"
+                "- int32_t: act_diff\n"
+                "- int64_t: prev_rtc\n"
+                "- int64_t: prev_dc\n"
+                "- int32_t: offset_compensation_cycles\n"
+                "- int32_t: offset_compensation_cnt\n"
+                "- int32_t: offset_compensation_max\n"
+                "- int32_t: timer_override\n"
+                "- int64_t: timer_prev\n";
 
             pdin_dc = make_shared<robotkernel::triple_buffer>(
                     (uint8_t *)&pec->dc.p_de_dc - (uint8_t *)&pec->dc.dc_time, 
                     name, "dc.inputs", pdo_desc);
+            dc_provider_hash = pdin_dc->set_provider(shared_from_this());
             k.add_device(pdin_dc);
             
             if (state == module_state_safeop)
@@ -531,7 +532,7 @@ void master::tick() {
 
     if (!pec || (pec->tx_sync == 1))
         return;
-        
+
     for (i = 0; i < pec->pd_group_cnt; ++i) {
         auto& g = groups[i];
         if ((++g->_divisor_cnt % g->_divisor) != 0)
@@ -629,7 +630,7 @@ void master::tick() {
         }        
 
         if (pdin_dc)
-            pdin_dc->write(0, (uint8_t *)&pec->dc.dc_time, 
+            pdin_dc->write(dc_provider_hash, 0, (uint8_t *)&pec->dc.dc_time, 
                     (size_t)((uint8_t *)&pec->dc.p_de_dc - (uint8_t *)&pec->dc.dc_time));
     }
 }

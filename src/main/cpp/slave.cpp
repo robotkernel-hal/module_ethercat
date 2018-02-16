@@ -614,6 +614,7 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                         format_string("slave_%d.inputs", index), 
                         pdo_desc,
                         format_string("%s.group_%d.trigger", master_dev->name.c_str(), slv->assigned_pd_group));;
+                provider_hash = pdin->set_provider(master_dev->shared_from_this());
                 k.add_device(pdin);
             }
             
@@ -625,6 +626,7 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                 pdout = make_shared<robotkernel::triple_buffer>(
                         slv->pdout.len, 
                         master_dev->name, format_string("slave_%d.outputs", index), pdo_desc);
+                consumer_hash = pdout->set_consumer(master_dev->shared_from_this());
                 k.add_device(pdout);
             }
 
@@ -709,7 +711,7 @@ void slave::pdout_handler() {
     if (!pdout || (slv->pdout.len == 0))
         return;
 
-    pdout->read(0, slv->pdout.pd, slv->pdout.len);
+    pdout->read(consumer_hash, 0, slv->pdout.pd, slv->pdout.len);
 }
 
 //! process data in handler
@@ -718,7 +720,7 @@ void slave::pdin_handler() {
     if (!pdin || (slv->pdin.len == 0))
         return;
 
-    pdin->write(0, slv->pdin.pd, slv->pdin.len);
+    pdin->write(provider_hash, 0, slv->pdin.pd, slv->pdin.len);
     pdin->pd_cookie++;
 }
 
