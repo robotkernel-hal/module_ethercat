@@ -108,7 +108,18 @@ Each CoE init command consists of it's '''index''' and it's '''subindex'''. The 
 
 == Process data ==
 
-=== distributed clocks ===
+This module provides several process data devices.
+
+=== Slave ===
+
+Each slave with inputs and/or outputs provides process data.
+
+ <modname>.slave_<nr>.outputs.pd
+ <modname>.slave_<nr>.inputs.pd
+
+The description of the process is figured out either via CoE or SoE Mailbox.
+
+=== Distributed Clocks ===
 
 Additionally the cyclic process data of the distributed clock mechanism can be retreaved.
 
