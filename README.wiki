@@ -208,4 +208,3 @@ The data delivered by that slave_id may be interpreted like:
  #define DEFTYPE_FSOECOMMPAR         0x0286 
 
 [[Category:Robotkernel-5|EtherCAT-master]]
-
