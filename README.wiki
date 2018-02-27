@@ -1,0 +1,211 @@
+The robotkernel module ''module_ethercat'' implements an own developed EtherCAT-master stack ([[libethercat]]). It's main benefit is an more deterministic frame scheduling and an improved distributed clock support with clock drift compensation.
+
+= Configuration =
+
+The '''EtherCAT-master''' uses the linux socket type SOCK_RAW. therefore we need to ensure that we have enough rights to open such a socket. this can be done by either running robokernel as root or with the CAP_NET_RAW file capability or by having the [[Linux preempt rt settings#build grant_cap_net_raw kernel module on SLED-RT hosts|grant_cap_net_raw]]-kernel module loaded (preferred).
+
+ ifname: en1
+ recv_prio: 19
+ recv_mask: 0x01
+ log_eeprom_data: false
+
+First thing we need to specify is the interface ('''iface''') we want to use as EtherCAT device. This interface should be connected and displayed as ''UP'' in the '''ifconfig''' output. If '''log_eeprom_data''' is set to true, the eeprom's of each slave will be printed on stdout.
+
+ burger_r@rmc-priamos:~> /sbin/ifconfig en1
+ en1       Link encap:Ethernet  HWaddr 68:05:CA:34:CF:6C  
+           UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+           RX packets:490200786 errors:33997 dropped:611 overruns:0 frame:33997
+           TX packets:490217815 errors:0 dropped:0 overruns:0 carrier:0
+           collisions:0 txqueuelen:1000 
+           RX bytes:55854878630 (53267.3 Mb)  TX bytes:55880461815 (53291.7 Mb)
+           Interrupt:28 Memory:f4d60000-f4d80000 
+
+The '''EtherCAT-master''' creates a receiver-thread for the ethercat-frames returning to the master. This thread should get a high realtime-priority ('''recv_prio''') and possibly be bound to one cpu ('''recv_mask''').
+
+== Main Distributed Clock settings ==
+
+If '''Distributed Clocks''' are used, the supported modes for drift compensation between the master clock and reference clock are:
+
+; master_clock 
+: correction of the system time offset (''sto'') of the dc master clock (reference clock).
+; ref_clock 
+: shift the trigger time to the dc master clock  (reference clock)
+
+ dc_offset_compensation_cycles: 100
+ dc_offset_compensation_max: 33333
+ dc_timer_override: 333333
+ dc_mode: ref_clock
+
+In this example every 100 master clock cycles the ''sto'' will be corrected by a maximum of 33333 ns.
+
+== Defining groups ==
+
+It is important to add the slaves to EtherCAT groups. These groups will be used to do the cyclic data exchange in '''safeop''' and '''op''' phase.
+
+ groups:
+     0: { divisor: 1, recv_timeout: 1000000, slaves: [ 0, 1, 2, ] }
+     1: { divisor: 5, slaves: [ 3, 7, ] }
+     2: { divisor: 10, slaves: [ 4, 5, 6, ] }
+
+At least one group needs to be specified. Each group can have it's own trigger divisor ('''divisor'''). A divisor of 1 is used to be triggered every EtherCAT cycle, a group with a divisor of 5 is only triggered every 5th cycle. This can be useful, if some slave do not need to be updated very fast or do not allow high cycletimes. All Slaves not listen in one of the '''slaves''' lists of the groups will not experience any cyclic update of their process data. Furthermore the '''recv_timeout''' can be specified for every group in [ns]. This is usefull for if the robotkernel is run in ''valgring'' or ''gdb''.
+
+== Specifying slaves ==
+
+Specifying slaves is necessary if the slaves need a specific configuration to reach the operational phase. For each slaves missing in the '''slaves''' section the EtherCAT-master tries configure it automatically.
+
+ slaves:
+ -   name: ax5000
+     index: 0
+     sm: # see ''sync manager configuration''
+     dc: # see ''distributed clock settings''
+     init_cmds:
+     -   # see ''init commands via mailbox''
+
+Each slave has it's unix '''index'''. this index is determined as the physical slave distance to the EtherCAT-master. So the first slave has an index of 0, the second has an index of 1, etc.. For each slave a '''name''' can be specified. This name is only used for logging purpose.
+
+=== Sync Manager configuration ===
+
+The configuration of the EtherCAT sync managers may also be specified. If not, the EtherCAT-master tries to figure them out automatically via the mailboxes or the stored values in the slave's eeprom. 
+
+ sm: 
+     0: { address: 0x1000, flags: 0x10020, length: 22 }
+     1: { address: 0x1400, flags: 0x10020, length: 22 }
+     2: { address: 0x0998, flags: 0x10020, length: 4 }
+
+Each sync manager has it's physical start '''address''' inside the slave's memory, corresponding '''flags''' and a byte '''length'''. For further information please consider the EtherCAT documentation.
+
+== Distributed Clock settings ==
+
+For each slave the distributed clock settings can be specified. The EtherCAT master automatically chooses the first distributed clock capable slave as clock master. 
+
+ dc: { type: 1, cycle_time_0: 250000, cycle_time_1: 750000, cycle_shift: 50000 }
+
+For each slave's distributed clock setting a '''type''' has to be specified. '''type''' 0 means that only the sync0 pulse is generated inside the slave, '''type''' 1 means that sync0 as well as sync1 pulse is generated. Also a '''cycle_shift''' can be specified per slave.
+
+== Init commands via mailbox ==
+
+Currently init commands via SoE (Servodrive/Sercos over EtherCAT) and CoE (CANOpen over EtherCAT) are supported.
+
+=== SoE example ===
+
+For a SoE init command the '''type''' soe has to be specified.
+
+ -   { # AT list
+       type: soe, idn: 0x10, atn: 0, element: 0x80, transition: 0x24, data: 080008003300bd0028005400 }
+
+Each SoE init command needs a id number ('''idn''') and a drive number ('''atn'''). The element specifies to which id field the data will be written. This is usually the data field (0x80). The '''transition''' for a standard configuration command should be specified as ''preop''(2)-to-''safeop''(4) -> (0x24). For a list of available Sercos ids please consider the Sercos fieldbus documentation.
+
+=== CoE example ===
+
+For a CoE init command the '''type''' coe has to be specified.
+
+ -   { # 160A : control word 0x6040/16
+       type: coe, index: 0x1C12, subindex: 1, transition: 0x24, ca: 0, data: 0A16 }
+
+Each CoE init command consists of it's '''index''' and it's '''subindex'''. The '''transition''' is the same as described above in the SoE section. The field '''ca''' describes, if CoE complete access should be used to transfer the data to a whole CoE index to all subindices.
+
+= Process data =
+
+This module provides several process data devices.
+
+== Slave ==
+
+Each slave with inputs and/or outputs provides process data.
+
+ <modname>.slave_<nr>.outputs.pd
+ <modname>.slave_<nr>.inputs.pd
+
+The description of the process is figured out either via CoE or SoE Mailbox.
+
+== Distributed Clocks ==
+
+Additionally the cyclic process data of the distributed clock mechanism can be retreaved.
+
+ dc_process_data_device = "<mod_name>.dc.inputs"
+
+The data delivered by that slave_id may be interpreted like:
+
+ measurements:
+ - uint64_t: dc_time
+ - uint64_t: dc_cycle_sum
+ - uint64_t: dc_cycle
+ - int32_t: dc_cycle_cnt
+ - int64_t: dc_sto
+ - uint64_t: rtc_sto
+ - uint64_t: rtc_time
+ - uint64_t: rtc_cycle_sum
+ - uint64_t: rtc_cycle
+ - int32_t: rtc_count
+ - int32_t: act_diff
+ - int64_t: prev_rtc
+ - int64_t: prev_dc
+ - int32_t: offset_compensation_cycles
+ - int32_t: offset_compensation_cnt
+ - int32_t: offset_compensation_max
+ - int32_t: timer_override
+ - int64_t: timer_prev
+
+== Datatype ==
+
+ #define DEFTYPE_NULL                0x0000 
+ #define DEFTYPE_BOOLEAN             0x0001 
+ #define DEFTYPE_INTEGER8            0x0002 
+ #define DEFTYPE_INTEGER16           0x0003 
+ #define DEFTYPE_INTEGER32           0x0004 
+ #define DEFTYPE_UNSIGNED8           0x0005 
+ #define DEFTYPE_UNSIGNED16          0x0006 
+ #define DEFTYPE_UNSIGNED32          0x0007 
+ #define DEFTYPE_REAL32              0x0008 
+ #define DEFTYPE_VISIBLESTRING       0x0009 
+ #define DEFTYPE_OCTETSTRING         0x000A 
+ #define DEFTYPE_UNICODE_STRING      0x000B 
+ #define DEFTYPE_TIME_OF_DAY         0x000C 
+ #define DEFTYPE_TIME_DIFFERENCE     0x000D 
+ #define DEFTYPE_INTEGER24           0x0010 
+ #define DEFTYPE_REAL64              0x0011 
+ #define DEFTYPE_INTEGER40           0x0012 
+ #define DEFTYPE_INTEGER48           0x0013 
+ #define DEFTYPE_INTEGER56           0x0014 
+ #define DEFTYPE_INTEGER64           0x0015 
+ #define DEFTYPE_UNSIGNED24          0x0016 
+ #define DEFTYPE_UNSIGNED40          0x0018 
+ #define DEFTYPE_UNSIGNED48          0x0019 
+ #define DEFTYPE_UNSIGNED56          0x001A 
+ #define DEFTYPE_UNSIGNED64          0x001B 
+ #define DEFTYPE_GUID                0x001D 
+ #define DEFTYPE_BYTE                0x001E 
+ #define DEFTYPE_WORD                0x001F 
+ #define DEFTYPE_DWORD               0x0020 
+ #define DEFTYPE_PDOMAPPING          0x0021 
+ #define DEFTYPE_IDENTITY            0x0023 
+ #define DEFTYPE_COMMAND             0x0025 
+ #define DEFTYPE_PDOCOMPAR           0x0027 
+ #define DEFTYPE_ENUM                0x0028 
+ #define DEFTYPE_SMPAR               0x0029 
+ #define DEFTYPE_RECORD              0x002A 
+ #define DEFTYPE_BACKUP              0x002B 
+ #define DEFTYPE_MDP                 0x002C 
+ #define DEFTYPE_BITARR8             0x002D 
+ #define DEFTYPE_BITARR16            0x002E 
+ #define DEFTYPE_BITARR32            0x002F 
+ #define DEFTYPE_BIT1                0x0030 
+ #define DEFTYPE_BIT2                0x0031 
+ #define DEFTYPE_BIT3                0x0032 
+ #define DEFTYPE_BIT4                0x0033 
+ #define DEFTYPE_BIT5                0x0034 
+ #define DEFTYPE_BIT6                0x0035 
+ #define DEFTYPE_BIT7                0x0036 
+ #define DEFTYPE_BIT8                0x0037 
+ #define DEFTYPE_ARRAY_OF_INT        0x0260 
+ #define DEFTYPE_ARRAY_OF_SINT       0x0261 
+ #define DEFTYPE_ARRAY_OF_DINT       0x0262 
+ #define DEFTYPE_ARRAY_OF_UDINT      0x0263 
+ #define DEFTYPE_ERRORHANDLING       0x0281 
+ #define DEFTYPE_DIAGHISTORY         0x0282 
+ #define DEFTYPE_SYNCSTATUS          0x0283 
+ #define DEFTYPE_SYNCSETTINGS        0x0284 
+ #define DEFTYPE_FSOEFRAME           0x0285 
+ #define DEFTYPE_FSOECOMMPAR         0x0286 
+
+[[Category:Robotkernel-5|EtherCAT-master]]
+

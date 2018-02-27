@@ -57,6 +57,7 @@ extern const std::string state_strings[];
 
 class master :
     public std::enable_shared_from_this<master>,
+    public robotkernel::pd_provider,
     public robotkernel::module_base, 
     public robotkernel::runnable 
 {

@@ -72,9 +72,9 @@ void log_func(int lvl, void *user, const char *format, ...) {
 /*!
  * \param node yaml intialization node
  */
-master::master(const std::string& name, const YAML::Node& node) 
-    : module_base("module_ethercat", name, node), 
-      runnable(node), pec(NULL) 
+master::master(const std::string& name, const YAML::Node& node) :
+    pd_provider(name), module_base("module_ethercat", name, node),
+    runnable(node), pec(NULL) 
 {
 #define get_yaml(t, n, d) \
     n = get_as<t>(node, #n, d);

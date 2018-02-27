@@ -100,7 +100,9 @@ typedef enum {
 
 class slave : 
     public std::enable_shared_from_this<slave>,
-    public service_provider::process_data_inspection::base 
+    public service_provider::process_data_inspection::base,
+    public robotkernel::pd_provider,
+    public robotkernel::pd_consumer
 {
     public:
         enum request_type {
@@ -347,8 +349,10 @@ class slave :
 
         // named process data
         robotkernel::sp_process_data_t pdin;
+        robotkernel::sp_trigger_t      pdin_trigger;
         std::size_t provider_hash;
         robotkernel::sp_process_data_t pdout;
+        robotkernel::sp_trigger_t      pdout_trigger;
         std::size_t consumer_hash;
 
         // service requesters
