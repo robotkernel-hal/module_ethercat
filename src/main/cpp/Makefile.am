@@ -9,6 +9,7 @@ libmodule_ethercat_la_CXXFLAGS = -Wall -Wno-deprecated-declarations -I$(srcdir) 
                                  @ROBOTKERNEL_CFLAGS@ @LIBETHERCAT_CFLAGS@  \
                                  @SERVICE_PROVIDER_MEMORY_INSPECTION_CFLAGS@ \
                                  @SERVICE_PROVIDER_CANOPEN_PROTOCOL_CFLAGS@ \
+                                 @SERVICE_PROVIDER_KEY_VALUE_CFLAGS@ \
                                  @SERVICE_PROVIDER_SERCOS_PROTOCOL_CFLAGS@ \
                                  @SERVICE_PROVIDER_FILE_PROTOCOL_CFLAGS@ \
                                  @SERVICE_PROVIDER_PROCESS_DATA_INSPECTION_CFLAGS@

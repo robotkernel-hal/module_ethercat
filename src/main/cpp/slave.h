@@ -36,6 +36,8 @@
 #include "service_provider/sercos_protocol/base.h"
 #include "service_provider/file_protocol/base.h"
 #include "service_provider/process_data_inspection/base.h"
+#include "service_provider/key_value/base.h"
+#include "service_provider/key_value/key_value_helper.h"
 
 extern "C" void convert_string_to_hex(std::string input, 
         char **output, size_t *outlen);
@@ -101,6 +103,7 @@ typedef enum {
 class slave : 
     public std::enable_shared_from_this<slave>,
     public service_provider::process_data_inspection::base,
+    public key_value_slave,
     public robotkernel::pd_provider,
     public robotkernel::pd_consumer
 {
@@ -380,6 +383,8 @@ class slave :
 
         //! destruction
         ~slave();
+
+        void init_key_value();
 
         // perform robotkernel clean up
         void clean_up();

@@ -142,10 +142,13 @@ slave::sync_manager_settings::sync_manager_settings(const YAML::Node& node) {
 slave::slave(int index, master *master_dev) : 
     service_provider::process_data_inspection::base(master_dev->name, 
             format_string("slave_%d", index)),
+    key_value_slave(master_dev->name, format_string("slave_%d", index)),
     pd_provider(master_dev->name + format_string(".slave_%d", index)),
     pd_consumer(master_dev->name + format_string(".slave_%d", index)),
     index(index), master_dev(master_dev) 
 {
+    init_key_value();
+
     master_dev->log(verbose, "default slave index %d created\n", index);
 };
 
@@ -157,6 +160,7 @@ slave::slave(int index, master *master_dev) :
 slave::slave(const YAML::Node& node, master *master_dev) : 
     service_provider::process_data_inspection::base(master_dev->name, 
             format_string("slave_%d", get_as<int>(node, "index"))), 
+    key_value_slave(master_dev->name, format_string("slave_%d", get_as<int>(node, "index"))),
     pd_provider(master_dev->name + format_string(".slave_%d", index)),
     pd_consumer(master_dev->name + format_string(".slave_%d", index)),
     master_dev(master_dev) 
@@ -222,6 +226,8 @@ slave::slave(const YAML::Node& node, master *master_dev) :
         }
     }
 
+    init_key_value();
+
     master_dev->log(verbose,
             "slave %s index %d created\n", name.c_str(), index);
 }
@@ -237,6 +243,27 @@ slave::~slave() {
         delete(*it);
 }
  
+template <typename T>
+key_value_key<T> *create_key(key_value_slave *parent, std::string name, T* val, std::string desc = "", 
+        std::string unit = "", std::string default_value = "", std::string format = "") {
+    auto *k = new key_value_key<T>(parent, name, val, false);
+    k->describe(desc);
+    k->unit(unit);
+    k->default_value(default_value);
+    k->format(format);
+    return k;
+}
+
+void slave::init_key_value() {
+    _add_key(create_key<int>     (this, "index", &index, "Position where attached on EtherCAT"));
+    _add_key(create_key<string>  (this, "name", &name, "Slave name"));
+    _add_key(create_key<bool>    (this, "dc.has_dc", &dc.has_dc, "Slave support for Distributed Clocks"));
+    _add_key(create_key<int>     (this, "dc.type", &dc.type, "Distributed Clock type"));
+    _add_key(create_key<uint32_t>(this, "dc.cycle_time_0", &dc.cycle_time_0, "Cycle Time Sync0", "ns")); 
+    _add_key(create_key<uint32_t>(this, "dc.cycle_time_1", &dc.cycle_time_1, "Cycle Time Sync1", "ns")); 
+    _add_key(create_key<uint32_t>(this, "dc.cycle_shift", &dc.cycle_shift, "Cyclce Shift"));
+}
+
 // perform robotkernel clean up
 void slave::clean_up() {
     kernel& k = *kernel::get_instance();
@@ -444,6 +471,25 @@ void slave::pre_state_transition(module_state_t from, module_state_t to) {
         case preop_2_init:
         case preop_2_boot:
             // ====> deinit devices
+            for (int i = 0; i < master_dev->pec->slaves[index].sm_ch; ++i) {
+                auto prefix = format_string("sync_manager.%d.", i);
+                key_map.erase(prefix + "address");
+                key_map.erase(prefix + "length");
+                key_map.erase(prefix + "flags");    
+            }
+            
+            for (int i = 0; i < master_dev->pec->slaves[index].fmmu_ch; ++i) {
+                auto prefix = format_string("fmmu.%d.", i);
+                key_map.erase(prefix + "log");
+                key_map.erase(prefix + "log_len");
+                key_map.erase(prefix + "log_bit_start");
+                key_map.erase(prefix + "log_bit_stop");
+                key_map.erase(prefix + "phys");
+                key_map.erase(prefix + "phys_bit_start");
+                key_map.erase(prefix + "type");
+                key_map.erase(prefix + "active");
+            }
+
         case init_2_init:
             // ====> re-/open ethercat device
             if (to == module_state_init)
@@ -539,7 +585,8 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
         case safeop_2_init:
         case safeop_2_boot:
             // ====> stop receiving measurements
-            REMOVE_SERVICE_COLLECTOR(shared_from_this()); // process data inspection
+            k.remove_device(std::static_pointer_cast<
+                    service_provider::process_data_inspection::base>(shared_from_this())); // process data inspection
             
             if (pdin)  { k.remove_device(pdin); pdin = nullptr; }
             if (pdout) { k.remove_device(pdout); pdout = nullptr; }
@@ -581,6 +628,36 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
         case init_2_preop:
         case preop_2_preop:
             // ====> initial devices            
+            for (int i = 0; i < master_dev->pec->slaves[index].sm_ch; ++i) {
+                auto prefix = format_string("sync_manager.%d.", i);
+                _add_key(create_key<uint16_t>(this, prefix + "address", 
+                            &master_dev->pec->slaves[index].sm[i].adr, "Physical start address"));
+                _add_key(create_key<uint16_t>(this, prefix + "length", 
+                            &master_dev->pec->slaves[index].sm[i].len, "Length"));
+                _add_key(create_key<uint32_t>(this, prefix + "flags", 
+                            &master_dev->pec->slaves[index].sm[i].flags, "Flags"));
+            }
+
+            for (int i = 0; i < master_dev->pec->slaves[index].fmmu_ch; ++i) {
+                auto prefix = format_string("fmmu.%d.", i);
+                _add_key(create_key<uint32_t>(this, prefix + "log",
+                            &master_dev->pec->slaves[index].fmmu[i].log, "Logical bus address"));
+                _add_key(create_key<uint16_t>(this, prefix + "log_len",
+                            &master_dev->pec->slaves[index].fmmu[i].log_len, "Length of logical address area"));
+                _add_key(create_key<uint8_t >(this, prefix + "log_bit_start",
+                            &master_dev->pec->slaves[index].fmmu[i].log_bit_start, "Start bit at logical bus address"));
+                _add_key(create_key<uint8_t >(this, prefix + "log_bit_stop",
+                            &master_dev->pec->slaves[index].fmmu[i].log_bit_stop, "Stop bit at logical address plus length"));
+                _add_key(create_key<uint16_t>(this, prefix + "phys",
+                            &master_dev->pec->slaves[index].fmmu[i].phys, "Physical (local) address in slave"));
+                _add_key(create_key<uint8_t >(this, prefix + "phys_bit_start",
+                            &master_dev->pec->slaves[index].fmmu[i].phys_bit_start, "Physical start bit at physical address"));
+                _add_key(create_key<uint8_t >(this, prefix + "type",
+                            &master_dev->pec->slaves[index].fmmu[i].type, "Type, read or write"));
+                _add_key(create_key<uint8_t >(this, prefix + "active",
+                            &master_dev->pec->slaves[index].fmmu[i].active, "Activation flag"));
+            }
+
             if (mbx_sup & EC_EEPROM_MBX_FOE)
                 ADD_SERVICE_COLLECTOR_CLASS(_mbx_foe, slave::file_protocol);
             
@@ -600,7 +677,8 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
         case preop_2_op:
         case preop_2_safeop:
             // ====> start receiving measurements
-            ADD_SERVICE_COLLECTOR(shared_from_this()); // process data inspection
+            k.add_device(std::static_pointer_cast<
+                    service_provider::process_data_inspection::base>(shared_from_this()));
             
             if (mbx_sup & EC_EEPROM_MBX_SOE) {
                 for (unsigned atn = 0; atn < _mbx_soe_list.size(); ++atn) {
