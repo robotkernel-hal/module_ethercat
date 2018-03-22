@@ -11,12 +11,16 @@ defines
 module_ethercat_base:          %(dirname %(dirname %(CURDIR)))
 module_ethercat_libdir:        %(subst "${exec_prefix}/", "", "@libdir@")
 module_ethercat_type:          %(ifexists "%(module_ethercat_base)/%(module_ethercat_libdir)/libmodule_ethercat.so", "local_install", "rmpm_release")
-module_ethercat_libpath:       %(subst "osl42-x86_64", "$(ARCH)", "@LIBETHERCAT_LIBPATHES@")
-module_ethercat_library_path:  %(ifeq "%(module_ethercat_type)", "local_install", "%(module_ethercat_base)/%(module_ethercat_libdir)", "%(module_ethercat_base)/lib/$(ARCH)")
+module_ethercat_type:          %(ifexists "%(module_ethercat_base)/../$(ARCH)", "rmpm_release", "local_install")
+module_ethercat_library_path:  %(ifeq "%(module_ethercat_type)", "local_install", "%(module_ethercat_base)", "%(dirname %(module_ethercat_base))/$(ARCH)")
+module_ethercat_gui_plugin:    %(module_ethercat_base)/share/robotkernel_gui/python
 
 ifndef rk_library_path: rk_library_path: ""
-rk_library_path: %(rk_library_path):%(module_ethercat_library_path)
+rk_library_path: %(rk_library_path):%(module_ethercat_library_path):%(module_ethercat_libdir)
 
 ifndef rk_libpath: rk_libpath: ""
 rk_libpath: %(rk_libpath):%(module_ethercat_libpath)
+
+ifndef rk_gui_plugin_path: rk_gui_plugin_path: ""
+rk_gui_plugin_path: %(rk_gui_plugin_path):%(module_ethercat_gui_plugin)
 
