@@ -357,7 +357,7 @@ void slave::canopen::read_element(const uint16_t& index, const uint8_t& sub_inde
 
             if (ret != 0) {
                 // decode ret
-                throw str_exception("slave %2d: reading CoE element description index 0x%X "
+                throw str_exception("slave %2d: reading CoE element index 0x%X "
                         "sub index %d returned errorcode 0x%X!\n", slv->index, 
                         index, sub_index, ret);
             }
