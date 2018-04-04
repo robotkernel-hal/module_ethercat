@@ -362,7 +362,7 @@ void slave::canopen::read_element(const uint16_t& index, const uint8_t& sub_inde
                         index, sub_index, ret);
             }
 
-            if (buf != (uint8_t *)&value[0]) {
+            if (buf && buf_len) {
                 // ec_coe_sdo_read call did allocate buffer
                 value.resize(buf_len);    
                 memcpy(&value[0], buf, buf_len);
@@ -480,6 +480,9 @@ string slave::canopen::get_pdo_description(uint16_t idx) {
     read_element(idx, 0, element);
     uint8_t entry_cnt = element[0];
 
+    slv->master_dev->log(verbose, "getting pdo description idx 0x%X : reading %d entries\n", 
+            idx, entry_cnt);
+
     // now read all mapped pdo's to retreave the mapped object lengths
     for (int i = 1; i <= entry_cnt; ++i) {
         // read mapped pdo
@@ -489,6 +492,8 @@ string slave::canopen::get_pdo_description(uint16_t idx) {
         // read mapped element count
         read_element(entry_idx, 0, element);
         uint8_t entry_cnt_2 = element[0];
+
+        slv->master_dev->log(verbose, "  mapped pdo 0x%X, count %d\n", entry_idx, entry_cnt_2);
 
         for (int entry_sub_idx = 1; entry_sub_idx <= entry_cnt_2; ++entry_sub_idx) {
             // read mapped element 
@@ -509,6 +514,8 @@ string slave::canopen::get_pdo_description(uint16_t idx) {
                 data_type = ss.str();
             }
     
+            slv->master_dev->log(verbose, "    subindex %d, entry %08X, name %s\n", entry_sub_idx, entry, desc.name.c_str());
+
             out << YAML::BeginMap;
             out << YAML::Key << data_type << YAML::Value << desc.name;
             out << YAML::EndMap;
