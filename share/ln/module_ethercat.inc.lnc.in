@@ -10,13 +10,13 @@ requires_version 0.2.43
 defines
 module_ethercat_base:          %(dirname %(dirname %(CURDIR)))
 module_ethercat_libdir:        %(subst "${exec_prefix}/", "", "@libdir@")
-module_ethercat_type:          %(ifexists "%(module_ethercat_base)/%(module_ethercat_libdir)/libmodule_ethercat.so", "local_install", "rmpm_release")
+module_ethercat_libpath:       %(subst "osl42-x86_64", "$(ARCH)", "/volume/software/common/packages/libethercat/0.1.beta10/osl42-x86_64/lib:/volume/software/common/packages/libethercat/0.1.beta10/osl42-x86_64/lib64")
 module_ethercat_type:          %(ifexists "%(module_ethercat_base)/../$(ARCH)", "rmpm_release", "local_install")
 module_ethercat_library_path:  %(ifeq "%(module_ethercat_type)", "local_install", "%(module_ethercat_base)", "%(dirname %(module_ethercat_base))/$(ARCH)")
 module_ethercat_gui_plugin:    %(module_ethercat_base)/share/robotkernel_gui/python
 
 ifndef rk_library_path: rk_library_path: ""
-rk_library_path: %(rk_library_path):%(module_ethercat_library_path):%(module_ethercat_libdir)
+rk_library_path: %(rk_library_path):%(module_ethercat_library_path)/%(module_ethercat_libdir)
 
 ifndef rk_libpath: rk_libpath: ""
 rk_libpath: %(rk_libpath):%(module_ethercat_libpath)
