@@ -161,8 +161,8 @@ slave::slave(const YAML::Node& node, master *master_dev) :
     service_provider::process_data_inspection::base(master_dev->name, 
             format_string("slave_%d", get_as<int>(node, "index"))), 
     key_value_slave(master_dev->name, format_string("slave_%d", get_as<int>(node, "index"))),
-    pd_provider(master_dev->name + format_string(".slave_%d", index)),
-    pd_consumer(master_dev->name + format_string(".slave_%d", index)),
+    pd_provider(master_dev->name + format_string(".slave_%d", get_as<int>(node, "index"))),
+    pd_consumer(master_dev->name + format_string(".slave_%d", get_as<int>(node, "index")),
     master_dev(master_dev) 
 {
     name  = get_as<string>(node, "name");
@@ -693,7 +693,11 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                 
                 pdin_trigger = make_shared<robotkernel::trigger>(
                         master_dev->name, format_string("slave_%d.inputs", index));
-                string pdo_desc = mbx_coe->get_pdo_description(0x1C13);
+                string pdo_desc = "";
+                    
+                if (mbx_coe)
+                    pdo_desc = mbx_coe->get_pdo_description(0x1C13);
+
                 pdin = make_shared<robotkernel::triple_buffer>(
                         slv->pdin.len, 
                         master_dev->name, 
@@ -712,7 +716,11 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                         master_dev->name, format_string("slave_%d.outputs", index));
                 k.add_device(pdout_trigger);
 
-                string pdo_desc = mbx_coe->get_pdo_description(0x1C12);
+                string pdo_desc = "";
+                
+                if (mbx_coe) 
+                    pdo_desc = mbx_coe->get_pdo_description(0x1C12);
+
                 pdout = make_shared<robotkernel::triple_buffer>(slv->pdout.len, master_dev->name, 
                         format_string("slave_%d.outputs", index), pdo_desc, pdout_trigger->id());
                 consumer_hash = pdout->set_consumer(shared_from_this());
