@@ -501,8 +501,15 @@ string slave::canopen::get_pdo_description(uint16_t idx) {
             uint32_t entry = *(uint32_t *)&element[0];
 
             service_provider::canopen_protocol::element_description_t desc;
-            get_element_description((entry & 0xFFFF0000) >> 16, 
-                    (entry & 0x0000FF00) >>8, desc);
+
+            uint16_t pdo_entry_id = (entry & 0xFFFF0000) >> 16;
+            uint16_t pdo_entry_subid = (entry & 0x0000FF00) >> 8;
+            if (pdo_entry_id > 0) 
+                get_element_description(pdo_entry_id, pdo_entry_subid, desc);
+            else {
+                desc.name = "";
+                desc.data_type = 0;
+            }
 
             if (desc.name == "") 
                 desc.name = format_string("padding_%d", entry_sub_idx);

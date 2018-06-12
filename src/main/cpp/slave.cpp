@@ -162,7 +162,7 @@ slave::slave(const YAML::Node& node, master *master_dev) :
             format_string("slave_%d", get_as<int>(node, "index"))), 
     key_value_slave(master_dev->name, format_string("slave_%d", get_as<int>(node, "index"))),
     pd_provider(master_dev->name + format_string(".slave_%d", get_as<int>(node, "index"))),
-    pd_consumer(master_dev->name + format_string(".slave_%d", get_as<int>(node, "index")),
+    pd_consumer(master_dev->name + format_string(".slave_%d", get_as<int>(node, "index"))),
     master_dev(master_dev) 
 {
     name  = get_as<string>(node, "name");
