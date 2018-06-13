@@ -406,6 +406,26 @@ void slave::canopen::write_element(const uint16_t& index, const uint8_t& sub_ind
     }
 }
 
+//! pop next emergency message, throw exception if non present
+/*!
+ * \param msg return emergency message
+ */
+void slave::canopen::pop_emergency_message(
+        service_provider::canopen_protocol::emergency_message_t& msg) {
+    ec_emergency_message_entry_t *entry;
+    entry = TAILQ_FIRST(&slv->master_dev->pec->slaves[slv->index].mbx_coe_emergencies);
+    if (!entry)
+        throw str_exception("slave %2d: there are no more emergency messages\n", slv->index);
+
+    msg.ts.tv_sec = entry->timestamp.sec;
+    msg.ts.tv_nsec = entry->timestamp.nsec;
+    msg.error_code = entry->msg[0] | ((uint16_t)entry->msg[1] << 8);
+    msg.error_register = entry->msg[2]; 
+
+    for (unsigned i = 3; i < entry->msg_len; ++i)
+        msg.data.push_back(entry->msg[i]);
+}
+
 std::map<uint16_t, std::string> data_type_2_string = {
     { 0x0000, "null" },
     { 0x0001, "bool_t" },

@@ -198,6 +198,12 @@ class slave :
                  */
                 void write_element(const uint16_t& index, const uint8_t& sub_index,
                         const service_provider::canopen_protocol::element_t& value);
+                
+                //! pop next emergency message, throw exception if non present
+                /*!
+                 * \param msg return emergency message
+                 */
+                void pop_emergency_message(service_provider::canopen_protocol::emergency_message_t& msg);
 
                 //! return process data description yaml string 
                 /*!
