@@ -311,6 +311,15 @@ int master::set_state(module_state_t state) {
         case op_2_init:
         case op_2_boot:
             // ====> stop sending commands
+            if (
+                    (state == module_state_preop) ||
+                    (state == module_state_init)  ||
+                    (state == module_state_boot)) {
+                // trigger is already deregistered by robotkernel
+                stop();
+                pec->tx_sync = 1;
+            }
+
             STATE_TRANSITION(pre, module_state_safeop);
             ec_set_state(pec, EC_STATE_SAFEOP);
             STATE_TRANSITION(post, module_state_safeop);
@@ -321,6 +330,9 @@ int master::set_state(module_state_t state) {
         case safeop_2_init:
         case safeop_2_boot:
             // ====> stop receiving measurements
+            stop();
+            pec->tx_sync = 1;
+
             if (pdin_dc) {
                 k.remove_device(pdin_dc);
                 pdin_dc = nullptr;
@@ -329,9 +341,6 @@ int master::set_state(module_state_t state) {
             // remove group trigger devices
             for (const auto& kv : groups)
                 k.remove_device(kv.second);
-
-            stop();
-            pec->tx_sync = 1;
 
             STATE_TRANSITION(pre, module_state_preop);
             ec_set_state(pec, EC_STATE_PREOP);

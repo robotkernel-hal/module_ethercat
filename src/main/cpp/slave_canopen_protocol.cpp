@@ -419,11 +419,15 @@ void slave::canopen::pop_emergency_message(
 
     msg.ts.tv_sec = entry->timestamp.sec;
     msg.ts.tv_nsec = entry->timestamp.nsec;
-    msg.error_code = entry->msg[0] | ((uint16_t)entry->msg[1] << 8);
+    msg.error_code = (uint16_t)entry->msg[0] | ((uint16_t)entry->msg[1] << 8);
     msg.error_register = entry->msg[2]; 
 
     for (unsigned i = 3; i < entry->msg_len; ++i)
         msg.data.push_back(entry->msg[i]);
+
+    TAILQ_REMOVE(&slv->master_dev->pec->slaves[slv->index].mbx_coe_emergencies, entry, qh);
+
+    free(entry);
 }
 
 std::map<uint16_t, std::string> data_type_2_string = {
@@ -508,6 +512,9 @@ string slave::canopen::get_pdo_description(uint16_t idx) {
         // read mapped pdo
         read_element(idx, i, element);
         uint16_t entry_idx = *(uint16_t *)&element[0];
+
+        if (entry_idx == 0)
+            continue; // skip this one
 
         // read mapped element count
         read_element(entry_idx, 0, element);
