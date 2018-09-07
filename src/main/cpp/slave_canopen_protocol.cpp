@@ -289,6 +289,10 @@ void slave::canopen::get_element_description(const uint16_t& index, const uint8_
                 if (tmp < (entry_desc.data + entry_desc.data_len)) {
                     size_t restlen = (entry_desc.data + entry_desc.data_len) - tmp;
                     desc.name = std::string((char *)tmp, restlen);
+
+                    if ((signed)desc.name.length() != std::count_if(desc.name.begin(), desc.name.end(), 
+                                [](unsigned char c){ return std::isprint(c); } ))
+                        desc.name = format_string("subindex_%d", sub_index); // name is not printable
                 }
 
                 free(entry_desc.data);
@@ -538,6 +542,10 @@ string slave::canopen::get_pdo_description(uint16_t idx) {
                 desc.data_type = 0;
             }
 
+            if ((signed)desc.name.length() != std::count_if(desc.name.begin(), desc.name.end(), 
+                        [](unsigned char c){ return std::isprint(c); } ))
+                desc.name = format_string("no_text_%d", entry_sub_idx); // name is not printable
+            
             if (desc.name == "") 
                 desc.name = format_string("padding_%d", entry_sub_idx);
 
