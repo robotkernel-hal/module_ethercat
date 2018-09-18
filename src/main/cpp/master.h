@@ -113,6 +113,7 @@ class master :
 
         //! named process data for distributed clocks info
         robotkernel::sp_process_data_t pdin_dc;
+        robotkernel::sp_trigger_t      pdin_dc_trigger;
         std::size_t dc_provider_hash;
 
     public:

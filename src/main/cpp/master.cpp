@@ -338,6 +338,11 @@ int master::set_state(module_state_t state) {
                 pdin_dc = nullptr;
             }
 
+            if (pdin_dc_trigger) {
+                k.remove_device(pdin_dc_trigger);
+                pdin_dc_trigger = nullptr;
+            }
+
             // remove group trigger devices
             for (const auto& kv : groups)
                 k.remove_device(kv.second);
@@ -485,6 +490,12 @@ int master::set_state(module_state_t state) {
             if (pdin_dc)
                 k.remove_device(pdin_dc);
 
+            if (pdin_dc_trigger)
+                k.remove_device(pdin_dc_trigger);
+            
+            pdin_dc_trigger = make_shared<robotkernel::trigger>(name, "dc.inputs");
+            k.add_device(pdin_dc_trigger);
+
             string pdo_desc = 
                 "- uint64_t: dc_time\n"
                 "- uint64_t: dc_cycle_sum\n"
@@ -507,7 +518,7 @@ int master::set_state(module_state_t state) {
 
             pdin_dc = make_shared<robotkernel::triple_buffer>(
                     (uint8_t *)&pec->dc.p_de_dc - (uint8_t *)&pec->dc.dc_time, 
-                    name, "dc.inputs", pdo_desc);
+                    name, "dc.inputs", pdo_desc, pdin_dc_trigger->id());
             dc_provider_hash = pdin_dc->set_provider(shared_from_this());
             k.add_device(pdin_dc);
             
@@ -638,9 +649,11 @@ void master::tick() {
             dc_sync.last_diff = diff;
         }        
 
-        if (pdin_dc)
+        if (pdin_dc) {
             pdin_dc->write(dc_provider_hash, 0, (uint8_t *)&pec->dc.dc_time, 
                     (size_t)((uint8_t *)&pec->dc.p_de_dc - (uint8_t *)&pec->dc.dc_time));
+            pdin_dc_trigger->trigger_modules();
+        }
     }
 }
 
