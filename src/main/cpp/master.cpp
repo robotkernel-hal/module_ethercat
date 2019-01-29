@@ -85,6 +85,7 @@ master::master(const std::string& name, const YAML::Node& node) :
     get_yaml(bool,     log_eeprom_data, false);
     get_yaml(int,      trigger_interval, 0);
     get_yaml(bool,     threaded_startup, true);
+    get_yaml(bool,     log_dc, false);
     get_yaml(int,      dc_offset_compensation_cycles, 250);
     get_yaml(int,      dc_timer_override, -1);
     get_yaml(uint64_t, dc_offset_compensation_max, 100000000);
@@ -151,29 +152,26 @@ void master::open() {
         int slave_nr = it->first;
         sp_slave_t slv = it->second;
 
-        if (pec->slave_cnt > slave_nr) {
-            for (slave::coe_list_t::iterator it2 = slv->coe_init_cmds.begin();
-                    it2 != slv->coe_init_cmds.end(); ++it2) {
-                slave::coe_init_cmd_t *cmd = *it2;
-                ec_slave_add_init_cmd(pec, slave_nr, EC_MBX_COE, 
-                        (int)cmd->transition, cmd->index, cmd->subindex, 
-                        cmd->ca, cmd->data, cmd->datalen);
-
-                cmd->already_added = true;
-            }
-        } else {
-            log(warning, "setting inits for slave %2d failed. no slave found!\n", slave_nr);
-            continue;
-        }
+//        if (pec->slave_cnt > slave_nr) {
+//            for (slave::coe_list_t::iterator it2 = slv->coe_init_cmds.begin();
+//                    it2 != slv->coe_init_cmds.end(); ++it2) {
+//                slave::coe_init_cmd_t *cmd = *it2;
+//                ec_slave_add_init_cmd(pec, slave_nr, EC_MBX_COE, 
+//                        (int)cmd->transition, cmd->index, cmd->subindex, 
+//                        cmd->ca, cmd->data, cmd->datalen);
+//
+//                cmd->already_added = true;
+//            }
+//        } else {
+//            log(warning, "setting inits for slave %2d failed. no slave found!\n", slave_nr);
+//            continue;
+//        }
                 
-        if (slv->dc.has_dc) {
-            pec->slaves[slave_nr].dc.use_dc        = 1;
-            pec->slaves[slave_nr].dc.type          = slv->dc.type;
-            pec->slaves[slave_nr].dc.cycle_time_0  = slv->dc.cycle_time_0;
-            pec->slaves[slave_nr].dc.cycle_time_1  = slv->dc.cycle_time_1;
-            pec->slaves[slave_nr].dc.cycle_shift   = slv->dc.cycle_shift;
-        } else 
-            pec->slaves[slave_nr].dc.use_dc = 0;
+        if (slv->dc.has_dc)
+            ec_slave_set_dc_config(pec, slave_nr, 1, slv->dc.type, slv->dc.cycle_time_0,
+                    slv->dc.cycle_time_1, slv->dc.cycle_shift);
+        else 
+            ec_slave_set_dc_config(pec, slave_nr, 0, 0, 0, 0, 0);
     }
 
     // -----------------------------------------------------------
@@ -638,9 +636,10 @@ void master::tick() {
             try {
                 t_dev->set_rate(1.f / act_timer);
 
-                log(verbose, "setting new clock %13.10f, last_diff %13.10f, diff %13.10f, "
-                        "offset_comp %d\n", act_timer, dc_sync.last_diff, diff, 
-                        pec->dc.offset_compensation_cycles);
+                if (log_dc) 
+                    log(info, "setting new clock %13.10f, last_diff %13.10f, diff %13.10f, "
+                            "offset_comp %d\n", act_timer, dc_sync.last_diff, diff, 
+                            pec->dc.offset_compensation_cycles);
             } catch (exception& e) {
                 log(warning, "setting new clock failed: %s\n", e.what());
             }

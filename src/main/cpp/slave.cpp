@@ -280,11 +280,7 @@ void slave::clean_up() {
 /*!
  */
 void slave::add_init_cmds() {
-    for (coe_list_t::iterator it = coe_init_cmds.begin();
-            it != coe_init_cmds.end(); ++it) {
-
-        coe_init_cmd_t *cmd = *it;
-
+    for (const auto& cmd : coe_init_cmds) {
         if (cmd->already_added)
             continue;
 
@@ -295,7 +291,7 @@ void slave::add_init_cmds() {
             int ret2 = ec_coe_sdo_entry_desc_read(master_dev->pec, index, 
                     cmd->index, cmd->subindex, 0x7F, &entry_desc);
 
-            if (ret2 > 0) {
+            if (ret2 == 0) {
                 py_value    *pval       = eval_full(cmd->value);
                 py_int      *pintval    = dynamic_cast<py_int *>(pval);
                 py_long     *plongval   = dynamic_cast<py_long *>(pval);
@@ -528,16 +524,18 @@ void slave::pre_state_transition(module_state_t from, module_state_t to) {
                             "cycle_times %d/%d, cycle_shift %d\n",
                             index, dc.cycle_time_0, dc.cycle_time_1, dc.cycle_shift);
 
-                    ec_dc_sync01(master_dev->pec, index, 1, dc.cycle_time_0, dc.cycle_time_1, dc.cycle_shift);
+                    ec_slave_set_dc_config(master_dev->pec, index, 1, 1, 
+                            dc.cycle_time_0, dc.cycle_time_1, dc.cycle_shift);
                 } else {
                     master_dev->log(verbose, "slave %2d configuring dc sync 0, "
                             "cycle_time %d, cycle_shift %d\n",
                             index, dc.cycle_time_0, dc.cycle_shift);
 
-                    ec_dc_sync0(master_dev->pec, index, 1, dc.cycle_time_0, dc.cycle_shift);
+                    ec_slave_set_dc_config(master_dev->pec, index, 1, 0, 
+                            dc.cycle_time_0, 0, dc.cycle_shift);
                 }
-            } else
-                ec_dc_sync0(master_dev->pec, index, 0, 0, 0);
+            } else 
+                ec_slave_set_dc_config(master_dev->pec, index, 0, 0, 0, 0, 0); 
 
             if (to == module_state_safeop)
                 break;

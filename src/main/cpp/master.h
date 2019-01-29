@@ -98,6 +98,7 @@ class master :
 
         int trigger_interval;
         bool threaded_startup;
+        bool log_dc;
 
         uint64_t pd_cookie;
         std::mutex pd_mtx;
