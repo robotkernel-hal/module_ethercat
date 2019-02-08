@@ -26,7 +26,7 @@ m4_ifdef([PKG_PROG_PKG_CONFIG], [PKG_PROG_PKG_CONFIG])
 m4_ifdef([PKG_INSTALLDIR], [PKG_INSTALLDIR], [pkgconfigdir='${libdir}/pkgconfig' AC_SUBST([pkgconfigdir])])
 
 # Check dependencies
-RK_CHECK_MODULES
+PKG_CHECK_MODULES([ROBOTKERNEL], [robotkernel])
 
 AC_DEFUN([GET_LIBRARY_PATHES],
          [
