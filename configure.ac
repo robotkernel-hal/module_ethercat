@@ -28,28 +28,6 @@ m4_ifdef([PKG_INSTALLDIR], [PKG_INSTALLDIR], [pkgconfigdir='${libdir}/pkgconfig'
 # Check dependencies
 PKG_CHECK_MODULES([ROBOTKERNEL], [robotkernel])
 
-AC_DEFUN([GET_LIBRARY_PATHES],
-         [
-            LIBSI=""
-            for path in $2; do
-                ANS=$([ [[ $path == -L* ]] || echo 'fail' ])
-                if test x$ANS != xfail; then
-                    STRIPPED=$([ echo ${path#-L} ])
-                    if test "$LIBSI" = ""; then
-                        LIBSI="$STRIPPED"
-                    else
-                        LIBSI="$LIBSI:$STRIPPED"
-                    fi
-                fi
-            done
-
-            $1[]=$LIBSI
-        ])
-
-GET_LIBRARY_PATHES(LIBETHERCAT_LIBPATHES, $LIBETHERCAT_LIBS)
-AC_SUBST(LIBETHERCAT_LIBPATHES)
-AC_SUBST(DLRRM_HOST_PLATFORM)
-
 # Checks for header files.
 AC_CHECK_HEADERS([stdlib.h string.h])
 
