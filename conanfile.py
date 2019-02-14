@@ -15,7 +15,7 @@ class MainProject(ConanFile):
     }
 
     generators = "pkg_config"
-    requires = [
+    requires = (
             "robotkernel/[~=5.0]@robotkernel/unstable",
             "service_provider_memory_inspection/[~=5.0]@robotkernel/unstable",
             "service_provider_canopen_protocol/[~=5.0]@robotkernel/unstable",
@@ -23,7 +23,7 @@ class MainProject(ConanFile):
             "service_provider_sercos_protocol/[~=5.0]@robotkernel/unstable",
             "service_provider_file_protocol/[~=5.0]@robotkernel/unstable",
             "service_provider_process_data_inspection/[~=5.0]@robotkernel/unstable",
-            "libethercat/[~=0.1]@common/stable" ]
+            "libethercat/[~=0.1]@common/stable" )
 
     def source(self):
         filedata = None
