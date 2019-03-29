@@ -820,5 +820,8 @@ void slave::pdin_handler() {
 
     pdin->write(provider_hash, 0, slv->pdin.pd, slv->pdin.len);
     pdin->pd_cookie++;
+
+    if (pdin_trigger)
+        pdin_trigger->trigger_modules();
 }
 
