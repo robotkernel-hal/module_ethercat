@@ -89,6 +89,7 @@ master::master(const std::string& name, const YAML::Node& node) :
     get_yaml(int,      dc_offset_compensation_cycles, 250);
     get_yaml(int,      dc_timer_override, -1);
     get_yaml(uint64_t, dc_offset_compensation_max, 100000000);
+    get_yaml(bool,     brd_state, false);
 
     thread_name = format_string("%s.mbxhandler", name.c_str());
 
@@ -546,7 +547,7 @@ int master::set_state(module_state_t state) {
 void master::tick() {
     int i = 0;
     int64_t max_timeout = 0;
-    ec_timer_t dc_timeout;
+    ec_timer_t dc_timeout, ec_state_timeout;
 
     if (!pec || (pec->tx_sync == 1))
         return;
@@ -571,6 +572,11 @@ void master::tick() {
     if (pec->dc.have_dc) {
         ec_send_distributed_clocks_sync(pec);
         ec_timer_init(&dc_timeout, max_timeout);
+    }
+
+    if (brd_state) {
+        ec_send_brd_ec_state(pec); 
+        ec_timer_init(&ec_state_timeout, 1000000000);
     }
 
     hw_tx(pec->phw);
@@ -653,6 +659,10 @@ void master::tick() {
                     (size_t)((uint8_t *)&pec->dc.p_de_dc - (uint8_t *)&pec->dc.dc_time));
             pdin_dc_trigger->trigger_modules();
         }
+    }
+    
+    if (brd_state) {
+        ec_receive_brd_ec_state(pec, &ec_state_timeout); 
     }
 }
 
