@@ -89,7 +89,7 @@ master::master(const std::string& name, const YAML::Node& node) :
     get_yaml(int,      dc_offset_compensation_cycles, 250);
     get_yaml(int,      dc_timer_override, -1);
     get_yaml(uint64_t, dc_offset_compensation_max, 100000000);
-    get_yaml(bool,     brd_state, false);
+    get_yaml(bool,     monitor_state, false);
 
     thread_name = format_string("%s.mbxhandler", name.c_str());
 
@@ -574,7 +574,7 @@ void master::tick() {
         ec_timer_init(&dc_timeout, max_timeout);
     }
 
-    if (brd_state) {
+    if (monitor_state) {
         ec_send_brd_ec_state(pec); 
         ec_timer_init(&ec_state_timeout, 1000000000);
     }
@@ -661,7 +661,7 @@ void master::tick() {
         }
     }
     
-    if (brd_state) {
+    if (monitor_state) {
         ec_receive_brd_ec_state(pec, &ec_state_timeout); 
     }
 }
