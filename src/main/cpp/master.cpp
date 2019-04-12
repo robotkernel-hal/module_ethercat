@@ -661,9 +661,8 @@ void master::tick() {
         }
     }
     
-    if (monitor_state) {
+    if (monitor_state)
         ec_receive_brd_ec_state(pec, &ec_state_timeout); 
-    }
 }
 
 //! async handler thread
