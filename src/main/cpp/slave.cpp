@@ -512,7 +512,7 @@ void slave::pre_state_transition(module_state_t from, module_state_t to) {
             add_init_cmds();
 
             // ====> configure distributed clocks if needed 
-            if (master_dev->pec->dc.have_dc && dc.has_dc) {
+            if (/*master_dev->pec->dc.have_dc &&*/ dc.has_dc) {
                 if (dc.cycle_time_0 == 0)
                     dc.cycle_time_0 = master_dev->pec->dc.timer_override; 
 
