@@ -512,7 +512,7 @@ void slave::pre_state_transition(module_state_t from, module_state_t to) {
             add_init_cmds();
 
             // ====> configure distributed clocks if needed 
-            if (/*master_dev->pec->dc.have_dc &&*/ dc.has_dc) {
+            if (true == dc.has_dc) {
                 if (dc.cycle_time_0 == 0)
                     dc.cycle_time_0 = master_dev->pec->dc.timer_override; 
 
@@ -656,6 +656,11 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                             &master_dev->pec->slaves[index].fmmu[i].active, "Activation flag"));
             }
 
+
+            _add_key(create_key<uint32_t>(this, "eeprom.vendor_id",
+                        &master_dev->pec->slaves[index].eeprom.vendor_id, "EEPROM Vendor ID"));
+            
+            //for (int i = 0; i < master_dev->pec->slaves[index].
             if (mbx_sup & EC_EEPROM_MBX_FOE)
                 ADD_SERVICE_COLLECTOR_CLASS(_mbx_foe, slave::file_protocol);
             
