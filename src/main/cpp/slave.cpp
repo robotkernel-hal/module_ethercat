@@ -659,6 +659,8 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
 
             _add_key(create_key<uint32_t>(this, "eeprom.vendor_id",
                         &master_dev->pec->slaves[index].eeprom.vendor_id, "EEPROM Vendor ID"));
+            _add_key(create_key<uint32_t>(this, "eeprom.product_code",
+                        &master_dev->pec->slaves[index].eeprom.product_code, "EEPROM Product Code"));
             
             //for (int i = 0; i < master_dev->pec->slaves[index].
             if (mbx_sup & EC_EEPROM_MBX_FOE)
