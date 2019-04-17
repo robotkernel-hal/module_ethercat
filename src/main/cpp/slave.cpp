@@ -242,11 +242,49 @@ slave::~slave() {
             it != soe_init_cmds.end(); ++it)
         delete(*it);
 }
- 
+
+template <typename T>
+class key_value_key_read_only : 
+    public key_value_key_base 
+{	
+    public:
+        T* ptr;
+        key_value_key_read_only(key_value_slave* parent, std::string name, T* ptr, bool after_change_cb)
+            : key_value_key_base(parent, name, after_change_cb), ptr(ptr) {
+                // printf("new key value %s with ptr %#x\n", name.c_str(), ptr);
+            }
+
+        virtual ~key_value_key_read_only() {}
+
+        virtual void _set_value(std::string repr) {
+        }
+        virtual void _set_value_from_yaml(const YAML::Node& value) {
+        }
+
+        virtual std::string get_value() {
+            return key_value_repr<T>(*ptr);
+        }
+
+        virtual void* get_void_pointer() {
+            return (void*)ptr;
+        }
+};
+
 template <typename T>
 key_value_key<T> *create_key(key_value_slave *parent, std::string name, T* val, std::string desc = "", 
         std::string unit = "", std::string default_value = "", std::string format = "") {
     auto *k = new key_value_key<T>(parent, name, val, false);
+    k->describe(desc);
+    k->unit(unit);
+    k->default_value(default_value);
+    k->format(format);
+    return k;
+}
+
+template <typename T>
+key_value_key_read_only<T> *create_key_read_only(key_value_slave *parent, std::string name, T* val, std::string desc = "", 
+        std::string unit = "", std::string default_value = "", std::string format = "") {
+    auto *k = new key_value_key_read_only<T>(parent, name, val, false);
     k->describe(desc);
     k->unit(unit);
     k->default_value(default_value);
@@ -658,9 +696,16 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
 
 
             _add_key(create_key<uint32_t>(this, "eeprom.vendor_id",
-                        &master_dev->pec->slaves[index].eeprom.vendor_id, "EEPROM Vendor ID"));
+                        &master_dev->pec->slaves[index].eeprom.vendor_id, "Vendor ID"));
             _add_key(create_key<uint32_t>(this, "eeprom.product_code",
-                        &master_dev->pec->slaves[index].eeprom.product_code, "EEPROM Product Code"));
+                        &master_dev->pec->slaves[index].eeprom.product_code, "Product Code"));
+
+            for (int i = 0; i < master_dev->pec->slaves[index].eeprom.strings_cnt; ++i) {
+                auto prefix = format_string("eeprom.strings.%d", i);
+                _add_key(create_key_read_only<char *>(this, prefix,
+                            &master_dev->pec->slaves[index].eeprom.strings[i], ""));
+
+            }
             
             //for (int i = 0; i < master_dev->pec->slaves[index].
             if (mbx_sup & EC_EEPROM_MBX_FOE)
