@@ -243,6 +243,11 @@ slave::~slave() {
         delete(*it);
 }
 
+template<>
+inline std::string key_value_repr<char *>(char *& value) {
+    return string_util::format_string("%s", value);
+}
+
 template <typename T>
 class key_value_key_read_only : 
     public key_value_key_base 
