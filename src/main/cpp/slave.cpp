@@ -243,38 +243,6 @@ slave::~slave() {
         delete(*it);
 }
 
-template<>
-inline std::string key_value_repr<char *>(char *& value) {
-    return string_util::format_string("%s", value);
-}
-
-template <typename T>
-class key_value_key_read_only : 
-    public key_value_key_base 
-{	
-    public:
-        T* ptr;
-        key_value_key_read_only(key_value_slave* parent, std::string name, T* ptr, bool after_change_cb)
-            : key_value_key_base(parent, name, after_change_cb), ptr(ptr) {
-                // printf("new key value %s with ptr %#x\n", name.c_str(), ptr);
-            }
-
-        virtual ~key_value_key_read_only() {}
-
-        virtual void _set_value(std::string repr) {
-        }
-        virtual void _set_value_from_yaml(const YAML::Node& value) {
-        }
-
-        virtual std::string get_value() {
-            return key_value_repr<T>(*ptr);
-        }
-
-        virtual void* get_void_pointer() {
-            return (void*)ptr;
-        }
-};
-
 template <typename T>
 key_value_key<T> *create_key(key_value_slave *parent, std::string name, T* val, std::string desc = "", 
         std::string unit = "", std::string default_value = "", std::string format = "") {
@@ -709,7 +677,22 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                 auto prefix = format_string("eeprom.strings.%d", i);
                 _add_key(create_key_read_only<char *>(this, prefix,
                             &master_dev->pec->slaves[index].eeprom.strings[i], ""));
-
+            }
+            
+            for (int i = 0; i < master_dev->pec->slaves[index].eeprom.sms_cnt; ++i) {
+                auto prefix = format_string("eeprom.sync_manager.%d.", i);
+                _add_key(create_key_read_only<uint16_t>(this, prefix + "adr",
+                            &master_dev->pec->slaves[index].eeprom.sms[i].adr, "Physical start address"));
+                _add_key(create_key_read_only<uint16_t>(this, prefix + "len",
+                            &master_dev->pec->slaves[index].eeprom.sms[i].len, "Length of physical start address"));
+                _add_key(create_key_read_only<uint8_t>(this, prefix + "ctrl_reg",
+                            &master_dev->pec->slaves[index].eeprom.sms[i].ctrl_reg, "Control register init value"));
+                _add_key(create_key_read_only<uint8_t>(this, prefix + "status_reg",
+                            &master_dev->pec->slaves[index].eeprom.sms[i].status_reg, "Status register init value"));
+                _add_key(create_key_read_only<uint8_t>(this, prefix + "activate",
+                            &master_dev->pec->slaves[index].eeprom.sms[i].activate, "Activation flags"));
+                _add_key(create_key_read_only<uint8_t>(this, prefix + "pdi_ctrl",
+                            &master_dev->pec->slaves[index].eeprom.sms[i].pdi_ctrl, "PDI control register"));
             }
             
             //for (int i = 0; i < master_dev->pec->slaves[index].
