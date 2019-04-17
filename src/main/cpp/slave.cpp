@@ -635,7 +635,7 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
         case init_2_op:
         case init_2_safeop:
         case init_2_preop:
-        case preop_2_preop:
+        case preop_2_preop: {
             // ====> initial devices            
             for (int i = 0; i < master_dev->pec->slaves[index].sm_ch; ++i) {
                 auto prefix = format_string("sync_manager.%d.", i);
@@ -696,37 +696,45 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
             }
 
             ec_eeprom_cat_pdo_t *entry;
-            TAILQ_FOREACH(entry, &master_dev->pec->slaves[index].eeprom.txpdos, qh) {
-                auto prefix = format_string("eeprom.txpdo.0x%04X.", entry->pdo_index);
-                _add_key(create_key_read_only<uint8_t>(this, prefix + "n_entry",
-                            &entry->n_entry, "Number of PDO entries"));
-                _add_key(create_key_read_only<uint8_t>(this, prefix + "sm_nr",
-                            &entry->sm_nr, "Assigned sync manager"));
-                _add_key(create_key_read_only<uint8_t>(this, prefix + "dc_sync",
-                            &entry->dc_sync, "Use distributed clocks"));
-                _add_key(create_key_read_only<uint8_t>(this, prefix + "name_idx",
-                            &entry->name_idx, "Name index in strings"));
-                if (entry->name_idx < master_dev->pec->slaves[index].eeprom.strings_cnt)
-                    _add_key(create_key_read_only<char *>(this, prefix + "name",
-                                &master_dev->pec->slaves[index].eeprom.strings[entry->name_idx], "Name"));
-                _add_key(create_key_read_only<uint16_t>(this, prefix + "flags",
-                            &entry->flags, "PDO flags"));
+            struct ec_eeprom_cat_pdo_queue *pdos[] = { 
+                &master_dev->pec->slaves[index].eeprom.txpdos,
+                &master_dev->pec->slaves[index].eeprom.rxpdos };
 
-                for (int i = 0; i < entry->n_entry; ++i) {
-                    auto prefix2 = format_string("%s0x%04X.%d.", prefix.c_str(), 
-                            entry->entries[i].entry_index, entry->entries[i].sub_index);
-                    _add_key(create_key_read_only<uint8_t>(this, prefix2 + "entry_name_idx",
-                                &entry->entries[i].entry_name_idx, "Name index in strings"));
-                    if (entry->entries[i].entry_name_idx < master_dev->pec->slaves[index].eeprom.strings_cnt)
-                        _add_key(create_key_read_only<char *>(this, prefix2 + "entry_name",
-                            &master_dev->pec->slaves[index].eeprom.strings[entry->entries[i].entry_name_idx], "Name"));
+            for (int u = 0; u < 2; ++u) {
+                string type = u == 0 ? string("txpdo") : string("rxpdo");
 
-                    _add_key(create_key_read_only<uint8_t>(this, prefix2 + "data_type",
-                                &entry->entries[i].data_type, "Data type"));
-                    _add_key(create_key_read_only<uint8_t>(this, prefix2 + "bit_len",
-                                &entry->entries[i].bit_len, "Length in bits"));
-                    _add_key(create_key_read_only<uint16_t>(this, prefix2 + "flags",
-                                &entry->entries[i].flags, "Flags"));
+                TAILQ_FOREACH(entry, pdos[u], qh) {
+                    auto prefix = format_string("eeprom.%s.0x%04X.", type.c_str(), entry->pdo_index);
+                    _add_key(create_key_read_only<uint8_t>(this, prefix + "n_entry",
+                                &entry->n_entry, "Number of PDO entries"));
+                    _add_key(create_key_read_only<uint8_t>(this, prefix + "sm_nr",
+                                &entry->sm_nr, "Assigned sync manager"));
+                    _add_key(create_key_read_only<uint8_t>(this, prefix + "dc_sync",
+                                &entry->dc_sync, "Use distributed clocks"));
+                    _add_key(create_key_read_only<uint8_t>(this, prefix + "name_idx",
+                                &entry->name_idx, "Name index in strings"));
+                    if (entry->name_idx < master_dev->pec->slaves[index].eeprom.strings_cnt)
+                        _add_key(create_key_read_only<char *>(this, prefix + "name",
+                                    &master_dev->pec->slaves[index].eeprom.strings[entry->name_idx], "Name"));
+                    _add_key(create_key_read_only<uint16_t>(this, prefix + "flags",
+                                &entry->flags, "PDO flags"));
+
+                    for (int i = 0; i < entry->n_entry; ++i) {
+                        auto prefix2 = format_string("%s0x%04X.%d.", prefix.c_str(), 
+                                entry->entries[i].entry_index, entry->entries[i].sub_index);
+                        _add_key(create_key_read_only<uint8_t>(this, prefix2 + "entry_name_idx",
+                                    &entry->entries[i].entry_name_idx, "Name index in strings"));
+                        if (entry->entries[i].entry_name_idx < master_dev->pec->slaves[index].eeprom.strings_cnt)
+                            _add_key(create_key_read_only<char *>(this, prefix2 + "entry_name",
+                                        &master_dev->pec->slaves[index].eeprom.strings[entry->entries[i].entry_name_idx], "Name"));
+
+                        _add_key(create_key_read_only<uint8_t>(this, prefix2 + "data_type",
+                                    &entry->entries[i].data_type, "Data type"));
+                        _add_key(create_key_read_only<uint8_t>(this, prefix2 + "bit_len",
+                                    &entry->entries[i].bit_len, "Length in bits"));
+                        _add_key(create_key_read_only<uint16_t>(this, prefix2 + "flags",
+                                    &entry->entries[i].flags, "Flags"));
+                    }
                 }
             }
             
@@ -747,6 +755,7 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
 
             if (to == module_state_preop)
                 break;
+        }
         case preop_2_op:
         case preop_2_safeop:
             // ====> start receiving measurements
