@@ -706,6 +706,9 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                             &entry->dc_sync, "Use distributed clocks"));
                 _add_key(create_key_read_only<uint8_t>(this, prefix + "name_idx",
                             &entry->name_idx, "Name index in strings"));
+                if (entry->name_idx < master_dev->pec->slaves[index].eeprom.strings_cnt)
+                    _add_key(create_key_read_only<char *>(this, prefix + "name",
+                                &master_dev->pec->slaves[index].eeprom.strings[entry->name_idx], "Name"));
                 _add_key(create_key_read_only<uint16_t>(this, prefix + "flags",
                             &entry->flags, "PDO flags"));
 
@@ -716,7 +719,7 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                                 &entry->entries[i].entry_name_idx, "Name index in strings"));
                     if (entry->entries[i].entry_name_idx < master_dev->pec->slaves[index].eeprom.strings_cnt)
                         _add_key(create_key_read_only<char *>(this, prefix2 + "entry_name",
-                            &master_dev->pec->slaves[index].eeprom.strings[i], "Name"));
+                            &master_dev->pec->slaves[index].eeprom.strings[entry->entries[i].entry_name_idx], "Name"));
 
                     _add_key(create_key_read_only<uint8_t>(this, prefix2 + "data_type",
                                 &entry->entries[i].data_type, "Data type"));
