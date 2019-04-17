@@ -678,6 +678,12 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                 _add_key(create_key_read_only<char *>(this, prefix,
                             &master_dev->pec->slaves[index].eeprom.strings[i], ""));
             }
+
+            for (int i = 0; i < master_dev->pec->slaves[index].eeprom.fmmus_cnt; ++i) {
+                auto prefix = format_string("eeprom.fmmu.%d.", i);
+                _add_key(create_key_read_only<uint8_t>(this, prefix + "type",
+                            &master_dev->pec->slaves[index].eeprom.fmmus[i].type, "FMMU type"));
+            }
             
             for (int i = 0; i < master_dev->pec->slaves[index].eeprom.sms_cnt; ++i) {
                 auto prefix = format_string("eeprom.sync_manager.%d.", i);
@@ -713,12 +719,12 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                             &master_dev->pec->slaves[index].eeprom.dcs[i].name_idx, "Name index in strings"));
                 if (master_dev->pec->slaves[index].eeprom.dcs[i].name_idx < master_dev->pec->slaves[index].eeprom.strings_cnt)
                     _add_key(create_key_read_only<char *>(this, prefix + "name",
-                                &master_dev->pec->slaves[index].eeprom.strings[master_dev->pec->slaves[index].eeprom.dcs[i].name_idx], "name"));
+                                &master_dev->pec->slaves[index].eeprom.strings[master_dev->pec->slaves[index].eeprom.dcs[i].name_idx], "Name"));
                 _add_key(create_key_read_only<uint8_t>(this, prefix + "desc_idx",
                             &master_dev->pec->slaves[index].eeprom.dcs[i].desc_idx, "Description index in strings"));
                 if (master_dev->pec->slaves[index].eeprom.dcs[i].desc_idx < master_dev->pec->slaves[index].eeprom.strings_cnt)
-                    _add_key(create_key_read_only<char *>(this, prefix + "name",
-                                &master_dev->pec->slaves[index].eeprom.strings[master_dev->pec->slaves[index].eeprom.dcs[i].desc_idx], "desc"));
+                    _add_key(create_key_read_only<char *>(this, prefix + "desc",
+                                &master_dev->pec->slaves[index].eeprom.strings[master_dev->pec->slaves[index].eeprom.dcs[i].desc_idx], "Description"));
             }
 
             ec_eeprom_cat_pdo_t *entry;
