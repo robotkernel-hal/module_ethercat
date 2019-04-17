@@ -694,6 +694,27 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                 _add_key(create_key_read_only<uint8_t>(this, prefix + "pdi_ctrl",
                             &master_dev->pec->slaves[index].eeprom.sms[i].pdi_ctrl, "PDI control register"));
             }
+
+            ec_eeprom_cat_pdo_t *entry;
+            TAILQ_FOREACH(entry, &master_dev->pec->slaves[index].eeprom.txpdos, qh) {
+                auto prefix = format_string("eeprom.txpdo.0x%04X.", entry->pdo_index);
+                _add_key(create_key_read_only<uint8_t>(this, prefix + "n_entry",
+                            &entry->n_entry, "Number of PDO entries"));
+                _add_key(create_key_read_only<uint8_t>(this, prefix + "sm_nr",
+                            &entry->sm_nr, "Assigned sync manager"));
+                _add_key(create_key_read_only<uint8_t>(this, prefix + "dc_sync",
+                            &entry->dc_sync, "Use distributed clocks"));
+                _add_key(create_key_read_only<uint8_t>(this, prefix + "name_idx",
+                            &entry->name_idx, "Name index in strings"));
+                _add_key(create_key_read_only<uint16_t>(this, prefix + "flags",
+                            &entry->flags, "PDO flags"));
+
+                for (int i = 0; i < entry->n_entry; ++i) {
+                    auto prefix2 = format_string("%s.0x%04X.", prefix.c_str(), entry->entries[i].entry_index);
+                    _add_key(create_key_read_only<uint8_t>(this, prefix2 + "sub_index",
+                                &entry->entries[i].sub_index, "PDO entry subindex"));
+                }
+            }
             
             //for (int i = 0; i < master_dev->pec->slaves[index].
             if (mbx_sup & EC_EEPROM_MBX_FOE)
