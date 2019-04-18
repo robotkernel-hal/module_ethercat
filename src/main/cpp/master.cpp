@@ -477,6 +477,9 @@ int master::set_state(module_state_t state) {
             ec_set_state(pec, EC_STATE_SAFEOP);
             STATE_TRANSITION(post, module_state_safeop);
 
+            if (dc_offset_compensation_cycles > 0)
+                pec->dc.offset_compensation_cycles = dc_offset_compensation_cycles;
+
             // process data is now available, create names process data
             for (int nr = 0; nr < pec->slave_cnt; ++nr) {
                 log(verbose, "slave %d: propagation delay %d [ns]\n", 
