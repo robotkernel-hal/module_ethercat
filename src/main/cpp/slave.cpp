@@ -692,6 +692,18 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                         &master_dev->pec->slaves[index].eeprom.general.name_idx, "Name index to strings"));
             _add_key_string(master_dev->pec->slaves[index].eeprom.general.name_idx, 
                     "eeprom.general.name_name", "Name name");
+#define _add_key_general(type, mbr, desc) \
+            _add_key(create_key<type>(this, "eeprom.general." # mbr, \
+                        &master_dev->pec->slaves[index].eeprom.general.mbr, (desc)));
+            _add_key_general(uint8_t,  physical_layer,  "Physical layer (0 e-bus, 1 ethernet)");
+            _add_key_general(uint8_t,  can_open,        "CoE support");
+            _add_key_general(uint8_t,  file_access,     "FoE support");
+            _add_key_general(uint8_t,  ethernet,        "EoE support");
+            _add_key_general(uint8_t,  soe_channels,    "Supported SoE channels");
+            _add_key_general(uint8_t,  ds402_channels,  "Supported CoE DS402 channels");
+            _add_key_general(uint8_t,  sysman_class,    "Sys Man");
+            _add_key_general(uint8_t,  flags,           "EEPROM flags");
+            _add_key_general(uint16_t, current_on_ebus, "EBus current in [mA]");
 
 
             for (int i = 0; i < master_dev->pec->slaves[index].eeprom.strings_cnt; ++i) {
