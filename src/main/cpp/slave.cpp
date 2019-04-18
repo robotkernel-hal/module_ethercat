@@ -667,11 +667,20 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                             &master_dev->pec->slaves[index].fmmu[i].active, "Activation flag"));
             }
 
-
             _add_key(create_key<uint32_t>(this, "eeprom.vendor_id",
                         &master_dev->pec->slaves[index].eeprom.vendor_id, "Vendor ID"));
             _add_key(create_key<uint32_t>(this, "eeprom.product_code",
                         &master_dev->pec->slaves[index].eeprom.product_code, "Product Code"));
+
+#define _add_key_string(idx, name, desc) \
+            if (((idx) > 0) && ((idx) <=master_dev->pec->slaves[index].eeprom.strings_cnt)) \
+                _add_key(create_key_read_only<char *>(this, (name), \
+                            &master_dev->pec->slaves[index].eeprom.strings[(idx) - 1], (desc)));
+            _add_key(create_key<uint8_t>(this, "eeprom.general.group_idx",
+                        &master_dev->pec->slaves[index].eeprom.general.group_idx, "Group index to strings"));
+            _add_key_string(master_dev->pec->slaves[index].eeprom.general.group_idx, 
+                    "eeprom.general.group_name", "Group name");
+
 
             for (int i = 0; i < master_dev->pec->slaves[index].eeprom.strings_cnt; ++i) {
                 auto prefix = format_string("eeprom.strings.%d", i);
