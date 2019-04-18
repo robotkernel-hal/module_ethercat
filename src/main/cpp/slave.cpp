@@ -683,13 +683,13 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
             _add_key_string(master_dev->pec->slaves[index].eeprom.general.mbr, "eeprom.general." # name, (desc)) 
 
             _add_key_general(uint8_t, group_idx,        "Group index to strings");
-            _add_key_general_string(  group_idx,        "group_name", "Group name");
+            _add_key_general_string(  group_idx,        group_name, "Group name");
             _add_key_general(uint8_t, img_idx,          "Image index to strings");
-            _add_key_general_string(  img_idx,          "img_name", "Image name");
+            _add_key_general_string(  img_idx,          img_name,   "Image name");
             _add_key_general(uint8_t,  order_idx,       "Order index to strings");
-            _add_key_general_string(   order_idx,       "order_name", "Order name");
+            _add_key_general_string(   order_idx,       order_name, "Order name");
             _add_key_general(uint8_t,  name_idx,        "Name index to strings");
-            _add_key_general_string(   name_idx,        "name", "Name");
+            _add_key_general_string(   name_idx,        name,       "Name");
             _add_key_general(uint8_t,  physical_layer,  "Physical layer (0 e-bus, 1 ethernet)");
             _add_key_general(uint8_t,  can_open,        "CoE support");
             _add_key_general(uint8_t,  file_access,     "FoE support");
