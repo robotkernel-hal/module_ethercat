@@ -680,6 +680,18 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                         &master_dev->pec->slaves[index].eeprom.general.group_idx, "Group index to strings"));
             _add_key_string(master_dev->pec->slaves[index].eeprom.general.group_idx, 
                     "eeprom.general.group_name", "Group name");
+            _add_key(create_key<uint8_t>(this, "eeprom.general.img_idx",
+                        &master_dev->pec->slaves[index].eeprom.general.img_idx, "Image index to strings"));
+            _add_key_string(master_dev->pec->slaves[index].eeprom.general.img_idx, 
+                    "eeprom.general.img_name", "Image name");
+            _add_key(create_key<uint8_t>(this, "eeprom.general.order_idx",
+                        &master_dev->pec->slaves[index].eeprom.general.order_idx, "Order index to strings"));
+            _add_key_string(master_dev->pec->slaves[index].eeprom.general.order_idx, 
+                    "eeprom.general.order_name", "Order name");
+            _add_key(create_key<uint8_t>(this, "eeprom.general.name_idx",
+                        &master_dev->pec->slaves[index].eeprom.general.name_idx, "Name index to strings"));
+            _add_key_string(master_dev->pec->slaves[index].eeprom.general.name_idx, 
+                    "eeprom.general.name_name", "Name name");
 
 
             for (int i = 0; i < master_dev->pec->slaves[index].eeprom.strings_cnt; ++i) {
