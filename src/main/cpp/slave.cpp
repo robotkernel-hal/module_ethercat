@@ -672,29 +672,24 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
             _add_key(create_key<uint32_t>(this, "eeprom.product_code",
                         &master_dev->pec->slaves[index].eeprom.product_code, "Product Code"));
 
+#define _add_key_general(type, mbr, desc) \
+            _add_key(create_key<type>(this, "eeprom.general." # mbr, \
+                        &master_dev->pec->slaves[index].eeprom.general.mbr, (desc)));
 #define _add_key_string(idx, name, desc) \
             if (((idx) > 0) && ((idx) <=master_dev->pec->slaves[index].eeprom.strings_cnt)) \
                 _add_key(create_key_read_only<char *>(this, (name), \
                             &master_dev->pec->slaves[index].eeprom.strings[(idx) - 1], (desc)));
-            _add_key(create_key<uint8_t>(this, "eeprom.general.group_idx",
-                        &master_dev->pec->slaves[index].eeprom.general.group_idx, "Group index to strings"));
-            _add_key_string(master_dev->pec->slaves[index].eeprom.general.group_idx, 
-                    "eeprom.general.group_name", "Group name");
-            _add_key(create_key<uint8_t>(this, "eeprom.general.img_idx",
-                        &master_dev->pec->slaves[index].eeprom.general.img_idx, "Image index to strings"));
-            _add_key_string(master_dev->pec->slaves[index].eeprom.general.img_idx, 
-                    "eeprom.general.img_name", "Image name");
-            _add_key(create_key<uint8_t>(this, "eeprom.general.order_idx",
-                        &master_dev->pec->slaves[index].eeprom.general.order_idx, "Order index to strings"));
-            _add_key_string(master_dev->pec->slaves[index].eeprom.general.order_idx, 
-                    "eeprom.general.order_name", "Order name");
-            _add_key(create_key<uint8_t>(this, "eeprom.general.name_idx",
-                        &master_dev->pec->slaves[index].eeprom.general.name_idx, "Name index to strings"));
-            _add_key_string(master_dev->pec->slaves[index].eeprom.general.name_idx, 
-                    "eeprom.general.name_name", "Name name");
-#define _add_key_general(type, mbr, desc) \
-            _add_key(create_key<type>(this, "eeprom.general." # mbr, \
-                        &master_dev->pec->slaves[index].eeprom.general.mbr, (desc)));
+#define _add_key_general_string(mbr, name, desc) \
+            _add_key_string(master_dev->pec->slaves[index].eeprom.general.mbr, "eeprom.general." # name, (desc)) 
+
+            _add_key_general(uint8_t, group_idx,        "Group index to strings");
+            _add_key_general_string(  group_idx,        "group_name", "Group name");
+            _add_key_general(uint8_t, img_idx,          "Image index to strings");
+            _add_key_general_string(  img_idx,          "img_name", "Image name");
+            _add_key_general(uint8_t,  order_idx,       "Order index to strings");
+            _add_key_general_string(   order_idx,       "order_name", "Order name");
+            _add_key_general(uint8_t,  name_idx,        "Name index to strings");
+            _add_key_general_string(   name_idx,        "eeprom.general.name", "Name");
             _add_key_general(uint8_t,  physical_layer,  "Physical layer (0 e-bus, 1 ethernet)");
             _add_key_general(uint8_t,  can_open,        "CoE support");
             _add_key_general(uint8_t,  file_access,     "FoE support");
@@ -778,9 +773,7 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                                 &entry->dc_sync, "Use distributed clocks"));
                     _add_key(create_key_read_only<uint8_t>(this, prefix + "name_idx",
                                 &entry->name_idx, "Name index in strings"));
-                    if (entry->name_idx < master_dev->pec->slaves[index].eeprom.strings_cnt)
-                        _add_key(create_key_read_only<char *>(this, prefix + "name",
-                                    &master_dev->pec->slaves[index].eeprom.strings[entry->name_idx], "name"));
+                    _add_key_string(entry->name_idx, prefix + "name", "Name"); 
                     _add_key(create_key_read_only<uint16_t>(this, prefix + "flags",
                                 &entry->flags, "PDO flags"));
 
