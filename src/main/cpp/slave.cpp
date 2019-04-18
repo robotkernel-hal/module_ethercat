@@ -689,7 +689,7 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
             _add_key_general(uint8_t,  order_idx,       "Order index to strings");
             _add_key_general_string(   order_idx,       "order_name", "Order name");
             _add_key_general(uint8_t,  name_idx,        "Name index to strings");
-            _add_key_general_string(   name_idx,        "eeprom.general.name", "Name");
+            _add_key_general_string(   name_idx,        "name", "Name");
             _add_key_general(uint8_t,  physical_layer,  "Physical layer (0 e-bus, 1 ethernet)");
             _add_key_general(uint8_t,  can_open,        "CoE support");
             _add_key_general(uint8_t,  file_access,     "FoE support");
@@ -782,9 +782,7 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                                 entry->entries[i].entry_index, entry->entries[i].sub_index);
                         _add_key(create_key_read_only<uint8_t>(this, prefix2 + "entry_name_idx",
                                     &entry->entries[i].entry_name_idx, "Name index in strings"));
-                        if (entry->entries[i].entry_name_idx < master_dev->pec->slaves[index].eeprom.strings_cnt)
-                            _add_key(create_key_read_only<char *>(this, prefix2 + "entry_name",
-                                        &master_dev->pec->slaves[index].eeprom.strings[entry->entries[i].entry_name_idx], "name"));
+                        _add_key_string(entry->entries[i].entry_name_idx, prefix2 + "entry_name", "Entry name"); 
 
                         _add_key(create_key_read_only<uint8_t>(this, prefix2 + "data_type",
                                     &entry->entries[i].data_type, "Data type"));
