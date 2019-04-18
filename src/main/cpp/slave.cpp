@@ -648,23 +648,18 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
             }
 
             for (int i = 0; i < master_dev->pec->slaves[index].fmmu_ch; ++i) {
-                auto prefix = format_string("fmmu.%d.", i);
-                _add_key(create_key<uint32_t>(this, prefix + "log",
-                            &master_dev->pec->slaves[index].fmmu[i].log, "Logical bus address"));
-                _add_key(create_key<uint16_t>(this, prefix + "log_len",
-                            &master_dev->pec->slaves[index].fmmu[i].log_len, "Length of logical address area"));
-                _add_key(create_key<uint8_t >(this, prefix + "log_bit_start",
-                            &master_dev->pec->slaves[index].fmmu[i].log_bit_start, "Start bit at logical bus address"));
-                _add_key(create_key<uint8_t >(this, prefix + "log_bit_stop",
-                            &master_dev->pec->slaves[index].fmmu[i].log_bit_stop, "Stop bit at logical address plus length"));
-                _add_key(create_key<uint16_t>(this, prefix + "phys",
-                            &master_dev->pec->slaves[index].fmmu[i].phys, "Physical (local) address in slave"));
-                _add_key(create_key<uint8_t >(this, prefix + "phys_bit_start",
-                            &master_dev->pec->slaves[index].fmmu[i].phys_bit_start, "Physical start bit at physical address"));
-                _add_key(create_key<uint8_t >(this, prefix + "type",
-                            &master_dev->pec->slaves[index].fmmu[i].type, "Type, read or write"));
-                _add_key(create_key<uint8_t >(this, prefix + "active",
-                            &master_dev->pec->slaves[index].fmmu[i].active, "Activation flag"));
+#define _add_key_fmmu(type, mbr, desc)\
+                _add_key(create_key<type>(this, format_string("fmmu.%d." # mbr, i), \
+                            &master_dev->pec->slaves[index].fmmu[i].mbr, desc))
+
+                _add_key_fmmu(uint32_t, log,            "Logical bus address");
+                _add_key_fmmu(uint16_t, log_len,        "Length of logical address area");
+                _add_key_fmmu(uint8_t,  log_bit_start, "Start bit at logical bus address");
+                _add_key_fmmu(uint8_t,  log_bit_stop,   "Stop bit at logical address plus length");
+                _add_key_fmmu(uint16_t, phys,           "Physical (local) address in slave");
+                _add_key_fmmu(uint8_t,  phys_bit_start, "Physical start bit at physical address");
+                _add_key_fmmu(uint8_t,  type,           "Type, read or write");
+                _add_key_fmmu(uint8_t,  active,         "Activation flag");
             }
 
             _add_key(create_key<uint32_t>(this, "eeprom.vendor_id",
@@ -680,16 +675,16 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                 _add_key(create_key_read_only<char *>(this, (name), \
                             &master_dev->pec->slaves[index].eeprom.strings[(idx) - 1], (desc)));
 #define _add_key_general_string(mbr, name, desc) \
-            _add_key_string(master_dev->pec->slaves[index].eeprom.general.mbr, "eeprom.general." # name, (desc)) 
+            _add_key_string(master_dev->pec->slaves[index].eeprom.general.mbr, "eeprom.general." name, (desc)) 
 
             _add_key_general(uint8_t, group_idx,        "Group index to strings");
-            _add_key_general_string(  group_idx,        group_name, "Group name");
+            _add_key_general_string(  group_idx,        "group_name", "Group name");
             _add_key_general(uint8_t, img_idx,          "Image index to strings");
-            _add_key_general_string(  img_idx,          img_name,   "Image name");
+            _add_key_general_string(  img_idx,          "img_name",   "Image name");
             _add_key_general(uint8_t,  order_idx,       "Order index to strings");
-            _add_key_general_string(   order_idx,       order_name, "Order name");
+            _add_key_general_string(   order_idx,       "order_name", "Order name");
             _add_key_general(uint8_t,  name_idx,        "Name index to strings");
-            _add_key_general_string(   name_idx,        name,       "Name");
+            _add_key_general_string(   name_idx,        "name",       "Name");
             _add_key_general(uint8_t,  physical_layer,  "Physical layer (0 e-bus, 1 ethernet)");
             _add_key_general(uint8_t,  can_open,        "CoE support");
             _add_key_general(uint8_t,  file_access,     "FoE support");
@@ -745,14 +740,10 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                             &master_dev->pec->slaves[index].eeprom.dcs[i].sync_0_cycle_factor, "Cycle factor Sync0"));
                 _add_key(create_key_read_only<uint8_t>(this, prefix + "name_idx",
                             &master_dev->pec->slaves[index].eeprom.dcs[i].name_idx, "Name index in strings"));
-                if (master_dev->pec->slaves[index].eeprom.dcs[i].name_idx < master_dev->pec->slaves[index].eeprom.strings_cnt)
-                    _add_key(create_key_read_only<char *>(this, prefix + "name",
-                                &master_dev->pec->slaves[index].eeprom.strings[master_dev->pec->slaves[index].eeprom.dcs[i].name_idx], "Name"));
+                _add_key_string(master_dev->pec->slaves[index].eeprom.dcs[i].name_idx, prefix + "name", "Name"); 
                 _add_key(create_key_read_only<uint8_t>(this, prefix + "desc_idx",
                             &master_dev->pec->slaves[index].eeprom.dcs[i].desc_idx, "Description index in strings"));
-                if (master_dev->pec->slaves[index].eeprom.dcs[i].desc_idx < master_dev->pec->slaves[index].eeprom.strings_cnt)
-                    _add_key(create_key_read_only<char *>(this, prefix + "desc",
-                                &master_dev->pec->slaves[index].eeprom.strings[master_dev->pec->slaves[index].eeprom.dcs[i].desc_idx], "Description"));
+                _add_key_string(master_dev->pec->slaves[index].eeprom.dcs[i].desc_idx, prefix + "desc", "Description"); 
             }
 
             ec_eeprom_cat_pdo_t *entry;
