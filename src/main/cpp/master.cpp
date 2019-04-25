@@ -549,6 +549,7 @@ int master::set_state(module_state_t state) {
 //! module trigger callback
 void master::tick() {
     int i = 0;
+    bool dc_sent = false;
     int64_t max_timeout = 0;
     ec_timer_t dc_timeout, ec_state_timeout;
 
@@ -573,7 +574,7 @@ void master::tick() {
     }
 
     if (pec->dc.have_dc) {
-        ec_send_distributed_clocks_sync(pec);
+        dc_sent = ec_send_distributed_clocks_sync(pec) == 0;
         ec_timer_init(&dc_timeout, max_timeout);
     }
 
@@ -618,7 +619,7 @@ void master::tick() {
         }
     }
 
-    if (pec->dc.have_dc) {
+    if (dc_sent && pec->dc.have_dc) {
         ec_receive_distributed_clocks_sync(pec, &dc_timeout);
 
         if (    (pec->dc.mode == ec_dc_info::dc_mode_ref_clock) && 
