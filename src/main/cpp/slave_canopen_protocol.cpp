@@ -495,6 +495,68 @@ std::map<uint16_t, std::string> data_type_2_string = {
     { 0x0285, "fsoe_frame_t"  },
     { 0x0286, "fsoe_commpar_t"  } };
  
+std::map<uint16_t, int> data_type_2_bitsize = {
+    { 0x0000, 0  },
+    { 0x0001, 1  },
+    { 0x0002, 8  },
+    { 0x0003, 16 },
+    { 0x0004, 32 },
+    { 0x0005, 8  },
+    { 0x0006, 16 },
+    { 0x0007, 32 },
+    { 0x0008, 32 },
+    { 0x0009, -1 },
+    { 0x000A, -1 },
+    { 0x000B, -1 },
+    { 0x000C, -1 },
+    { 0x000D, -1 },
+    { 0x0010, 24 },
+    { 0x0011, 64 },
+    { 0x0012, 40 },
+    { 0x0013, 48 },
+    { 0x0014, 56 },
+    { 0x0015, 64 },
+    { 0x0016, 24 },
+    { 0x0018, 40 },
+    { 0x0019, 48 },
+    { 0x001A, 56 },
+    { 0x001B, 64 },
+    { 0x001D, -1 },
+    { 0x001E, 8  },
+    { 0x001F, 16 },
+    { 0x0020, 32 },
+    { 0x0021, -1 },
+    { 0x0023, -1 },
+    { 0x0025, -1 },
+    { 0x0027, -1 },
+    { 0x0028, -1 },
+    { 0x0029, -1 },
+    { 0x002A, -1 },
+    { 0x002B, -1 },
+    { 0x002C, -1 },
+    { 0x002D, -1 },
+    { 0x002E, -1 },
+    { 0x002F, -1 },
+    { 0x0030, 1  },
+    { 0x0031, 2  },
+    { 0x0032, 3  },
+    { 0x0033, 4  },
+    { 0x0034, 5  },
+    { 0x0035, 6  },
+    { 0x0036, 7  },
+    { 0x0037, 8  },
+    { 0x0260, -1 },
+    { 0x0261, -1 },
+    { 0x0262, -1 },
+    { 0x0263, -1 },
+    { 0x0281, -1 },
+    { 0x0282, -1 },
+    { 0x0283, -1 },
+    { 0x0284, -1 },
+    { 0x0285, -1 },
+    { 0x0286, -1 },
+};
+
 //! return process data description yaml string 
 /*!
  * \param idx pdo index, usually 0x1C12 (RxPDO) or 0x1C13 (TxPDO)
@@ -510,6 +572,9 @@ string slave::canopen::get_pdo_description(uint16_t idx) {
 
     slv->master_dev->log(verbose, "getting pdo description idx 0x%X : reading %d entries\n", 
             idx, entry_cnt);
+
+    int stored_bits = 0;
+    int combined_cnt = 0;
 
     // now read all mapped pdo's to retreave the mapped object lengths
     for (int i = 1; i <= entry_cnt; ++i) {
@@ -535,11 +600,16 @@ string slave::canopen::get_pdo_description(uint16_t idx) {
 
             uint16_t pdo_entry_id = (entry & 0xFFFF0000) >> 16;
             uint16_t pdo_entry_subid = (entry & 0x0000FF00) >> 8;
-            if (pdo_entry_id > 0) 
-                get_element_description(pdo_entry_id, pdo_entry_subid, desc);
-            else {
-                desc.name = "";
-                desc.data_type = 0;
+                
+            desc.name = "";
+            desc.data_type = 0;
+
+            if (pdo_entry_id > 0) {
+                try {
+                    get_element_description(pdo_entry_id, pdo_entry_subid, desc);
+                } catch (std::exception& e) {
+                    slv->master_dev->log(warning, "%s\n", e.what());
+                }
             }
 
             if ((signed)desc.name.length() != std::count_if(desc.name.begin(), desc.name.end(), 
@@ -554,14 +624,61 @@ string slave::canopen::get_pdo_description(uint16_t idx) {
                 stringstream ss;
                 ss << "int" << (entry & 0x000000FF) << "_t";
                 data_type = ss.str();
+            } else {
+                int bitsize = data_type_2_bitsize[desc.data_type];
+                if ((bitsize >= 0) && (bitsize != (entry & 0x000000FF))) {
+                    slv->master_dev->log(warning, "    subindex %d, mappend bitsize %d, datatype bitsize %d mismatch!\n", 
+                            entry_sub_idx, (entry & 0x000000FF), bitsize);
+
+                    stringstream ss;
+                    ss << "int" << (entry & 0x000000FF) << "_t";
+                    data_type = ss.str();
+                }
             }
     
             slv->master_dev->log(verbose, "    subindex %d, entry %08X, name %s\n", entry_sub_idx, entry, desc.name.c_str());
 
-            out << YAML::BeginMap;
-            out << YAML::Key << data_type << YAML::Value << desc.name;
-            out << YAML::EndMap;
+            if (((entry & 0x000000FF) % 8) != 0) {
+                stored_bits += (entry & 0x000000FF);
+            } else {
+                if (stored_bits != 0) {
+                    stringstream ss;
+                    ss << "uint" << (((stored_bits + 7) / 8) * 8) << "_t";
+                    string combined_data_type = ss.str();
+
+                    ss.str("");
+                    ss << "combined_" << combined_cnt++;
+                    string combined_name = ss.str();
+
+                    out << YAML::BeginMap;
+                    out << YAML::Key << combined_data_type << YAML::Value << combined_name;
+                    out << YAML::EndMap;
+
+                    stored_bits = 0;
+                }
+
+                out << YAML::BeginMap;
+                out << YAML::Key << data_type << YAML::Value << desc.name;
+                out << YAML::EndMap;
+            }
         }                        
+
+        if (stored_bits != 0) {
+            stringstream ss;
+            ss << "uint" << (((stored_bits + 7) / 8) * 8) << "_t";
+            string combined_data_type = ss.str();
+
+            ss.str("");
+            ss << "combined_" << combined_cnt++;
+            string combined_name = ss.str();
+
+            out << YAML::BeginMap;
+            out << YAML::Key << combined_data_type << YAML::Value << combined_name;
+            out << YAML::EndMap;
+
+            stored_bits = 0;
+        }
+
     }
 
     out << YAML::EndSeq;
