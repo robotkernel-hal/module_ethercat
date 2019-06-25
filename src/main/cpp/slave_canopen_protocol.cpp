@@ -434,129 +434,73 @@ void slave::canopen::pop_emergency_message(
     free(entry);
 }
 
-std::map<uint16_t, std::string> data_type_2_string = {
-    { 0x0000, "null" },
-    { 0x0001, "bool_t" },
-    { 0x0002, "int8_t" },
-    { 0x0003, "int16_t" },
-    { 0x0004, "int32_t" },
-    { 0x0005, "uint8_t" },
-    { 0x0006, "uint16_t" },
-    { 0x0007, "uint32_t" },
-    { 0x0008, "float" },
-    { 0x0009, "string" },
-    { 0x000A, "string" },
-    { 0x000B, "string" },
-    { 0x000C, "time_of_day" },
-    { 0x000D, "time_difference" },
-    { 0x0010, "int24_t" },
-    { 0x0011, "double" },
-    { 0x0012, "int40_t"  },
-    { 0x0013, "int48_t"  },
-    { 0x0014, "int56_t"  },
-    { 0x0015, "int64_t"  },
-    { 0x0016, "uint24_t"  },
-    { 0x0018, "uint40_t"  },
-    { 0x0019, "uint48_t"  },
-    { 0x001A, "uint56_t"  },
-    { 0x001B, "uint64_t"  },
-    { 0x001D, "guid"  },
-    { 0x001E, "uint8_t"  },
-    { 0x001F, "uint16_t"  },
-    { 0x0020, "uint32_t"  },
-    { 0x0021, "pdo_mapping_t"  },
-    { 0x0023, "identity_t"  },
-    { 0x0025, "command_t"  },
-    { 0x0027, "pdocompar_t"  },
-    { 0x0028, "enum_t"  },
-    { 0x0029, "smpar_t"  },
-    { 0x002A, "record_t"  },
-    { 0x002B, "backup_t"  },
-    { 0x002C, "mdp_t"  },
-    { 0x002D, "bitarr8_t"  },
-    { 0x002E, "bitarr16_t"  },
-    { 0x002F, "bitarr32_t"  },
-    { 0x0030, "bit1_t"  },
-    { 0x0031, "bit2_t"  },
-    { 0x0032, "bit3_t"  },
-    { 0x0033, "bit4_t"  },
-    { 0x0034, "bit5_t"  },
-    { 0x0035, "bit6_t"  },
-    { 0x0036, "bit7_t"  },
-    { 0x0037, "bit8_t"  },
-    { 0x0260, "vector/int32_t"  },
-    { 0x0261, "vector/int16_t"  },
-    { 0x0262, "vector/int64_t"  },
-    { 0x0263, "vector/uint64_t"  },
-    { 0x0281, "error_handling_t"  },
-    { 0x0282, "diag_history_t"  },
-    { 0x0283, "sync_status_t"  },
-    { 0x0284, "sync_settings_t"  },
-    { 0x0285, "fsoe_frame_t"  },
-    { 0x0286, "fsoe_commpar_t"  } };
- 
-std::map<uint16_t, int> data_type_2_bitsize = {
-    { 0x0000, 0  },
-    { 0x0001, 1  },
-    { 0x0002, 8  },
-    { 0x0003, 16 },
-    { 0x0004, 32 },
-    { 0x0005, 8  },
-    { 0x0006, 16 },
-    { 0x0007, 32 },
-    { 0x0008, 32 },
-    { 0x0009, -1 },
-    { 0x000A, -1 },
-    { 0x000B, -1 },
-    { 0x000C, -1 },
-    { 0x000D, -1 },
-    { 0x0010, 24 },
-    { 0x0011, 64 },
-    { 0x0012, 40 },
-    { 0x0013, 48 },
-    { 0x0014, 56 },
-    { 0x0015, 64 },
-    { 0x0016, 24 },
-    { 0x0018, 40 },
-    { 0x0019, 48 },
-    { 0x001A, 56 },
-    { 0x001B, 64 },
-    { 0x001D, -1 },
-    { 0x001E, 8  },
-    { 0x001F, 16 },
-    { 0x0020, 32 },
-    { 0x0021, -1 },
-    { 0x0023, -1 },
-    { 0x0025, -1 },
-    { 0x0027, -1 },
-    { 0x0028, -1 },
-    { 0x0029, -1 },
-    { 0x002A, -1 },
-    { 0x002B, -1 },
-    { 0x002C, -1 },
-    { 0x002D, -1 },
-    { 0x002E, -1 },
-    { 0x002F, -1 },
-    { 0x0030, 1  },
-    { 0x0031, 2  },
-    { 0x0032, 3  },
-    { 0x0033, 4  },
-    { 0x0034, 5  },
-    { 0x0035, 6  },
-    { 0x0036, 7  },
-    { 0x0037, 8  },
-    { 0x0260, -1 },
-    { 0x0261, -1 },
-    { 0x0262, -1 },
-    { 0x0263, -1 },
-    { 0x0281, -1 },
-    { 0x0282, -1 },
-    { 0x0283, -1 },
-    { 0x0284, -1 },
-    { 0x0285, -1 },
-    { 0x0286, -1 },
-};
+typedef struct data_type_desc {
+    std::string data_type;
+    int bitsize;
+    int signprefix;
+} data_type_desc_t;
 
+std::map<uint16_t, data_type_desc_t> data_type_2_desc = {
+    { 0x0000, { "null"            , 0  , 0 } },
+    { 0x0001, { "bool_t"          , 1  , 0 } },
+    { 0x0002, { "int8_t"          , 8  , 1 } },
+    { 0x0003, { "int16_t"         , 16 , 1 } },
+    { 0x0004, { "int32_t"         , 32 , 1 } },
+    { 0x0005, { "uint8_t"         , 8  , 0 } },
+    { 0x0006, { "uint16_t"        , 16 , 0 } },
+    { 0x0007, { "uint32_t"        , 32 , 0 } },
+    { 0x0008, { "float"           , 32 , 0 } },
+    { 0x0009, { "string"          , -1 , 0 } },
+    { 0x000A, { "string"          , -1 , 0 } },
+    { 0x000B, { "string"          , -1 , 0 } },
+    { 0x000C, { "time_of_day"     , -1 , 0 } },
+    { 0x000D, { "time_difference" , -1 , 0 } },
+    { 0x0010, { "int24_t"         , 24 , 1 } },
+    { 0x0011, { "double"          , 64 , 0 } },
+    { 0x0012, { "int40_t"         , 40 , 1 } },
+    { 0x0013, { "int48_t"         , 48 , 1 } },
+    { 0x0014, { "int56_t"         , 56 , 1 } },
+    { 0x0015, { "int64_t"         , 64 , 1 } },
+    { 0x0016, { "uint24_t"        , 24 , 0 } },
+    { 0x0018, { "uint40_t"        , 40 , 0 } },
+    { 0x0019, { "uint48_t"        , 48 , 0 } },
+    { 0x001A, { "uint56_t"        , 56 , 0 } },
+    { 0x001B, { "uint64_t"        , 64 , 0 } },
+    { 0x001D, { "guid"            , -1 , 0 } },
+    { 0x001E, { "uint8_t"         , 8  , 0 } },
+    { 0x001F, { "uint16_t"        , 16 , 0 } },
+    { 0x0020, { "uint32_t"        , 32 , 0 } },
+    { 0x0021, { "pdo_mapping_t"   , -1 , 0 } },
+    { 0x0023, { "identity_t"      , -1 , 0 } },
+    { 0x0025, { "command_t"       , -1 , 0 } },
+    { 0x0027, { "pdocompar_t"     , -1 , 0 } },
+    { 0x0028, { "enum_t"          , -1 , 0 } },
+    { 0x0029, { "smpar_t"         , -1 , 0 } },
+    { 0x002A, { "record_t"        , -1 , 0 } },
+    { 0x002B, { "backup_t"        , -1 , 0 } },
+    { 0x002C, { "mdp_t"           , -1 , 0 } },
+    { 0x002D, { "bitarr8_t"       , -1 , 0 } },
+    { 0x002E, { "bitarr16_t"      , -1 , 0 } },
+    { 0x002F, { "bitarr32_t"      , -1 , 0 } },
+    { 0x0030, { "bit1_t"          , 1  , 0 } },
+    { 0x0031, { "bit2_t"          , 2  , 0 } },
+    { 0x0032, { "bit3_t"          , 3  , 0 } },
+    { 0x0033, { "bit4_t"          , 4  , 0 } },
+    { 0x0034, { "bit5_t"          , 5  , 0 } },
+    { 0x0035, { "bit6_t"          , 6  , 0 } },
+    { 0x0036, { "bit7_t"          , 7  , 0 } },
+    { 0x0037, { "bit8_t"          , 8  , 0 } },
+    { 0x0260, { "vector/int32_t"  , -1 , 0 } },
+    { 0x0261, { "vector/int16_t"  , -1 , 0 } },
+    { 0x0262, { "vector/int64_t"  , -1 , 0 } },
+    { 0x0263, { "vector/uint64_t" , -1 , 0 } },
+    { 0x0281, { "error_handling_t", -1 , 0 } },
+    { 0x0282, { "diag_history_t"  , -1 , 0 } },
+    { 0x0283, { "sync_status_t"   , -1 , 0 } },
+    { 0x0284, { "sync_settings_t" , -1 , 0 } },
+    { 0x0285, { "fsoe_frame_t"    , -1 , 0 } },
+    { 0x0286, { "fsoe_commpar_t"  , -1 , 0 } } };
+ 
 //! return process data description yaml string 
 /*!
  * \param idx pdo index, usually 0x1C12 (RxPDO) or 0x1C13 (TxPDO)
@@ -619,19 +563,24 @@ string slave::canopen::get_pdo_description(uint16_t idx) {
             if (desc.name == "") 
                 desc.name = format_string("padding_%d", entry_sub_idx);
 
-            string data_type = data_type_2_string[desc.data_type];
+            auto& _data_type_desc = data_type_2_desc[desc.data_type];
+            string data_type = _data_type_desc.data_type;
+
             if (desc.data_type == 0x0000) {
                 stringstream ss;
                 ss << "int" << (entry & 0x000000FF) << "_t";
                 data_type = ss.str();
             } else {
-                int bitsize = data_type_2_bitsize[desc.data_type];
-                if ((bitsize >= 0) && (bitsize != (entry & 0x000000FF))) {
+                if ((_data_type_desc.bitsize >= 0) && (_data_type_desc.bitsize != (entry & 0x000000FF))) {
                     slv->master_dev->log(warning, "    subindex %d, mappend bitsize %d, datatype bitsize %d mismatch!\n", 
-                            entry_sub_idx, (entry & 0x000000FF), bitsize);
+                            entry_sub_idx, (entry & 0x000000FF), _data_type_desc.bitsize);
 
                     stringstream ss;
-                    ss << "int" << (entry & 0x000000FF) << "_t";
+                    if (_data_type_desc.signprefix == 1)
+                        ss << "int";
+                    else 
+                        ss << "uint";
+                    ss << (entry & 0x000000FF) << "_t";
                     data_type = ss.str();
                 }
             }
