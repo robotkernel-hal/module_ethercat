@@ -356,6 +356,23 @@ void slave::canopen::read_element(const uint16_t& index, const uint8_t& sub_inde
             size_t buf_len = 0;
             uint32_t abort_code = 0;
 
+						{
+							uint8_t *tmp_buf = NULL;
+							size_t tmp_buf_len = 0;
+	            int ret2 = ec_coe_sdo_read(slv->master_dev->pec, slv->index, index, sub_index, 
+                    1, &tmp_buf, &tmp_buf_len, &abort_code);
+
+							if ((tmp_buf_len > 0) && tmp_buf) {
+								for (int a = 0; a < tmp_buf_len; ++a)
+									printf("%02X", tmp_buf[a]);
+
+								printf("\n");
+								free(tmp_buf);
+							}
+
+
+						}
+
             int ret = ec_coe_sdo_read(slv->master_dev->pec, slv->index, index, sub_index, 
                     0, &buf, &buf_len, &abort_code);
 
