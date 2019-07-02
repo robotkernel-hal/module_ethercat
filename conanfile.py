@@ -7,13 +7,7 @@ class MainProject(ConanFile):
     url = f"https://rmc-github.robotic.dlr.de/robotkernel/{name}"
     description = "robotkernel-5 is a modular, easy configurable hardware abstraction framework"
     settings = "os", "compiler", "build_type", "arch"
-    scm = {
-        "type": "git",
-        "url": "auto",
-        "revision": "auto",
-        "submodule": "recursive",
-    }
-
+    exports_sources = "src/*", "README.wiki", "project.properties", "module_ethercat.pc.in", "Makefile.am", "m4/*", "configure.ac", "LICENSE"
     generators = "pkg_config"
     requires = (
             "robotkernel/[~=5.0]@robotkernel/unstable",
