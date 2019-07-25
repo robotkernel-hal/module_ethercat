@@ -552,7 +552,7 @@ string slave::canopen::get_pdo_description(uint16_t idx) {
                 try {
                     get_element_description(pdo_entry_id, pdo_entry_subid, desc);
                 } catch (std::exception& e) {
-                    slv->master_dev->log(warning, "%s\n", e.what());
+                    slv->master_dev->log(verbose, "%s\n", e.what());
                 }
             }
 
