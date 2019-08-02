@@ -829,7 +829,7 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                     try {
                         pdo_desc = mbx_coe->get_pdo_description(0x1C13);
                     } catch (std::exception& e) {
-                        log(error, e.what());
+                        master_dev->log(error, e.what());
                     }
                 }
 
@@ -857,7 +857,7 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                     try {
                         pdo_desc = mbx_coe->get_pdo_description(0x1C12);
                     } catch (std::exception& e) {
-                        log(error, e.what());
+                        master_dev->log(error, e.what());
                     }
                 }
 
