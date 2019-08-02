@@ -693,8 +693,13 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                         master_dev->name, format_string("slave_%d.inputs", index));
                 string pdo_desc = "";
                     
-                if (mbx_coe)
-                    pdo_desc = mbx_coe->get_pdo_description(0x1C13);
+                if (mbx_coe) {
+                    try {
+                        pdo_desc = mbx_coe->get_pdo_description(0x1C13);
+                    } catch (std::exception& e) {
+                        log(error, e.what());
+                    }
+                }
 
                 pdin = make_shared<robotkernel::triple_buffer>(
                         slv->pdin.len, 
@@ -716,8 +721,13 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
 
                 string pdo_desc = "";
                 
-                if (mbx_coe) 
-                    pdo_desc = mbx_coe->get_pdo_description(0x1C12);
+                if (mbx_coe) {
+                    try {
+                        pdo_desc = mbx_coe->get_pdo_description(0x1C12);
+                    } catch (std::exception& e) {
+                        log(error, e.what());
+                    }
+                }
 
                 pdout = make_shared<robotkernel::triple_buffer>(slv->pdout.len, master_dev->name, 
                         format_string("slave_%d.outputs", index), pdo_desc, pdout_trigger->id());
