@@ -356,6 +356,8 @@ class slave :
         int index;              //!< slave bus index
         master *master_dev;     //!< master device
 
+        double rate;
+
         // named process data
         robotkernel::sp_process_data_t pdin;
         robotkernel::sp_trigger_t      pdin_trigger;

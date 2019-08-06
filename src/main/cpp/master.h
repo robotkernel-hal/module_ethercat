@@ -101,6 +101,8 @@ class master :
         bool log_dc;
         bool monitor_state;
 
+        double rate;
+
         uint64_t pd_cookie;
         std::mutex pd_mtx;
         std::condition_variable pd_cond;

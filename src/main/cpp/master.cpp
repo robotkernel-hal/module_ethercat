@@ -418,11 +418,13 @@ int master::set_state(module_state_t state) {
                 t_dev = kernel::get_instance()->get_trigger(et->dev_name);
             }
 
-            if (dc_timer_override > 0)
+            if (dc_timer_override > 0) {
                 pec->dc.timer_override = dc_timer_override;
-            else {
+
+                rate = 1. / (dc_timer_override / 1E9);
+            } else {
                 // trigger devices stores rate in [Hz]
-                double rate = t_dev->get_rate() / t_divisor;
+                rate = t_dev->get_rate() / t_divisor;
 
                 // ethercat master need timer interval in [ns]
                 dc_timer_override = 
@@ -470,8 +472,17 @@ int master::set_state(module_state_t state) {
             start();
 
             // add group trigger devices
-            for (const auto& kv : groups)
-                k.add_device(kv.second);
+            for (auto& kv : groups) {
+                auto& grp = kv.second; 
+
+                double grp_rate = (rate / grp->divisor);
+                grp->set_rate(grp_rate);
+                k.add_device(grp);
+    
+                for (auto& s_nr : grp->_slaves) {
+                    _slave_info[s_nr]->rate = grp_rate;
+                }
+            }
                 
             STATE_TRANSITION(pre, module_state_safeop);
             ec_set_state(pec, EC_STATE_SAFEOP);
@@ -558,7 +569,7 @@ void master::tick() {
 
     for (i = 0; i < pec->pd_group_cnt; ++i) {
         auto& g = groups[i];
-        if ((++g->_divisor_cnt % g->_divisor) != 0)
+        if ((++g->_divisor_cnt % g->divisor) != 0)
             continue; 
 
         for (const auto& slave : g->_slaves)

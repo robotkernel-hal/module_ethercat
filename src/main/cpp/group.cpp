@@ -39,9 +39,9 @@ group::group(master *parent, int index, const YAML::Node& node) :
     trigger(parent->name, format_string("group_%d", index)),
     parent(parent)
 {
-    _index          = index;
-    _divisor        = get_as<int>(node, "divisor");
-    _divisor_cnt    = 0;
+    _index         = index;
+    divisor        = get_as<int>(node, "divisor");
+    _divisor_cnt   = 0;
     recv_timeout   = get_as<int>(node, "recv_timeout", 1000000);
 
     for (YAML::const_iterator it = node["slaves"].begin(); 

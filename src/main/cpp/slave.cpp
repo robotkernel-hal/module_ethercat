@@ -820,7 +820,7 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                     k.remove_device(pdin);
                 
                 pdin_trigger = make_shared<robotkernel::trigger>(
-                        master_dev->name, format_string("slave_%d.inputs", index));
+                        master_dev->name, format_string("slave_%d.inputs", index), rate);
                 k.add_device(pdin_trigger);
 
                 string pdo_desc = "";
