@@ -148,6 +148,7 @@ slave::slave(int index, master *master_dev) :
     index(index), master_dev(master_dev) 
 {
     master_dev->log(verbose, "default slave index %d created\n", index);
+    provider_hash = consumer_hash = 0;
 };
 
 //! construction
@@ -165,6 +166,8 @@ slave::slave(const YAML::Node& node, master *master_dev) :
 {
     name  = get_as<string>(node, "name");
     index = get_as<int>(node, "index");
+
+    provider_hash = consumer_hash = 0;
 
     // sync manager settings
     if (node["sm"]) {
@@ -741,8 +744,19 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
             k.remove_device(std::static_pointer_cast<
                     service_provider::process_data_inspection::base>(shared_from_this())); // process data inspection
             
-            if (pdin)  { k.remove_device(pdin); pdin = nullptr; }
-            if (pdout) { k.remove_device(pdout); pdout = nullptr; }
+            if (pdin)  { 
+                pdin->reset_provider(provider_hash);
+                provider_hash = 0;
+                k.remove_device(pdin); 
+                pdin = nullptr; 
+            }
+
+            if (pdout) { 
+                pdin->reset_consumer(consumer_hash);
+                consumer_hash = 0;
+                k.remove_device(pdout); 
+                pdout = nullptr; 
+            }
 
             if (to == module_state_preop)
                 break;
@@ -945,7 +959,7 @@ void slave::get_pdout(service_provider::process_data_inspection::pd_t& pd) {
 //! process data out handler
 void slave::pdout_handler() {
     ec_slave_t *slv = &master_dev->pec->slaves[index];
-    if (!pdout || (slv->pdout.len == 0))
+    if (!pdout || !consumer_hash || (slv->pdout.len == 0))
         return;
 
     pdout->read(consumer_hash, 0, slv->pdout.pd, slv->pdout.len);
@@ -955,7 +969,7 @@ void slave::pdout_handler() {
 //! process data in handler
 void slave::pdin_handler() {
     ec_slave_t *slv = &master_dev->pec->slaves[index];
-    if (!pdin || (slv->pdin.len == 0))
+    if (!pdin || !provider_hash || (slv->pdin.len == 0))
         return;
 
     pdin->write(provider_hash, 0, slv->pdin.pd, slv->pdin.len);
