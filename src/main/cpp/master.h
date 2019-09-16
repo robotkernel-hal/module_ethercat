@@ -45,6 +45,7 @@
 #include "libethercat/dc.h"
 #include "libethercat/soe.h"
 #include "libethercat/foe.h"
+#include "libethercat/error_codes.h"
 
 //! module_ethercat::
 namespace module_ethercat {

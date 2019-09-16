@@ -360,6 +360,9 @@ void slave::canopen::read_element(const uint16_t& index, const uint8_t& sub_inde
                     0, &buf, &buf_len, &abort_code);
 
             if (ret != 0) {
+                if (ret == EC_ERROR_MAILBOX_ABORT)
+                    throw service_provider::canopen_protocol::sdo_abort_exception(abort_code);
+
                 // decode ret
                 throw str_exception("slave %2d: reading CoE element index 0x%X "
                         "sub index %d returned errorcode 0x%X!\n", slv->index, 

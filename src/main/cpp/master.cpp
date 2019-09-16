@@ -152,22 +152,14 @@ void master::open() {
             it != _slave_info.end(); ++it) {
         int slave_nr = it->first;
         sp_slave_t slv = it->second;
-
-//        if (pec->slave_cnt > slave_nr) {
-//            for (slave::coe_list_t::iterator it2 = slv->coe_init_cmds.begin();
-//                    it2 != slv->coe_init_cmds.end(); ++it2) {
-//                slave::coe_init_cmd_t *cmd = *it2;
-//                ec_slave_add_init_cmd(pec, slave_nr, EC_MBX_COE, 
-//                        (int)cmd->transition, cmd->index, cmd->subindex, 
-//                        cmd->ca, cmd->data, cmd->datalen);
-//
-//                cmd->already_added = true;
-//            }
-//        } else {
-//            log(warning, "setting inits for slave %2d failed. no slave found!\n", slave_nr);
-//            continue;
-//        }
                 
+        if (pec->slave_cnt <= slave_nr)  {
+            log(warning, "slave %d not connected to ethercat bus, "
+                        "settings dc config failed!\n", slave_nr);
+
+            continue;
+        }
+            
         if (slv->dc.has_dc)
             ec_slave_set_dc_config(pec, slave_nr, 1, slv->dc.type, slv->dc.cycle_time_0,
                     slv->dc.cycle_time_1, slv->dc.cycle_shift);
@@ -188,7 +180,8 @@ void master::open() {
             int s_nr = *it2;
             if (pec->slave_cnt <= s_nr) {
                 log(warning, "slave %d not connected to ethercat bus, "
-                        "not adding to group %d\n", s_nr, g_nr);
+                        "not adding to group %d!\n", s_nr, g_nr);
+
                 continue;
             }
 
@@ -205,44 +198,47 @@ void master::open() {
 
         log(verbose, "trying to create mapping for slave %d\n", slave_nr);
 
-        if (pec->slave_cnt > slave_nr) {
-            // generate input mapping for coe
-            int mapping_entries = slv->input_mapping.size();
-            if (mapping_entries > 0) {
-                uint16_t mapping[mapping_entries + 1];
-                int mnr = 0;
-                mapping[mnr++] = mapping_entries;
-                for (slave::mapping_t::iterator mit = slv->input_mapping.begin(); 
-                        mit != slv->input_mapping.end(); ++mit) {
-                    mapping[mnr++] = *mit;
+        if (pec->slave_cnt <= slave_nr) {
+            log(warning, "slave %d not connected to ethercat bus, "
+                    "setting mapping failed!\n", slave_nr);
 
-                    log(verbose, "adding input mapping for slave %d: 0x%08X\n", 
-                            slave_nr, *mit);
-                }
+            continue;
+        }
 
-                ec_slave_add_init_cmd(pec, slave_nr, EC_MBX_COE, 0x24, 0x1C13, 
-                        0, 1, (char *)mapping, 2 * (mapping_entries + 1));
+        // generate input mapping for coe
+        int mapping_entries = slv->input_mapping.size();
+        if (mapping_entries > 0) {
+            uint16_t mapping[mapping_entries + 1];
+            int mnr = 0;
+            mapping[mnr++] = mapping_entries;
+            for (slave::mapping_t::iterator mit = slv->input_mapping.begin(); 
+                    mit != slv->input_mapping.end(); ++mit) {
+                mapping[mnr++] = *mit;
+
+                log(verbose, "adding input mapping for slave %d: 0x%08X\n", 
+                        slave_nr, *mit);
             }
 
-            // generate output mapping for coe
-            mapping_entries = slv->output_mapping.size();
-            if (mapping_entries > 0) {
-                uint16_t mapping[mapping_entries + 1];
-                int mnr = 0;
-                mapping[mnr++] = mapping_entries;
-                for (slave::mapping_t::iterator mit = slv->output_mapping.begin(); 
-                        mit != slv->output_mapping.end(); ++mit) {
-                    mapping[mnr++] = *mit;
+            ec_slave_add_init_cmd(pec, slave_nr, EC_MBX_COE, 0x24, 0x1C13, 
+                    0, 1, (char *)mapping, 2 * (mapping_entries + 1));
+        }
 
-                    log(verbose, "adding output mapping for slave %d: 0x%08X\n", 
-                            slave_nr, *mit);
-                }
+        // generate output mapping for coe
+        mapping_entries = slv->output_mapping.size();
+        if (mapping_entries > 0) {
+            uint16_t mapping[mapping_entries + 1];
+            int mnr = 0;
+            mapping[mnr++] = mapping_entries;
+            for (slave::mapping_t::iterator mit = slv->output_mapping.begin(); 
+                    mit != slv->output_mapping.end(); ++mit) {
+                mapping[mnr++] = *mit;
 
-                ec_slave_add_init_cmd(pec, slave_nr, EC_MBX_COE, 0x24, 0x1C12, 
-                        0, 1, (char *)mapping, 2 * (mapping_entries + 1));
+                log(verbose, "adding output mapping for slave %d: 0x%08X\n", 
+                        slave_nr, *mit);
             }
-        } else {
-            log(error, "setting mapping for slave %d, failed. no slave found!\n", slave_nr);
+
+            ec_slave_add_init_cmd(pec, slave_nr, EC_MBX_COE, 0x24, 0x1C12, 
+                    0, 1, (char *)mapping, 2 * (mapping_entries + 1));
         }
     }
             
