@@ -53,9 +53,11 @@ class group :
          */
         group(master *parent, int index, const YAML::Node& node);
 
+        void set_rate(double new_rate) { rate = new_rate; }
+
         int recv_timeout;
         int _index;
-        int _divisor;
+        int divisor;
         int _divisor_cnt;
         std::list<int> _slaves;
 
