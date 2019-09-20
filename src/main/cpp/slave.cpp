@@ -752,7 +752,7 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
             }
 
             if (pdout) { 
-                pdin->reset_consumer(consumer_hash);
+                pdout->reset_consumer(consumer_hash);
                 consumer_hash = 0;
                 k.remove_device(pdout); 
                 pdout = nullptr; 
