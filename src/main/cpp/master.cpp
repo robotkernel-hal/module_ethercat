@@ -79,16 +79,11 @@ master::master(const std::string& name, const YAML::Node& node) :
 #define get_yaml(t, n, d) \
     n = get_as<t>(node, #n, d);
 
-    get_yaml(string,   ifname, "");
+    ifname = get_as<string>(node, "ifname");
     get_yaml(int,      recv_prio, 0);
     get_yaml(int,      recv_mask, 0xff);
     get_yaml(bool,     log_eeprom_data, false);
-    get_yaml(int,      trigger_interval, 0);
     get_yaml(bool,     threaded_startup, true);
-    get_yaml(bool,     log_dc, false);
-    get_yaml(int,      dc_offset_compensation_cycles, 250);
-    get_yaml(int,      dc_timer_override, -1);
-    get_yaml(uint64_t, dc_offset_compensation_max, 100000000);
     get_yaml(bool,     monitor_state, false);
 
     thread_name = format_string("%s.mbxhandler", name.c_str());
@@ -117,14 +112,26 @@ master::master(const std::string& name, const YAML::Node& node) :
         }
     }
 
-    _dc_mode_string = get_as<string>(node, "dc_mode", "master_clock");
-    dc_sync.first_run = true;
-    dc_sync.last_diff = 0.;
-    dc_sync.diffsum   = 0.;
+    // read in distributed clocks settings
+    dc_sync.log                        = get_as<bool>(node, "dc_sync_log", false);
+    dc_sync.mode_string                = get_as<string>(node, "dc_sync_mode", "ref_clock");
+    dc_sync.first_run                  = true;
+    dc_sync.last_diff                  = 0.;
+    dc_sync.diffsum                    = 0.;
+    dc_sync.kp                         = get_as<double>(node, "dc_sync_kp", 0.0025);
+    dc_sync.ki                         = get_as<double>(node, "dc_sync_ki", 0.0025);
+    dc_sync.timer_override             = get_as<int>(node, "dc_sync_timer_override", -1);
+    dc_sync.offset_compensation_cycles = get_as<int>(node, "dc_sync_offset_compensation_cycles", 100);
+    dc_sync.diff_converge_cycles       = 0;
+    dc_sync.diff_converge_cnt          = 0;
+    dc_sync.diff_converged             = false;
 
-    get_yaml(double,    dc_sync.kp, 0.1);
-    get_yaml(double,    dc_sync.ki, 0.001);
-    get_yaml(double,    dc_sync.kd, 0.1);
+    if (node["dc_sync.kp"] || node["dc_sync.ki"] || node["dc_sync.kd"])
+        log(warning, 
+                "\n"
+                "This is a newer version of module_ethercat which uses a better pi-control\n"
+                "for dc clock synchronization. To modify the gains use parameters \"dc_sync_kp\"\n"
+                "and \"dc_sync_ki\" in your config file. (Using kp=%7.3f, ki=%7.3f\n");
 
     pd_cookie = 0;
     
@@ -394,15 +401,15 @@ int master::set_state(module_state_t state) {
         case init_2_op:
         case init_2_safeop:
         case init_2_preop: {
-            pec->dc.mode = _dc_mode_string == "ref_clock" ? 
+            pec->dc.mode = dc_sync.mode_string == "ref_clock" ? 
                 ec_dc_info::dc_mode_ref_clock : ec_dc_info::dc_mode_master_clock;
             
             STATE_TRANSITION(pre, module_state_preop);
             ec_set_state(pec, EC_STATE_PREOP);
             STATE_TRANSITION(post, module_state_preop);
 
-            if (dc_offset_compensation_cycles > 0)
-                pec->dc.offset_compensation_cycles = dc_offset_compensation_cycles;
+            if (dc_sync.offset_compensation_cycles > 0)
+                pec->dc.offset_compensation_cycles = dc_sync.offset_compensation_cycles;
 
             auto mdl = get_module();
             if (mdl->triggers.size() != 1) {
@@ -412,18 +419,22 @@ int master::set_state(module_state_t state) {
                 auto et = mdl->triggers.front();
                 t_divisor = et->divisor;
                 t_dev = kernel::get_instance()->get_trigger(et->dev_name);
+            
+                double rate = t_dev->get_rate() / t_divisor;
+                dc_sync.start_timer = (1.f / rate);
+                dc_sync.diff_converge_cycles = rate;
             }
 
-            if (dc_timer_override > 0) {
-                pec->dc.timer_override = dc_timer_override;
+            if (dc_sync.timer_override > 0) {
+                pec->dc.timer_override = dc_sync.timer_override;
 
-                rate = 1. / (dc_timer_override / 1E9);
+                rate = 1. / (dc_sync.timer_override / 1E9);
             } else {
                 // trigger devices stores rate in [Hz]
                 rate = t_dev->get_rate() / t_divisor;
 
                 // ethercat master need timer interval in [ns]
-                dc_timer_override = 
+                dc_sync.timer_override = 
                     pec->dc.timer_override = (1.f / rate) * 1E9;
 
                 log(info, "got trigger rate %f Hz\n", rate);
@@ -484,8 +495,8 @@ int master::set_state(module_state_t state) {
             ec_set_state(pec, EC_STATE_SAFEOP);
             STATE_TRANSITION(post, module_state_safeop);
 
-            if (dc_offset_compensation_cycles > 0)
-                pec->dc.offset_compensation_cycles = dc_offset_compensation_cycles;
+            if (dc_sync.offset_compensation_cycles > 0)
+                pec->dc.offset_compensation_cycles = dc_sync.offset_compensation_cycles;
 
             // process data is now available, create names process data
             for (int nr = 0; nr < pec->slave_cnt; ++nr) {
@@ -633,36 +644,47 @@ void master::tick() {
                 (pec->dc.offset_compensation_cnt == 0)) {
             double diff = (pec->dc.act_diff / 1E9);
 
-            // trigger devices stores rate in [Hz]
-            double rate = t_dev->get_rate() / t_divisor;
-            double act_timer = (1.f / rate);
-
             // sum it up for integral part
-            dc_sync.diffsum += diff;
+            dc_sync.diffsum += dc_sync.ki * diff * pec->dc.offset_compensation_cycles * dc_sync.start_timer;
 
-            if (!dc_sync.first_run) {
-                // calculate new rate in [s]
-                act_timer += 
-                    (dc_sync.kp * (diff/pec->dc.offset_compensation_cycles)) + 
-                    (dc_sync.ki * (dc_sync.diffsum/pec->dc.offset_compensation_cycles)) +
-                    (dc_sync.kd * (diff - dc_sync.last_diff)/(pec->dc.offset_compensation_cycles));
-            } else {
-                act_timer += (dc_sync.kp * (diff/pec->dc.offset_compensation_cycles) );
-            }
+            // limit diffsum
+            double diffsum_limit = dc_sync.start_timer / 2.;
+
+            if (dc_sync.diffsum > diffsum_limit)
+                dc_sync.diffsum = diffsum_limit;
+            else if (dc_sync.diffsum < (-1 * diffsum_limit))
+                dc_sync.diffsum = -1 * diffsum_limit;
+
+            // calculate new rate in [s]
+            double act_timer = dc_sync.start_timer + 
+                (dc_sync.kp * diff) + dc_sync.diffsum;
 
             try {
-                t_dev->set_rate(1.f / act_timer);
+                rate = 1.f / act_timer;
+                t_dev->set_rate(rate);
 
-                if (log_dc) 
-                    log(info, "setting new clock %13.10f, last_diff %13.10f, diff %13.10f, "
-                            "offset_comp %d\n", act_timer, dc_sync.last_diff, diff, 
-                            pec->dc.offset_compensation_cycles);
+                if (dc_sync.log) 
+                    log(info, "setting new clock rate to %7.3f [Hz], clock diff %7.3f [us]\n",
+                            rate, diff * 1E6);
             } catch (exception& e) {
                 log(warning, "setting new clock failed: %s\n", e.what());
             }
 
             dc_sync.first_run = false;
             dc_sync.last_diff = diff;
+
+            // check if diff converged
+            if (    !dc_sync.diff_converged &&
+                    ((++dc_sync.diff_converge_cnt % dc_sync.diff_converge_cycles) == 0)) {
+                int margin = dc_sync.start_timer * 0.01;
+
+                if ((diff > margin) || (diff < -1 * margin))
+                    log(info, "DC diff did not converge until now...\n");
+                else {
+                    log(info, "DC diff converged!\n");
+                    dc_sync.diff_converged = true;
+                }
+            }
         }        
 
         if (pdin_dc) {
