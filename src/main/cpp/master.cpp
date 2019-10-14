@@ -131,7 +131,7 @@ master::master(const std::string& name, const YAML::Node& node) :
                 "\n"
                 "This is a newer version of module_ethercat which uses a better pi-control\n"
                 "for dc clock synchronization. To modify the gains use parameters \"dc_sync_kp\"\n"
-                "and \"dc_sync_ki\" in your config file. (Using kp=%7.3f, ki=%7.3f\n");
+                "and \"dc_sync_ki\" in your config file. (Using kp=%7.3f, ki=%7.3f)\n", dc_sync.ki, dc_sync.kp);
 
     pd_cookie = 0;
     
