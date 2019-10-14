@@ -1,29 +1,76 @@
-loglevel: [ error, warning, info, module_error, module_warning, module_info, interface_error, interface_warning, interface_info ]
-modules:
--   name: posix_timer
-    module_file: libmodule_posix_timer.so
-    config: 
-        interval: 0.001
-        signo: 36
-        prio: 91
-        affinity: [ 0, 1, 2, 3 ]
-        mode: nanosleep
-    power_up: true
+# Configuration file for module_ethercat.
+#
+# vim: set ft=yaml
 
--   name: jr3
-    module_file: libmodule_jr3.so
-    config: 
-        devname: /dev/jr30
-        filter: 0
-    trigger:
-    -   mod_name: posix_timer
-        clk_id: 1
-        prio: 72 
-    power_up: true
+#########################################################
+# network interface settings
 
--   name: jr3_lnrk
-    module_file: libmodule_lnrkinterface.so
-    config_file: jr3_lnrkinterface.rkc
-    depends: [ jr3, ]
-    power_up: true
+# Defines the interface name of the EtherCAT master network
+# controller
+#ifname: p1p1
 
+# Setting realtime priorities for the receive thread of
+# the EtherCAT master.
+#recv_prio: 82
+#recv_mask: 0x02
+
+#########################################################
+# logging settings
+
+# Standard robotkernel module local loglevel.
+#loglevel: verbose
+
+# Log EEPROM content to robotkernels logging infrastructure.
+#log_eeprom_data: false
+
+#########################################################
+# distributed clocks settings, sync ethercat master clock 
+# to ref clock in first ethercat slave
+
+# Log dc sync values to robotkernels logging infrastructure.
+#dc_sync_log: false
+
+# EtherCAT master timer start value. Default is to use the 
+# value read out from the trigger input. Value is in [ns].
+#dc_sync_timer_override: -1
+
+# Defines how many EtherCAT cycles should be used to determine
+# the average drift between master clock and dc clock.
+#dc_sync_offset_compensation_cycles: 100
+
+# The EtherCAT master can either sync the master clock to the
+# dc clock (better, more accurate) or the dc clock to the master 
+# clock. Values can be "ref_clock" or "master_clock".
+#dc_sync_mode: ref_clock
+
+# These values are the gains for the PI-controller to sync 
+# the master clock to the dc clock. 
+#dc_sync_kp: 0.0025
+#dc_sync_ki: 0.0025
+
+#########################################################
+# Common settings
+
+# With many slaves startup can spawn one thread per slave
+# to decrease startup time.
+#threaded_startup: true
+
+#########################################################
+# Process data group settings. 
+# specify ethercat process data groups
+groups: 
+  0: { divisor: 1, recv_timeout: 1000000, slaves: [ 0, ] }
+
+cs_mapping: &cs_mapping
+  { type: coe, pdos: [ 0x1600, 0x1601, 0x1A00, 0x1A01, 0x1610, 0x1611, 0x1A10, 0x1A11 ] }
+
+# specify slaves
+slaves:
+- name: cs_jcu_BB_v1
+  index: 0
+  # cycle_time_0: cycle time for sync0 interrupt, triggers control loop (4kHz -> 250000ns)
+  # cycle_time_1: when to write telemetry (relative to sync0 interrupt)
+  # cycle_shift:  shift pdi interrupt (when ethercat package arrives) relative to sync0
+  #               < 0: pdi comes later
+  dc: { type: 1, cycle_time_0: 250000, cycle_time_1: 900000, cycle_shift: -100000 }
+  mapping: *cs_mapping
