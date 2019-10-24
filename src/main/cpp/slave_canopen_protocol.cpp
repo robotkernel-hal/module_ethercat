@@ -360,6 +360,9 @@ void slave::canopen::read_element(const uint16_t& index, const uint8_t& sub_inde
                     0, &buf, &buf_len, &abort_code);
 
             if (ret != 0) {
+                if (ret == EC_ERROR_MAILBOX_ABORT)
+                    throw service_provider::canopen_protocol::sdo_abort_exception(abort_code);
+
                 // decode ret
                 throw str_exception("slave %2d: reading CoE element index 0x%X "
                         "sub index %d returned errorcode 0x%X!\n", slv->index, 
@@ -434,66 +437,72 @@ void slave::canopen::pop_emergency_message(
     free(entry);
 }
 
-std::map<uint16_t, std::string> data_type_2_string = {
-    { 0x0000, "null" },
-    { 0x0001, "bool_t" },
-    { 0x0002, "int8_t" },
-    { 0x0003, "int16_t" },
-    { 0x0004, "int32_t" },
-    { 0x0005, "uint8_t" },
-    { 0x0006, "uint16_t" },
-    { 0x0007, "uint32_t" },
-    { 0x0008, "float" },
-    { 0x0009, "string" },
-    { 0x000A, "string" },
-    { 0x000B, "string" },
-    { 0x000C, "time_of_day" },
-    { 0x000D, "time_difference" },
-    { 0x0010, "int24_t" },
-    { 0x0011, "double" },
-    { 0x0012, "int40_t"  },
-    { 0x0013, "int48_t"  },
-    { 0x0014, "int56_t"  },
-    { 0x0015, "int64_t"  },
-    { 0x0016, "uint24_t"  },
-    { 0x0018, "uint40_t"  },
-    { 0x0019, "uint48_t"  },
-    { 0x001A, "uint56_t"  },
-    { 0x001B, "uint64_t"  },
-    { 0x001D, "guid"  },
-    { 0x001E, "uint8_t"  },
-    { 0x001F, "uint16_t"  },
-    { 0x0020, "uint32_t"  },
-    { 0x0021, "pdo_mapping_t"  },
-    { 0x0023, "identity_t"  },
-    { 0x0025, "command_t"  },
-    { 0x0027, "pdocompar_t"  },
-    { 0x0028, "enum_t"  },
-    { 0x0029, "smpar_t"  },
-    { 0x002A, "record_t"  },
-    { 0x002B, "backup_t"  },
-    { 0x002C, "mdp_t"  },
-    { 0x002D, "bitarr8_t"  },
-    { 0x002E, "bitarr16_t"  },
-    { 0x002F, "bitarr32_t"  },
-    { 0x0030, "bit1_t"  },
-    { 0x0031, "bit2_t"  },
-    { 0x0032, "bit3_t"  },
-    { 0x0033, "bit4_t"  },
-    { 0x0034, "bit5_t"  },
-    { 0x0035, "bit6_t"  },
-    { 0x0036, "bit7_t"  },
-    { 0x0037, "bit8_t"  },
-    { 0x0260, "vector/int32_t"  },
-    { 0x0261, "vector/int16_t"  },
-    { 0x0262, "vector/int64_t"  },
-    { 0x0263, "vector/uint64_t"  },
-    { 0x0281, "error_handling_t"  },
-    { 0x0282, "diag_history_t"  },
-    { 0x0283, "sync_status_t"  },
-    { 0x0284, "sync_settings_t"  },
-    { 0x0285, "fsoe_frame_t"  },
-    { 0x0286, "fsoe_commpar_t"  } };
+typedef struct data_type_desc {
+    std::string data_type;
+    int bitsize;
+    int signprefix;
+} data_type_desc_t;
+
+std::map<uint16_t, data_type_desc_t> data_type_2_desc = {
+    { 0x0000, { "null"            , 0  , 0 } },
+    { 0x0001, { "bool_t"          , 1  , 0 } },
+    { 0x0002, { "int8_t"          , 8  , 1 } },
+    { 0x0003, { "int16_t"         , 16 , 1 } },
+    { 0x0004, { "int32_t"         , 32 , 1 } },
+    { 0x0005, { "uint8_t"         , 8  , 0 } },
+    { 0x0006, { "uint16_t"        , 16 , 0 } },
+    { 0x0007, { "uint32_t"        , 32 , 0 } },
+    { 0x0008, { "float"           , 32 , 0 } },
+    { 0x0009, { "string"          , -1 , 0 } },
+    { 0x000A, { "string"          , -1 , 0 } },
+    { 0x000B, { "string"          , -1 , 0 } },
+    { 0x000C, { "time_of_day"     , -1 , 0 } },
+    { 0x000D, { "time_difference" , -1 , 0 } },
+    { 0x0010, { "int24_t"         , 24 , 1 } },
+    { 0x0011, { "double"          , 64 , 0 } },
+    { 0x0012, { "int40_t"         , 40 , 1 } },
+    { 0x0013, { "int48_t"         , 48 , 1 } },
+    { 0x0014, { "int56_t"         , 56 , 1 } },
+    { 0x0015, { "int64_t"         , 64 , 1 } },
+    { 0x0016, { "uint24_t"        , 24 , 0 } },
+    { 0x0018, { "uint40_t"        , 40 , 0 } },
+    { 0x0019, { "uint48_t"        , 48 , 0 } },
+    { 0x001A, { "uint56_t"        , 56 , 0 } },
+    { 0x001B, { "uint64_t"        , 64 , 0 } },
+    { 0x001D, { "guid"            , -1 , 0 } },
+    { 0x001E, { "uint8_t"         , 8  , 0 } },
+    { 0x001F, { "uint16_t"        , 16 , 0 } },
+    { 0x0020, { "uint32_t"        , 32 , 0 } },
+    { 0x0021, { "pdo_mapping_t"   , -1 , 0 } },
+    { 0x0023, { "identity_t"      , -1 , 0 } },
+    { 0x0025, { "command_t"       , -1 , 0 } },
+    { 0x0027, { "pdocompar_t"     , -1 , 0 } },
+    { 0x0028, { "enum_t"          , -1 , 0 } },
+    { 0x0029, { "smpar_t"         , -1 , 0 } },
+    { 0x002A, { "record_t"        , -1 , 0 } },
+    { 0x002B, { "backup_t"        , -1 , 0 } },
+    { 0x002C, { "mdp_t"           , -1 , 0 } },
+    { 0x002D, { "bitarr8_t"       , -1 , 0 } },
+    { 0x002E, { "bitarr16_t"      , -1 , 0 } },
+    { 0x002F, { "bitarr32_t"      , -1 , 0 } },
+    { 0x0030, { "bit1_t"          , 1  , 0 } },
+    { 0x0031, { "bit2_t"          , 2  , 0 } },
+    { 0x0032, { "bit3_t"          , 3  , 0 } },
+    { 0x0033, { "bit4_t"          , 4  , 0 } },
+    { 0x0034, { "bit5_t"          , 5  , 0 } },
+    { 0x0035, { "bit6_t"          , 6  , 0 } },
+    { 0x0036, { "bit7_t"          , 7  , 0 } },
+    { 0x0037, { "bit8_t"          , 8  , 0 } },
+    { 0x0260, { "vector/int32_t"  , -1 , 0 } },
+    { 0x0261, { "vector/int16_t"  , -1 , 0 } },
+    { 0x0262, { "vector/int64_t"  , -1 , 0 } },
+    { 0x0263, { "vector/uint64_t" , -1 , 0 } },
+    { 0x0281, { "error_handling_t", -1 , 0 } },
+    { 0x0282, { "diag_history_t"  , -1 , 0 } },
+    { 0x0283, { "sync_status_t"   , -1 , 0 } },
+    { 0x0284, { "sync_settings_t" , -1 , 0 } },
+    { 0x0285, { "fsoe_frame_t"    , -1 , 0 } },
+    { 0x0286, { "fsoe_commpar_t"  , -1 , 0 } } };
  
 //! return process data description yaml string 
 /*!
@@ -510,6 +519,9 @@ string slave::canopen::get_pdo_description(uint16_t idx) {
 
     slv->master_dev->log(verbose, "getting pdo description idx 0x%X : reading %d entries\n", 
             idx, entry_cnt);
+
+    int stored_bits = 0;
+    int combined_cnt = 0;
 
     // now read all mapped pdo's to retreave the mapped object lengths
     for (int i = 1; i <= entry_cnt; ++i) {
@@ -535,11 +547,16 @@ string slave::canopen::get_pdo_description(uint16_t idx) {
 
             uint16_t pdo_entry_id = (entry & 0xFFFF0000) >> 16;
             uint16_t pdo_entry_subid = (entry & 0x0000FF00) >> 8;
-            if (pdo_entry_id > 0) 
-                get_element_description(pdo_entry_id, pdo_entry_subid, desc);
-            else {
-                desc.name = "";
-                desc.data_type = 0;
+                
+            desc.name = "";
+            desc.data_type = 0;
+
+            if (pdo_entry_id > 0) {
+                try {
+                    get_element_description(pdo_entry_id, pdo_entry_subid, desc);
+                } catch (std::exception& e) {
+                    slv->master_dev->log(verbose, "%s\n", e.what());
+                }
             }
 
             if ((signed)desc.name.length() != std::count_if(desc.name.begin(), desc.name.end(), 
@@ -549,19 +566,71 @@ string slave::canopen::get_pdo_description(uint16_t idx) {
             if (desc.name == "") 
                 desc.name = format_string("padding_%d", entry_sub_idx);
 
-            string data_type = data_type_2_string[desc.data_type];
+            auto& _data_type_desc = data_type_2_desc[desc.data_type];
+            string data_type = _data_type_desc.data_type;
+
             if (desc.data_type == 0x0000) {
                 stringstream ss;
                 ss << "int" << (entry & 0x000000FF) << "_t";
                 data_type = ss.str();
+            } else {
+                if ((_data_type_desc.bitsize >= 0) && (_data_type_desc.bitsize != (entry & 0x000000FF))) {
+                    slv->master_dev->log(warning, "    subindex %d, mappend bitsize %d, datatype bitsize %d mismatch!\n", 
+                            entry_sub_idx, (entry & 0x000000FF), _data_type_desc.bitsize);
+
+                    stringstream ss;
+                    if (_data_type_desc.signprefix == 1)
+                        ss << "int";
+                    else 
+                        ss << "uint";
+                    ss << (entry & 0x000000FF) << "_t";
+                    data_type = ss.str();
+                }
             }
     
             slv->master_dev->log(verbose, "    subindex %d, entry %08X, name %s\n", entry_sub_idx, entry, desc.name.c_str());
 
-            out << YAML::BeginMap;
-            out << YAML::Key << data_type << YAML::Value << desc.name;
-            out << YAML::EndMap;
+            if (((entry & 0x000000FF) % 8) != 0) {
+                stored_bits += (entry & 0x000000FF);
+            } else {
+                if (stored_bits != 0) {
+                    stringstream ss;
+                    ss << "uint" << (((stored_bits + 7) / 8) * 8) << "_t";
+                    string combined_data_type = ss.str();
+
+                    ss.str("");
+                    ss << "combined_" << combined_cnt++;
+                    string combined_name = ss.str();
+
+                    out << YAML::BeginMap;
+                    out << YAML::Key << combined_data_type << YAML::Value << combined_name;
+                    out << YAML::EndMap;
+
+                    stored_bits = 0;
+                }
+
+                out << YAML::BeginMap;
+                out << YAML::Key << data_type << YAML::Value << desc.name;
+                out << YAML::EndMap;
+            }
         }                        
+
+        if (stored_bits != 0) {
+            stringstream ss;
+            ss << "uint" << (((stored_bits + 7) / 8) * 8) << "_t";
+            string combined_data_type = ss.str();
+
+            ss.str("");
+            ss << "combined_" << combined_cnt++;
+            string combined_name = ss.str();
+
+            out << YAML::BeginMap;
+            out << YAML::Key << combined_data_type << YAML::Value << combined_name;
+            out << YAML::EndMap;
+
+            stored_bits = 0;
+        }
+
     }
 
     out << YAML::EndSeq;

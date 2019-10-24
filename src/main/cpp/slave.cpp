@@ -147,9 +147,8 @@ slave::slave(int index, master *master_dev) :
     pd_consumer(master_dev->name + format_string(".slave_%d", index)),
     index(index), master_dev(master_dev) 
 {
-    init_key_value();
-
     master_dev->log(verbose, "default slave index %d created\n", index);
+    provider_hash = consumer_hash = 0;
 };
 
 //! construction
@@ -167,6 +166,8 @@ slave::slave(const YAML::Node& node, master *master_dev) :
 {
     name  = get_as<string>(node, "name");
     index = get_as<int>(node, "index");
+
+    provider_hash = consumer_hash = 0;
 
     // sync manager settings
     if (node["sm"]) {
@@ -226,8 +227,6 @@ slave::slave(const YAML::Node& node, master *master_dev) :
         }
     }
 
-    init_key_value();
-
     master_dev->log(verbose,
             "slave %s index %d created\n", name.c_str(), index);
 }
@@ -242,11 +241,22 @@ slave::~slave() {
             it != soe_init_cmds.end(); ++it)
         delete(*it);
 }
- 
+
 template <typename T>
 key_value_key<T> *create_key(key_value_slave *parent, std::string name, T* val, std::string desc = "", 
         std::string unit = "", std::string default_value = "", std::string format = "") {
     auto *k = new key_value_key<T>(parent, name, val, false);
+    k->describe(desc);
+    k->unit(unit);
+    k->default_value(default_value);
+    k->format(format);
+    return k;
+}
+
+template <typename T>
+key_value_key_read_only<T> *create_key_read_only(key_value_slave *parent, std::string name, T* val, std::string desc = "", 
+        std::string unit = "", std::string default_value = "", std::string format = "") {
+    auto *k = new key_value_key_read_only<T>(parent, name, val, false);
     k->describe(desc);
     k->unit(unit);
     k->default_value(default_value);
@@ -262,6 +272,154 @@ void slave::init_key_value() {
     _add_key(create_key<uint32_t>(this, "dc.cycle_time_0", &dc.cycle_time_0, "Cycle Time Sync0", "ns")); 
     _add_key(create_key<uint32_t>(this, "dc.cycle_time_1", &dc.cycle_time_1, "Cycle Time Sync1", "ns")); 
     _add_key(create_key<uint32_t>(this, "dc.cycle_shift", &dc.cycle_shift, "Cyclce Shift"));
+            
+    for (int i = 0; i < master_dev->pec->slaves[index].sm_ch; ++i) {
+        auto prefix = format_string("sync_manager.%d.", i);
+        _add_key(create_key<uint16_t>(this, prefix + "address", 
+                    &master_dev->pec->slaves[index].sm[i].adr, "Physical start address"));
+        _add_key(create_key<uint16_t>(this, prefix + "length", 
+                    &master_dev->pec->slaves[index].sm[i].len, "Length"));
+        _add_key(create_key<uint32_t>(this, prefix + "flags", 
+                    &master_dev->pec->slaves[index].sm[i].flags, "Flags"));
+    }
+
+    for (int i = 0; i < master_dev->pec->slaves[index].fmmu_ch; ++i) {
+#define _add_key_fmmu(type, mbr, desc)\
+        _add_key(create_key<type>(this, format_string("fmmu.%d." # mbr, i), \
+                    &master_dev->pec->slaves[index].fmmu[i].mbr, desc))
+
+        _add_key_fmmu(uint32_t, log,            "Logical bus address");
+        _add_key_fmmu(uint16_t, log_len,        "Length of logical address area");
+        _add_key_fmmu(uint8_t,  log_bit_start, "Start bit at logical bus address");
+        _add_key_fmmu(uint8_t,  log_bit_stop,   "Stop bit at logical address plus length");
+        _add_key_fmmu(uint16_t, phys,           "Physical (local) address in slave");
+        _add_key_fmmu(uint8_t,  phys_bit_start, "Physical start bit at physical address");
+        _add_key_fmmu(uint8_t,  type,           "Type, read or write");
+        _add_key_fmmu(uint8_t,  active,         "Activation flag");
+    }
+
+    _add_key(create_key<uint32_t>(this, "eeprom.vendor_id",
+                &master_dev->pec->slaves[index].eeprom.vendor_id, "Vendor ID"));
+    _add_key(create_key<uint32_t>(this, "eeprom.product_code",
+                &master_dev->pec->slaves[index].eeprom.product_code, "Product Code"));
+
+#define _add_key_general(type, mbr, desc) \
+    _add_key(create_key<type>(this, "eeprom.general." # mbr, \
+                &master_dev->pec->slaves[index].eeprom.general.mbr, (desc)));
+#define _add_key_string(idx, name, desc) \
+    if (((idx) > 0) && ((idx) <=master_dev->pec->slaves[index].eeprom.strings_cnt)) \
+    _add_key(create_key_read_only<char *>(this, (name), \
+                &master_dev->pec->slaves[index].eeprom.strings[(idx) - 1], (desc)));
+#define _add_key_general_string(mbr, name, desc) \
+    _add_key_string(master_dev->pec->slaves[index].eeprom.general.mbr, "eeprom.general." name, (desc)) 
+
+    _add_key_general(uint8_t, group_idx,        "Group index to strings");
+    _add_key_general_string(  group_idx,        "group_name", "Group name");
+    _add_key_general(uint8_t, img_idx,          "Image index to strings");
+    _add_key_general_string(  img_idx,          "img_name",   "Image name");
+    _add_key_general(uint8_t,  order_idx,       "Order index to strings");
+    _add_key_general_string(   order_idx,       "order_name", "Order name");
+    _add_key_general(uint8_t,  name_idx,        "Name index to strings");
+    _add_key_general_string(   name_idx,        "name",       "Name");
+    _add_key_general(uint8_t,  physical_layer,  "Physical layer (0 e-bus, 1 ethernet)");
+    _add_key_general(uint8_t,  can_open,        "CoE support");
+    _add_key_general(uint8_t,  file_access,     "FoE support");
+    _add_key_general(uint8_t,  ethernet,        "EoE support");
+    _add_key_general(uint8_t,  soe_channels,    "Supported SoE channels");
+    _add_key_general(uint8_t,  ds402_channels,  "Supported CoE DS402 channels");
+    _add_key_general(uint8_t,  sysman_class,    "Sys Man");
+    _add_key_general(uint8_t,  flags,           "EEPROM flags");
+    _add_key_general(uint16_t, current_on_ebus, "EBus current in [mA]");
+
+
+    for (int i = 0; i < master_dev->pec->slaves[index].eeprom.strings_cnt; ++i) {
+        auto prefix = format_string("eeprom.strings.%d", i);
+        _add_key(create_key_read_only<char *>(this, prefix,
+                    &master_dev->pec->slaves[index].eeprom.strings[i], ""));
+    }
+
+    for (int i = 0; i < master_dev->pec->slaves[index].eeprom.fmmus_cnt; ++i) {
+        auto prefix = format_string("eeprom.fmmu.%d.", i);
+        _add_key(create_key_read_only<uint8_t>(this, prefix + "type",
+                    &master_dev->pec->slaves[index].eeprom.fmmus[i].type, "FMMU type"));
+    }
+
+    for (int i = 0; i < master_dev->pec->slaves[index].eeprom.sms_cnt; ++i) {
+        auto prefix = format_string("eeprom.sync_manager.%d.", i);
+        _add_key(create_key_read_only<uint16_t>(this, prefix + "adr",
+                    &master_dev->pec->slaves[index].eeprom.sms[i].adr, "Physical start address"));
+        _add_key(create_key_read_only<uint16_t>(this, prefix + "len",
+                    &master_dev->pec->slaves[index].eeprom.sms[i].len, "Length of physical start address"));
+        _add_key(create_key_read_only<uint8_t>(this, prefix + "ctrl_reg",
+                    &master_dev->pec->slaves[index].eeprom.sms[i].ctrl_reg, "Control register init value"));
+        _add_key(create_key_read_only<uint8_t>(this, prefix + "status_reg",
+                    &master_dev->pec->slaves[index].eeprom.sms[i].status_reg, "Status register init value"));
+        _add_key(create_key_read_only<uint8_t>(this, prefix + "activate",
+                    &master_dev->pec->slaves[index].eeprom.sms[i].activate, "Activation flags"));
+        _add_key(create_key_read_only<uint8_t>(this, prefix + "pdi_ctrl",
+                    &master_dev->pec->slaves[index].eeprom.sms[i].pdi_ctrl, "PDI control register"));
+    }
+
+    for (int i = 0; i < master_dev->pec->slaves[index].eeprom.dcs_cnt; ++i) {
+        auto prefix = format_string("eeprom.distributed_clocks.%d.", i);
+        _add_key(create_key_read_only<uint32_t>(this, prefix + "cycle_time_0",
+                    &master_dev->pec->slaves[index].eeprom.dcs[i].cycle_time_0, "Cycle time Sync0"));
+        _add_key(create_key_read_only<uint32_t>(this, prefix + "shift_time_0",
+                    &master_dev->pec->slaves[index].eeprom.dcs[i].shift_time_0, "Shift time Sync0"));
+        _add_key(create_key_read_only<uint32_t>(this, prefix + "shift_time_1",
+                    &master_dev->pec->slaves[index].eeprom.dcs[i].shift_time_1, "Shift time Sync1"));
+        _add_key(create_key_read_only<int16_t>(this, prefix + "sync_1_cycle_factor",
+                    &master_dev->pec->slaves[index].eeprom.dcs[i].sync_1_cycle_factor, "Cycle factor Sync1"));
+        _add_key(create_key_read_only<uint16_t>(this, prefix + "assign_active",
+                    &master_dev->pec->slaves[index].eeprom.dcs[i].assign_active, "Activation flags"));
+        _add_key(create_key_read_only<int16_t>(this, prefix + "sync_0_cycle_factor",
+                    &master_dev->pec->slaves[index].eeprom.dcs[i].sync_0_cycle_factor, "Cycle factor Sync0"));
+        _add_key(create_key_read_only<uint8_t>(this, prefix + "name_idx",
+                    &master_dev->pec->slaves[index].eeprom.dcs[i].name_idx, "Name index in strings"));
+        _add_key_string(master_dev->pec->slaves[index].eeprom.dcs[i].name_idx, prefix + "name", "Name"); 
+        _add_key(create_key_read_only<uint8_t>(this, prefix + "desc_idx",
+                    &master_dev->pec->slaves[index].eeprom.dcs[i].desc_idx, "Description index in strings"));
+        _add_key_string(master_dev->pec->slaves[index].eeprom.dcs[i].desc_idx, prefix + "desc", "Description"); 
+    }
+
+    ec_eeprom_cat_pdo_t *entry;
+    struct ec_eeprom_cat_pdo_queue *pdos[] = { 
+        &master_dev->pec->slaves[index].eeprom.txpdos,
+        &master_dev->pec->slaves[index].eeprom.rxpdos };
+
+    for (int u = 0; u < 2; ++u) {
+        string type = u == 0 ? string("txpdo") : string("rxpdo");
+
+        TAILQ_FOREACH(entry, pdos[u], qh) {
+            auto prefix = format_string("eeprom.%s.0x%04X.", type.c_str(), entry->pdo_index);
+            _add_key(create_key_read_only<uint8_t>(this, prefix + "n_entry",
+                        &entry->n_entry, "Number of PDO entries"));
+            _add_key(create_key_read_only<uint8_t>(this, prefix + "sm_nr",
+                        &entry->sm_nr, "Assigned sync manager"));
+            _add_key(create_key_read_only<uint8_t>(this, prefix + "dc_sync",
+                        &entry->dc_sync, "Use distributed clocks"));
+            _add_key(create_key_read_only<uint8_t>(this, prefix + "name_idx",
+                        &entry->name_idx, "Name index in strings"));
+            _add_key_string(entry->name_idx, prefix + "name", "Name"); 
+            _add_key(create_key_read_only<uint16_t>(this, prefix + "flags",
+                        &entry->flags, "PDO flags"));
+
+            for (int i = 0; i < entry->n_entry; ++i) {
+                auto prefix2 = format_string("%s0x%04X.%d.", prefix.c_str(), 
+                        entry->entries[i].entry_index, entry->entries[i].sub_index);
+                _add_key(create_key_read_only<uint8_t>(this, prefix2 + "entry_name_idx",
+                            &entry->entries[i].entry_name_idx, "Name index in strings"));
+                _add_key_string(entry->entries[i].entry_name_idx, prefix2 + "entry_name", "Entry name"); 
+
+                _add_key(create_key_read_only<uint8_t>(this, prefix2 + "data_type",
+                            &entry->entries[i].data_type, "Data type"));
+                _add_key(create_key_read_only<uint8_t>(this, prefix2 + "bit_len",
+                            &entry->entries[i].bit_len, "Length in bits"));
+                _add_key(create_key_read_only<uint16_t>(this, prefix2 + "flags",
+                            &entry->entries[i].flags, "Flags"));
+            }
+        }
+    }
 }
 
 // perform robotkernel clean up
@@ -512,7 +670,7 @@ void slave::pre_state_transition(module_state_t from, module_state_t to) {
             add_init_cmds();
 
             // ====> configure distributed clocks if needed 
-            if (master_dev->pec->dc.have_dc && dc.has_dc) {
+            if (true == dc.has_dc) {
                 if (dc.cycle_time_0 == 0)
                     dc.cycle_time_0 = master_dev->pec->dc.timer_override; 
 
@@ -586,13 +744,26 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
             k.remove_device(std::static_pointer_cast<
                     service_provider::process_data_inspection::base>(shared_from_this())); // process data inspection
             
-            if (pdin)  { k.remove_device(pdin); pdin = nullptr; }
-            if (pdout) { k.remove_device(pdout); pdout = nullptr; }
+            if (pdin)  { 
+                pdin->reset_provider(provider_hash);
+                provider_hash = 0;
+                k.remove_device(pdin); 
+                pdin = nullptr; 
+            }
+
+            if (pdout) { 
+                pdout->reset_consumer(consumer_hash);
+                consumer_hash = 0;
+                k.remove_device(pdout); 
+                pdout = nullptr; 
+            }
 
             if (to == module_state_preop)
                 break;
         case preop_2_init:
         case preop_2_boot:
+            delete_keys();
+
             // ====> deinit devices
             REMOVE_SERVICE_COLLECTOR(_mbx_foe);
             REMOVE_SERVICE_COLLECTOR(mbx_coe);
@@ -624,38 +795,10 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
         case init_2_op:
         case init_2_safeop:
         case init_2_preop:
-        case preop_2_preop:
+        case preop_2_preop: {
             // ====> initial devices            
-            for (int i = 0; i < master_dev->pec->slaves[index].sm_ch; ++i) {
-                auto prefix = format_string("sync_manager.%d.", i);
-                _add_key(create_key<uint16_t>(this, prefix + "address", 
-                            &master_dev->pec->slaves[index].sm[i].adr, "Physical start address"));
-                _add_key(create_key<uint16_t>(this, prefix + "length", 
-                            &master_dev->pec->slaves[index].sm[i].len, "Length"));
-                _add_key(create_key<uint32_t>(this, prefix + "flags", 
-                            &master_dev->pec->slaves[index].sm[i].flags, "Flags"));
-            }
-
-            for (int i = 0; i < master_dev->pec->slaves[index].fmmu_ch; ++i) {
-                auto prefix = format_string("fmmu.%d.", i);
-                _add_key(create_key<uint32_t>(this, prefix + "log",
-                            &master_dev->pec->slaves[index].fmmu[i].log, "Logical bus address"));
-                _add_key(create_key<uint16_t>(this, prefix + "log_len",
-                            &master_dev->pec->slaves[index].fmmu[i].log_len, "Length of logical address area"));
-                _add_key(create_key<uint8_t >(this, prefix + "log_bit_start",
-                            &master_dev->pec->slaves[index].fmmu[i].log_bit_start, "Start bit at logical bus address"));
-                _add_key(create_key<uint8_t >(this, prefix + "log_bit_stop",
-                            &master_dev->pec->slaves[index].fmmu[i].log_bit_stop, "Stop bit at logical address plus length"));
-                _add_key(create_key<uint16_t>(this, prefix + "phys",
-                            &master_dev->pec->slaves[index].fmmu[i].phys, "Physical (local) address in slave"));
-                _add_key(create_key<uint8_t >(this, prefix + "phys_bit_start",
-                            &master_dev->pec->slaves[index].fmmu[i].phys_bit_start, "Physical start bit at physical address"));
-                _add_key(create_key<uint8_t >(this, prefix + "type",
-                            &master_dev->pec->slaves[index].fmmu[i].type, "Type, read or write"));
-                _add_key(create_key<uint8_t >(this, prefix + "active",
-                            &master_dev->pec->slaves[index].fmmu[i].active, "Activation flag"));
-            }
-
+            init_key_value();
+            
             if (mbx_sup & EC_EEPROM_MBX_FOE)
                 ADD_SERVICE_COLLECTOR_CLASS(_mbx_foe, slave::file_protocol);
             
@@ -672,6 +815,7 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
 
             if (to == module_state_preop)
                 break;
+        }
         case preop_2_op:
         case preop_2_safeop:
             // ====> start receiving measurements
@@ -690,14 +834,16 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                     k.remove_device(pdin);
                 
                 pdin_trigger = make_shared<robotkernel::trigger>(
-                        master_dev->name, format_string("slave_%d.inputs", index));
+                        master_dev->name, format_string("slave_%d.inputs", index), rate);
+                k.add_device(pdin_trigger);
+
                 string pdo_desc = "";
                     
                 if (mbx_coe) {
                     try {
                         pdo_desc = mbx_coe->get_pdo_description(0x1C13);
                     } catch (std::exception& e) {
-                        log(error, e.what());
+                        master_dev->log(error, e.what());
                     }
                 }
 
@@ -725,7 +871,7 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                     try {
                         pdo_desc = mbx_coe->get_pdo_description(0x1C12);
                     } catch (std::exception& e) {
-                        log(error, e.what());
+                        master_dev->log(error, e.what());
                     }
                 }
 
@@ -813,7 +959,7 @@ void slave::get_pdout(service_provider::process_data_inspection::pd_t& pd) {
 //! process data out handler
 void slave::pdout_handler() {
     ec_slave_t *slv = &master_dev->pec->slaves[index];
-    if (!pdout || (slv->pdout.len == 0))
+    if (!pdout || !consumer_hash || (slv->pdout.len == 0))
         return;
 
     pdout->read(consumer_hash, 0, slv->pdout.pd, slv->pdout.len);
@@ -823,10 +969,13 @@ void slave::pdout_handler() {
 //! process data in handler
 void slave::pdin_handler() {
     ec_slave_t *slv = &master_dev->pec->slaves[index];
-    if (!pdin || (slv->pdin.len == 0))
+    if (!pdin || !provider_hash || (slv->pdin.len == 0))
         return;
 
     pdin->write(provider_hash, 0, slv->pdin.pd, slv->pdin.len);
     pdin->pd_cookie++;
+
+    if (pdin_trigger)
+        pdin_trigger->trigger_modules();
 }
 

@@ -45,6 +45,7 @@
 #include "libethercat/dc.h"
 #include "libethercat/soe.h"
 #include "libethercat/foe.h"
+#include "libethercat/error_codes.h"
 
 //! module_ethercat::
 namespace module_ethercat {
@@ -73,16 +74,26 @@ class master :
         typedef std::map<int, wp_slave_t> slave_map_t;
         slave_map_t _slave_info;
 
-        std::string _dc_mode_string;
-
         struct {
+            bool log;
+            std::string mode_string;
+
             bool first_run;
             double last_diff;
             double diffsum;
 
+            double start_timer;
+
             double kp;
             double ki;
             double kd;
+        
+            int offset_compensation_cycles;
+            int timer_override;
+            
+            int diff_converge_cycles;
+            int diff_converge_cnt;
+            bool diff_converged;
         } dc_sync;
 
         ec_t *pec;
@@ -92,13 +103,10 @@ class master :
         std::string ifname;
         bool log_eeprom_data;
 
-        int dc_offset_compensation_cycles;
-        int dc_offset_compensation_max;
-        int dc_timer_override;
-
-        int trigger_interval;
         bool threaded_startup;
-        bool log_dc;
+        bool monitor_state;
+
+        double rate;
 
         uint64_t pd_cookie;
         std::mutex pd_mtx;

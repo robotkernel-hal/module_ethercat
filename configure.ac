@@ -52,6 +52,5 @@ AX_CHECK_COMPILE_FLAG([-pthread], [AX_APPEND_FLAG([-pthread])] )
 AC_CHECK_LIB([pthread], [pthread_create])
 
 AC_CONFIG_FILES([Makefile src/main/cpp/Makefile module_ethercat.pc])
-AC_CONFIG_FILES([share/ln/module_ethercat.inc.lnc], [cp share/ln/module_ethercat.inc.lnc ${ac_abs_top_srcdir}/share/ln/])
 
 AC_OUTPUT

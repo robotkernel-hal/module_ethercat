@@ -79,16 +79,12 @@ master::master(const std::string& name, const YAML::Node& node) :
 #define get_yaml(t, n, d) \
     n = get_as<t>(node, #n, d);
 
-    get_yaml(string,   ifname, "");
+    ifname = get_as<string>(node, "ifname");
     get_yaml(int,      recv_prio, 0);
     get_yaml(int,      recv_mask, 0xff);
     get_yaml(bool,     log_eeprom_data, false);
-    get_yaml(int,      trigger_interval, 0);
     get_yaml(bool,     threaded_startup, true);
-    get_yaml(bool,     log_dc, false);
-    get_yaml(int,      dc_offset_compensation_cycles, 250);
-    get_yaml(int,      dc_timer_override, -1);
-    get_yaml(uint64_t, dc_offset_compensation_max, 100000000);
+    get_yaml(bool,     monitor_state, false);
 
     thread_name = format_string("%s.mbxhandler", name.c_str());
 
@@ -116,14 +112,26 @@ master::master(const std::string& name, const YAML::Node& node) :
         }
     }
 
-    _dc_mode_string = get_as<string>(node, "dc_mode", "master_clock");
-    dc_sync.first_run = true;
-    dc_sync.last_diff = 0.;
-    dc_sync.diffsum   = 0.;
+    // read in distributed clocks settings
+    dc_sync.log                        = get_as<bool>(node, "dc_sync_log", false);
+    dc_sync.mode_string                = get_as<string>(node, "dc_sync_mode", "ref_clock");
+    dc_sync.first_run                  = true;
+    dc_sync.last_diff                  = 0.;
+    dc_sync.diffsum                    = 0.;
+    dc_sync.kp                         = get_as<double>(node, "dc_sync_kp", 0.0025);
+    dc_sync.ki                         = get_as<double>(node, "dc_sync_ki", 0.0025);
+    dc_sync.timer_override             = get_as<int>(node, "dc_sync_timer_override", -1);
+    dc_sync.offset_compensation_cycles = get_as<int>(node, "dc_sync_offset_compensation_cycles", 100);
+    dc_sync.diff_converge_cycles       = 0;
+    dc_sync.diff_converge_cnt          = 0;
+    dc_sync.diff_converged             = false;
 
-    get_yaml(double,    dc_sync.kp, 0.1);
-    get_yaml(double,    dc_sync.ki, 0.001);
-    get_yaml(double,    dc_sync.kd, 0.1);
+    if (node["dc_sync.kp"] || node["dc_sync.ki"] || node["dc_sync.kd"])
+        log(warning, 
+                "\n"
+                "This is a newer version of module_ethercat which uses a better pi-control\n"
+                "for dc clock synchronization. To modify the gains use parameters \"dc_sync_kp\"\n"
+                "and \"dc_sync_ki\" in your config file. (Using kp=%7.3f, ki=%7.3f)\n", dc_sync.ki, dc_sync.kp);
 
     pd_cookie = 0;
     
@@ -151,22 +159,14 @@ void master::open() {
             it != _slave_info.end(); ++it) {
         int slave_nr = it->first;
         sp_slave_t slv = it->second;
-
-//        if (pec->slave_cnt > slave_nr) {
-//            for (slave::coe_list_t::iterator it2 = slv->coe_init_cmds.begin();
-//                    it2 != slv->coe_init_cmds.end(); ++it2) {
-//                slave::coe_init_cmd_t *cmd = *it2;
-//                ec_slave_add_init_cmd(pec, slave_nr, EC_MBX_COE, 
-//                        (int)cmd->transition, cmd->index, cmd->subindex, 
-//                        cmd->ca, cmd->data, cmd->datalen);
-//
-//                cmd->already_added = true;
-//            }
-//        } else {
-//            log(warning, "setting inits for slave %2d failed. no slave found!\n", slave_nr);
-//            continue;
-//        }
                 
+        if (pec->slave_cnt <= slave_nr)  {
+            log(warning, "slave %d not connected to ethercat bus, "
+                        "settings dc config failed!\n", slave_nr);
+
+            continue;
+        }
+            
         if (slv->dc.has_dc)
             ec_slave_set_dc_config(pec, slave_nr, 1, slv->dc.type, slv->dc.cycle_time_0,
                     slv->dc.cycle_time_1, slv->dc.cycle_shift);
@@ -187,7 +187,8 @@ void master::open() {
             int s_nr = *it2;
             if (pec->slave_cnt <= s_nr) {
                 log(warning, "slave %d not connected to ethercat bus, "
-                        "not adding to group %d\n", s_nr, g_nr);
+                        "not adding to group %d!\n", s_nr, g_nr);
+
                 continue;
             }
 
@@ -204,44 +205,47 @@ void master::open() {
 
         log(verbose, "trying to create mapping for slave %d\n", slave_nr);
 
-        if (pec->slave_cnt > slave_nr) {
-            // generate input mapping for coe
-            int mapping_entries = slv->input_mapping.size();
-            if (mapping_entries > 0) {
-                uint16_t mapping[mapping_entries + 1];
-                int mnr = 0;
-                mapping[mnr++] = mapping_entries;
-                for (slave::mapping_t::iterator mit = slv->input_mapping.begin(); 
-                        mit != slv->input_mapping.end(); ++mit) {
-                    mapping[mnr++] = *mit;
+        if (pec->slave_cnt <= slave_nr) {
+            log(warning, "slave %d not connected to ethercat bus, "
+                    "setting mapping failed!\n", slave_nr);
 
-                    log(verbose, "adding input mapping for slave %d: 0x%08X\n", 
-                            slave_nr, *mit);
-                }
+            continue;
+        }
 
-                ec_slave_add_init_cmd(pec, slave_nr, EC_MBX_COE, 0x24, 0x1C13, 
-                        0, 1, (char *)mapping, 2 * (mapping_entries + 1));
+        // generate input mapping for coe
+        int mapping_entries = slv->input_mapping.size();
+        if (mapping_entries > 0) {
+            uint16_t mapping[mapping_entries + 1];
+            int mnr = 0;
+            mapping[mnr++] = mapping_entries;
+            for (slave::mapping_t::iterator mit = slv->input_mapping.begin(); 
+                    mit != slv->input_mapping.end(); ++mit) {
+                mapping[mnr++] = *mit;
+
+                log(verbose, "adding input mapping for slave %d: 0x%08X\n", 
+                        slave_nr, *mit);
             }
 
-            // generate output mapping for coe
-            mapping_entries = slv->output_mapping.size();
-            if (mapping_entries > 0) {
-                uint16_t mapping[mapping_entries + 1];
-                int mnr = 0;
-                mapping[mnr++] = mapping_entries;
-                for (slave::mapping_t::iterator mit = slv->output_mapping.begin(); 
-                        mit != slv->output_mapping.end(); ++mit) {
-                    mapping[mnr++] = *mit;
+            ec_slave_add_init_cmd(pec, slave_nr, EC_MBX_COE, 0x24, 0x1C13, 
+                    0, 1, (char *)mapping, 2 * (mapping_entries + 1));
+        }
 
-                    log(verbose, "adding output mapping for slave %d: 0x%08X\n", 
-                            slave_nr, *mit);
-                }
+        // generate output mapping for coe
+        mapping_entries = slv->output_mapping.size();
+        if (mapping_entries > 0) {
+            uint16_t mapping[mapping_entries + 1];
+            int mnr = 0;
+            mapping[mnr++] = mapping_entries;
+            for (slave::mapping_t::iterator mit = slv->output_mapping.begin(); 
+                    mit != slv->output_mapping.end(); ++mit) {
+                mapping[mnr++] = *mit;
 
-                ec_slave_add_init_cmd(pec, slave_nr, EC_MBX_COE, 0x24, 0x1C12, 
-                        0, 1, (char *)mapping, 2 * (mapping_entries + 1));
+                log(verbose, "adding output mapping for slave %d: 0x%08X\n", 
+                        slave_nr, *mit);
             }
-        } else {
-            log(error, "setting mapping for slave %d, failed. no slave found!\n", slave_nr);
+
+            ec_slave_add_init_cmd(pec, slave_nr, EC_MBX_COE, 0x24, 0x1C12, 
+                    0, 1, (char *)mapping, 2 * (mapping_entries + 1));
         }
     }
             
@@ -397,15 +401,15 @@ int master::set_state(module_state_t state) {
         case init_2_op:
         case init_2_safeop:
         case init_2_preop: {
-            pec->dc.mode = _dc_mode_string == "ref_clock" ? 
+            pec->dc.mode = dc_sync.mode_string == "ref_clock" ? 
                 ec_dc_info::dc_mode_ref_clock : ec_dc_info::dc_mode_master_clock;
             
             STATE_TRANSITION(pre, module_state_preop);
             ec_set_state(pec, EC_STATE_PREOP);
             STATE_TRANSITION(post, module_state_preop);
 
-            if (dc_offset_compensation_cycles > 0)
-                pec->dc.offset_compensation_cycles = dc_offset_compensation_cycles;
+            if (dc_sync.offset_compensation_cycles > 0)
+                pec->dc.offset_compensation_cycles = dc_sync.offset_compensation_cycles;
 
             auto mdl = get_module();
             if (mdl->triggers.size() != 1) {
@@ -415,16 +419,22 @@ int master::set_state(module_state_t state) {
                 auto et = mdl->triggers.front();
                 t_divisor = et->divisor;
                 t_dev = kernel::get_instance()->get_trigger(et->dev_name);
+            
+                double rate = t_dev->get_rate() / t_divisor;
+                dc_sync.start_timer = (1.f / rate);
+                dc_sync.diff_converge_cycles = rate;
             }
 
-            if (dc_timer_override > 0)
-                pec->dc.timer_override = dc_timer_override;
-            else {
+            if (dc_sync.timer_override > 0) {
+                pec->dc.timer_override = dc_sync.timer_override;
+
+                rate = 1. / (dc_sync.timer_override / 1E9);
+            } else {
                 // trigger devices stores rate in [Hz]
-                double rate = t_dev->get_rate() / t_divisor;
+                rate = t_dev->get_rate() / t_divisor;
 
                 // ethercat master need timer interval in [ns]
-                dc_timer_override = 
+                dc_sync.timer_override = 
                     pec->dc.timer_override = (1.f / rate) * 1E9;
 
                 log(info, "got trigger rate %f Hz\n", rate);
@@ -469,12 +479,24 @@ int master::set_state(module_state_t state) {
             start();
 
             // add group trigger devices
-            for (const auto& kv : groups)
-                k.add_device(kv.second);
+            for (auto& kv : groups) {
+                auto& grp = kv.second; 
+
+                double grp_rate = (rate / grp->divisor);
+                grp->set_rate(grp_rate);
+                k.add_device(grp);
+    
+                for (auto& s_nr : grp->_slaves) {
+                    _slave_info[s_nr]->rate = grp_rate;
+                }
+            }
                 
             STATE_TRANSITION(pre, module_state_safeop);
             ec_set_state(pec, EC_STATE_SAFEOP);
             STATE_TRANSITION(post, module_state_safeop);
+
+            if (dc_sync.offset_compensation_cycles > 0)
+                pec->dc.offset_compensation_cycles = dc_sync.offset_compensation_cycles;
 
             // process data is now available, create names process data
             for (int nr = 0; nr < pec->slave_cnt; ++nr) {
@@ -545,15 +567,16 @@ int master::set_state(module_state_t state) {
 //! module trigger callback
 void master::tick() {
     int i = 0;
+    bool dc_sent = false;
     int64_t max_timeout = 0;
-    ec_timer_t dc_timeout;
+    ec_timer_t dc_timeout, ec_state_timeout;
 
     if (!pec || (pec->tx_sync == 1))
         return;
 
     for (i = 0; i < pec->pd_group_cnt; ++i) {
         auto& g = groups[i];
-        if ((++g->_divisor_cnt % g->_divisor) != 0)
+        if ((++g->_divisor_cnt % g->divisor) != 0)
             continue; 
 
         for (const auto& slave : g->_slaves)
@@ -569,8 +592,13 @@ void master::tick() {
     }
 
     if (pec->dc.have_dc) {
-        ec_send_distributed_clocks_sync(pec);
+        dc_sent = ec_send_distributed_clocks_sync(pec) == 0;
         ec_timer_init(&dc_timeout, max_timeout);
+    }
+
+    if (monitor_state) {
+        ec_send_brd_ec_state(pec); 
+        ec_timer_init(&ec_state_timeout, 1000000000);
     }
 
     hw_tx(pec->phw);
@@ -609,43 +637,54 @@ void master::tick() {
         }
     }
 
-    if (pec->dc.have_dc) {
+    if (dc_sent && pec->dc.have_dc) {
         ec_receive_distributed_clocks_sync(pec, &dc_timeout);
 
         if (    (pec->dc.mode == ec_dc_info::dc_mode_ref_clock) && 
                 (pec->dc.offset_compensation_cnt == 0)) {
             double diff = (pec->dc.act_diff / 1E9);
 
-            // trigger devices stores rate in [Hz]
-            double rate = t_dev->get_rate() / t_divisor;
-            double act_timer = (1.f / rate);
-
             // sum it up for integral part
-            dc_sync.diffsum += diff;
+            dc_sync.diffsum += dc_sync.ki * diff * pec->dc.offset_compensation_cycles * dc_sync.start_timer;
 
-            if (!dc_sync.first_run) {
-                // calculate new rate in [s]
-                act_timer += 
-                    (dc_sync.kp * (diff/pec->dc.offset_compensation_cycles)) + 
-                    (dc_sync.ki * (dc_sync.diffsum/pec->dc.offset_compensation_cycles)) +
-                    (dc_sync.kd * (diff - dc_sync.last_diff)/(pec->dc.offset_compensation_cycles));
-            } else {
-                act_timer += (dc_sync.kp * (diff/pec->dc.offset_compensation_cycles) );
-            }
+            // limit diffsum
+            double diffsum_limit = dc_sync.start_timer / 2.;
+
+            if (dc_sync.diffsum > diffsum_limit)
+                dc_sync.diffsum = diffsum_limit;
+            else if (dc_sync.diffsum < (-1 * diffsum_limit))
+                dc_sync.diffsum = -1 * diffsum_limit;
+
+            // calculate new rate in [s]
+            double act_timer = dc_sync.start_timer + 
+                (dc_sync.kp * diff) + dc_sync.diffsum;
 
             try {
-                t_dev->set_rate(1.f / act_timer);
+                rate = 1.f / act_timer;
+                t_dev->set_rate(rate);
 
-                if (log_dc) 
-                    log(info, "setting new clock %13.10f, last_diff %13.10f, diff %13.10f, "
-                            "offset_comp %d\n", act_timer, dc_sync.last_diff, diff, 
-                            pec->dc.offset_compensation_cycles);
+                if (dc_sync.log) 
+                    log(info, "setting new clock rate to %7.3f [Hz], clock diff %7.3f [us]\n",
+                            rate, diff * 1E6);
             } catch (exception& e) {
                 log(warning, "setting new clock failed: %s\n", e.what());
             }
 
             dc_sync.first_run = false;
             dc_sync.last_diff = diff;
+
+            // check if diff converged
+            if (    !dc_sync.diff_converged &&
+                    ((++dc_sync.diff_converge_cnt % dc_sync.diff_converge_cycles) == 0)) {
+                int margin = dc_sync.start_timer * 0.01;
+
+                if ((diff > margin) || (diff < -1 * margin))
+                    log(info, "DC diff did not converge until now...\n");
+                else {
+                    log(info, "DC diff converged!\n");
+                    dc_sync.diff_converged = true;
+                }
+            }
         }        
 
         if (pdin_dc) {
@@ -654,6 +693,9 @@ void master::tick() {
             pdin_dc_trigger->trigger_modules();
         }
     }
+    
+    if (monitor_state)
+        ec_receive_brd_ec_state(pec, &ec_state_timeout); 
 }
 
 //! async handler thread
