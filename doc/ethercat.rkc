@@ -57,20 +57,50 @@
 
 #########################################################
 # Process data group settings. 
-# specify ethercat process data groups
-groups: 
-  0: { divisor: 1, recv_timeout: 1000000, slaves: [ 0, ] }
+# Specify ethercat process data groups. Each group must have
+# a unique groupt number. 
+#
+# A 'divider' can be specified to 
+# divide the incoming trigger to a lower rate. This makes it
+# possible to achieve different rates for the slaves depending 
+# on your setup
+#
+# The timeout after which a sent packet is expected to be 
+# received can be specified with 'recv_timeout'.
+#
+# All slaves mentioned in the list 'slaves' will be bounded to
+# that process data group.
+#groups: 
+#  0: 
+#    divisor: 1
+#    recv_timeout: 1000000
+#    slaves: [ 0, ]
 
-cs_mapping: &cs_mapping
-  { type: coe, pdos: [ 0x1600, 0x1601, 0x1A00, 0x1A01, 0x1610, 0x1611, 0x1A10, 0x1A11 ] }
+#########################################################
+# Slave settings.
+# Each slave has to have a unique slave 'name'. 
+#
+# The 'index' reflects the slave order of the connected 
+# EtherCAT slaves.
+#  
+# Distributed clocks 'type': Type 0 means sync0 only, 
+# type 1 sync0 and sync1.
+#
+# Cycle time for sync0 interrupt may be specified with 
+# 'cycle_time_0'. If omitted, the module's trigger cycle 
+# time is used.
+#
+# Time for sync1 interrupt relative to sync0.
+# Shift EtherCAT datagram relative to sync0.
+#slaves:
+#- name: my_slave_1
+#  index: 0
+#  dc: 
+#    type: 1
+#    cycle_time_0: 250000
+#    cycle_time_1: 900000
+#    cycle_shift: -100000
+#  mapping: 
+#    type: coe
+#    pdos: [ 0x1600, 0x1601, 0x1A00, 0x1A01, 0x1610, 0x1611, 0x1A10, 0x1A11 ]
 
-# specify slaves
-slaves:
-- name: cs_jcu_BB_v1
-  index: 0
-  # cycle_time_0: cycle time for sync0 interrupt, triggers control loop (4kHz -> 250000ns)
-  # cycle_time_1: when to write telemetry (relative to sync0 interrupt)
-  # cycle_shift:  shift pdi interrupt (when ethercat package arrives) relative to sync0
-  #               < 0: pdi comes later
-  dc: { type: 1, cycle_time_0: 250000, cycle_time_1: 900000, cycle_shift: -100000 }
-  mapping: *cs_mapping
