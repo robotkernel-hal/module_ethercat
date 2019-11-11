@@ -1,0 +1,6 @@
+modules:
+- name: ecat
+  so_file: libmodule_ethercat.so
+  config: { ifname: en1 }
+  power_up: op
+
