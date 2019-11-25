@@ -674,7 +674,7 @@ void master::tick() {
             dc_sync.last_diff = diff;
 
             // check if diff converged
-            if (    !dc_sync.diff_converged &&
+            if (    !dc_sync.diff_converge_cycles && !dc_sync.diff_converged &&
                     ((++dc_sync.diff_converge_cnt % dc_sync.diff_converge_cycles) == 0)) {
                 int margin = dc_sync.start_timer * 0.01;
 
