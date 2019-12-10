@@ -125,6 +125,8 @@ class master :
         robotkernel::sp_trigger_t      pdin_dc_trigger;
         std::size_t dc_provider_hash;
 
+        robotkernel::sp_trigger_t      recv_error_trigger;
+
     public:
         //! construction
         /*!

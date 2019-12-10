@@ -344,6 +344,11 @@ int master::set_state(module_state_t state) {
                 k.remove_device(pdin_dc_trigger);
                 pdin_dc_trigger = nullptr;
             }
+            
+            if (recv_error_trigger) {
+                k.remove_device(recv_error_trigger);
+                recv_error_trigger = nullptr;
+            }
 
             // remove group trigger devices
             for (const auto& kv : groups)
@@ -506,6 +511,12 @@ int master::set_state(module_state_t state) {
                 sp_slave_t slv = _slave_info[nr];
             }
 
+            if (recv_error_trigger)
+                k.remove_device(recv_error_trigger);
+            
+            recv_error_trigger = make_shared<robotkernel::trigger>(name, "recv_error");
+            k.add_device(recv_error_trigger);
+
             // distributed clock info process data
             if (pdin_dc)
                 k.remove_device(pdin_dc);
@@ -579,6 +590,8 @@ void master::tick() {
         if ((++g->_divisor_cnt % g->divisor) != 0)
             continue; 
 
+        log(verbose, "sending group %d\n", i);
+
         for (const auto& slave : g->_slaves)
             _slave_info[slave]->pdout_handler();
 
@@ -592,6 +605,8 @@ void master::tick() {
     }
 
     if (pec->dc.have_dc) {
+        log(verbose, "sending distributed clock sync\n");
+
         dc_sent = ec_send_distributed_clocks_sync(pec) == 0;
         ec_timer_init(&dc_timeout, max_timeout);
     }
@@ -614,8 +629,16 @@ void master::tick() {
 
         int ret = ec_receive_process_data_group(pec, i, &g->timeout);
 
-        if ((ret == -1) && (errno == ETIMEDOUT))
-            continue;
+        if (ret == -1) {
+            recv_error_trigger->trigger_modules();
+            
+            if (errno == ETIMEDOUT) {
+                log(warning, "receiving group %d returned timeout!\n");
+                continue;
+            }
+        }
+
+        log(verbose, "received group %d\n", i);
 
         for (auto it = g->_slaves.begin(); it != g->_slaves.end(); ++it) {
             int slave = *it;
@@ -639,6 +662,8 @@ void master::tick() {
 
     if (dc_sent && pec->dc.have_dc) {
         ec_receive_distributed_clocks_sync(pec, &dc_timeout);
+
+        log(verbose, "received distributed clock sync\n");
 
         if (    (pec->dc.mode == ec_dc_info::dc_mode_ref_clock) && 
                 (pec->dc.offset_compensation_cnt == 0)) {
@@ -664,7 +689,7 @@ void master::tick() {
                 t_dev->set_rate(rate);
 
                 if (dc_sync.log) 
-                    log(info, "setting new clock rate to %7.3f [Hz], clock diff %7.3f [us]\n",
+                    log(verbose, "setting new clock rate to %7.3f [Hz], clock diff %7.3f [us]\n",
                             rate, diff * 1E6);
             } catch (exception& e) {
                 log(warning, "setting new clock failed: %s\n", e.what());
