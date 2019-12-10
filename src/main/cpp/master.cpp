@@ -676,10 +676,11 @@ void master::tick() {
             // check if diff converged
             if (    dc_sync.diff_converge_cycles && !dc_sync.diff_converged &&
                     ((++dc_sync.diff_converge_cnt % dc_sync.diff_converge_cycles) == 0)) {
-                int margin = dc_sync.start_timer * 0.01;
+                double margin = dc_sync.start_timer * 0.01;
 
                 if ((diff > margin) || (diff < -1 * margin))
-                    log(info, "DC diff did not converge until now...\n");
+                    log(info, "DC diff did not converge until now... (start_timer %10.7f, margin %d, diff %10.7f\n",
+                            dc_sync.start_timer, margin, diff);
                 else {
                     log(info, "DC diff converged!\n");
                     dc_sync.diff_converged = true;
