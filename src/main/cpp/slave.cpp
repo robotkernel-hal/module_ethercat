@@ -123,6 +123,41 @@ slave::slave_dc::slave_dc(const YAML::Node& node) {
     cycle_time_1    = get_as<uint32_t>(node, "cycle_time_1", 0);
     cycle_shift     = get_as<uint32_t>(node, "cycle_shift", 0);
 }
+            
+//! emit yaml node
+YAML::Node slave::slave_dc::to_yaml() {
+    YAML::Node node(YAML::NodeType::Map);
+    node["type"]         = type;
+    node["cycle_time_0"] = cycle_time_0;
+    node["cycle_time_1"] = cycle_time_1;
+    node["cycle_shift"]  = cycle_shift;
+    return node;
+}
+            
+//! emit yaml node
+YAML::Node slave::sync_manager_settings::to_yaml() {
+    YAML::Node node(YAML::NodeType::Map);
+    node["address"] = format_string("0x%X", _address);
+    node["flags"]   = format_string("0x%X", _flags);
+    node["length"]  = _length;
+    return node;
+}
+
+//! Emit YAML status of module instance.
+/*! 
+ * \param[out] out  Emitter output stream.
+ * \param[in] sm    Module instance.
+ * \return  Output emitter.
+ */
+YAML::Emitter& operator << (YAML::Emitter& out, slave::sync_manager_settings& sm) {
+    out << YAML::BeginMap;
+    out << YAML::Key << "address"   << YAML::Value << sm._address;
+    out << YAML::Key << "flags"     << YAML::Value << YAML::Hex << sm._flags;
+    out << YAML::Key << "length"    << YAML::Value << sm._length;
+    out << YAML::EndMap;
+
+    return out;
+}
 
 //! construction
 /*!
@@ -240,6 +275,37 @@ slave::~slave() {
     for (soe_list_t::iterator it = soe_init_cmds.begin();
             it != soe_init_cmds.end(); ++it)
         delete(*it);
+}
+        
+//! emit yaml node
+YAML::Node slave::to_yaml() {
+    YAML::Node node;
+
+    node["index"] = index;
+
+    if (name != "") {
+        node["name"] = name;
+    } else if (master_dev->pec->slaves[index].eeprom.general.name_idx > 0) {
+        node["name"] = master_dev->pec->slaves[index].eeprom.strings[
+            master_dev->pec->slaves[index].eeprom.general.name_idx - 1];
+    } else {
+        node["name"] = "no name";
+    }
+
+    YAML::Node sms_node(YAML::NodeType::Map);
+
+    for (const auto& kv : _sm_map) {
+        if (kv.second->is_set())
+            sms_node[kv.first] = kv.second->to_yaml();
+    }
+
+    if (sms_node.size() > 0)
+        node["sm"] = sms_node;
+
+    if (dc.is_set())
+        node["dc"] = dc.to_yaml();
+
+    return node;
 }
 
 template <typename T>
