@@ -180,7 +180,7 @@ slave::slave(int index, master *master_dev) :
     key_value_slave(master_dev->name, format_string("slave_%d", index)),
     pd_provider(master_dev->name + format_string(".slave_%d", index)),
     pd_consumer(master_dev->name + format_string(".slave_%d", index)),
-    index(index), master_dev(master_dev) 
+    sm_set_by_user(false), index(index), master_dev(master_dev) 
 {
     master_dev->log(verbose, "default slave index %d created\n", index);
     provider_hash = consumer_hash = 0;
@@ -191,16 +191,16 @@ slave::slave(int index, master *master_dev) :
  * \param node yaml intialization node
  * \param master_dev master device
  */
-slave::slave(const YAML::Node& node, master *master_dev) : 
+slave::slave(int index, const YAML::Node& node, master *master_dev) : 
     service_provider::process_data_inspection::base(master_dev->name, 
-            format_string("slave_%d", get_as<int>(node, "index"))), 
-    key_value_slave(master_dev->name, format_string("slave_%d", get_as<int>(node, "index"))),
-    pd_provider(master_dev->name + format_string(".slave_%d", get_as<int>(node, "index"))),
-    pd_consumer(master_dev->name + format_string(".slave_%d", get_as<int>(node, "index"))),
-    master_dev(master_dev) 
+            format_string("slave_%d", "index")), 
+    key_value_slave(master_dev->name, format_string("slave_%d", index)),
+    pd_provider(master_dev->name + format_string(".slave_%d", index)),
+    pd_consumer(master_dev->name + format_string(".slave_%d", index)),
+    sm_set_by_user(false), master_dev(master_dev) 
 {
     name  = get_as<string>(node, "name");
-    index = get_as<int>(node, "index");
+    this->index = index;
 
     provider_hash = consumer_hash = 0;
 
@@ -215,6 +215,8 @@ slave::slave(const YAML::Node& node, master *master_dev) :
             int sm_nr = it->first.as<int>();
             _sm_map[sm_nr] = make_shared<sync_manager_settings_t>(it->second);
         }
+
+        sm_set_by_user = true;
     }
     
     if (node["dc"])
@@ -864,6 +866,9 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
         case preop_2_preop: {
             // ====> initial devices            
             init_key_value();
+            
+            k.add_device(std::static_pointer_cast<
+                    service_provider::key_value::base>(shared_from_this()));
             
             if (mbx_sup & EC_EEPROM_MBX_FOE)
                 ADD_SERVICE_COLLECTOR_CLASS(_mbx_foe, slave::file_protocol);

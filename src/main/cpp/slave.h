@@ -351,6 +351,7 @@ class slave :
             
             //! default construction
             sync_manager_settings() {};
+
             //! construction
             /*!
              * \param node yaml intialization node
@@ -367,6 +368,7 @@ class slave :
 
         typedef std::map<int, std::shared_ptr<sync_manager_settings_t> > sm_map_t;
         sm_map_t _sm_map;       //! sync manager configs
+        bool   sm_set_by_user;  //!< sync manager read from config 
 
         std::string name;       //!< slave name
         int index;              //!< slave bus index
@@ -403,7 +405,7 @@ class slave :
          * \param node yaml intialization node
          * \param master_dev master device
          */
-        slave(const YAML::Node& node, master *master_dev);
+        slave(int index, const YAML::Node& node, master *master_dev);
 
         //! destruction
         ~slave();

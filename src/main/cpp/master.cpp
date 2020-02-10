@@ -76,10 +76,15 @@ master::master(const std::string& name, const YAML::Node& node) :
     pd_provider(name), module_base("module_ethercat", name, node),
     runnable(node), pec(NULL) 
 {
-#define get_yaml(t, n, d) \
-    n = get_as<t>(node, #n, d);
+    config = YAML::Clone(node);
+} 
 
-    ifname = get_as<string>(node, "ifname");
+//! second stage init routine
+void master::init() {
+#define get_yaml(t, n, d) \
+    n = get_as<t>(config, #n, d);
+
+    ifname = get_as<string>(config, "ifname");
     get_yaml(int,      recv_prio, 0);
     get_yaml(int,      recv_mask, 0xff);
     get_yaml(bool,     log_eeprom_data, false);
@@ -92,9 +97,9 @@ master::master(const std::string& name, const YAML::Node& node) :
     ec_log_func = log_func;
 
     // group settings
-    if (node["groups"]) {
-        for (YAML::const_iterator it = node["groups"].begin();
-                it != node["groups"].end(); ++it) {
+    if (config["groups"]) {
+        for (YAML::const_iterator it = config["groups"].begin();
+                it != config["groups"].end(); ++it) {
             int g_nr = it->first.as<int>();
             groups[g_nr] = make_shared<group>(this, g_nr, it->second);
             
@@ -103,30 +108,53 @@ master::master(const std::string& name, const YAML::Node& node) :
         }
     }
 
-    if (node["slaves"] != NULL) {
+    if (config["slaves"] != NULL) {
         // parsing slave configurations
-        const YAML::Node& slaves = node["slaves"];
-        for (YAML::const_iterator it = slaves.begin(); it != slaves.end(); ++it) {
-            std::shared_ptr<slave> slv = make_shared<slave>(*it, this);
-            _slave_info[slv->index] = slv;
+        const YAML::Node& slaves = config["slaves"];
+
+        if (slaves.IsMap()) {
+            for (const auto& kv : slaves) {
+                int index = kv.first.as<int>();
+                auto& slave_node = kv.second;
+
+                std::shared_ptr<slave> slv = make_shared<slave>(index, slave_node, this);
+                _slave_info[slv->index] = slv;
+            }
+        }
+
+        if (slaves.IsSequence()) {
+            YAML::Node new_slaves(YAML::NodeType::Map);
+
+            for (YAML::const_iterator it = slaves.begin(); it != slaves.end(); ++it) {
+                auto& slave_node = *it;
+                int index = get_as<int>(slave_node, "index");
+
+                new_slaves[index] = YAML::Clone(slave_node);
+                new_slaves[index].remove("index");
+
+                std::shared_ptr<slave> slv = make_shared<slave>(index, slave_node, this);
+                _slave_info[slv->index] = slv;
+            }
+
+            config["slaves"] = new_slaves;
         }
     }
 
     // read in distributed clocks settings
-    dc_sync.log                        = get_as<bool>(node, "dc_sync_log", false);
-    dc_sync.mode_string                = get_as<string>(node, "dc_sync_mode", "ref_clock");
+    dc_sync.log                        = get_as<bool>(config, "dc_sync_log", false);
+    dc_sync.mode_string                = get_as<string>(config, "dc_sync_mode", "ref_clock");
     dc_sync.first_run                  = true;
     dc_sync.last_diff                  = 0.;
     dc_sync.diffsum                    = 0.;
-    dc_sync.kp                         = get_as<double>(node, "dc_sync_kp", 0.0025);
-    dc_sync.ki                         = get_as<double>(node, "dc_sync_ki", 0.0025);
-    dc_sync.timer_override             = get_as<int>(node, "dc_sync_timer_override", -1);
-    dc_sync.offset_compensation_cycles = get_as<int>(node, "dc_sync_offset_compensation_cycles", 100);
+    dc_sync.kp                         = get_as<double>(config, "dc_sync_kp", 0.0025);
+    dc_sync.ki                         = get_as<double>(config, "dc_sync_ki", 0.0025);
+    dc_sync.timer_override             = get_as<int>(config, "dc_sync_timer_override", -1);
+    dc_sync.offset_compensation_cycles = get_as<int>(config, "dc_sync_offset_compensation_cycles", 100);
     dc_sync.diff_converge_cycles       = 0;
     dc_sync.diff_converge_cnt          = 0;
     dc_sync.diff_converged             = false;
 
-    if (node["dc_sync.kp"] || node["dc_sync.ki"] || node["dc_sync.kd"])
+    if (config["dc_sync.kp"] || config["dc_sync.ki"] || config["dc_sync.kd"])
         log(warning, 
                 "\n"
                 "This is a newer version of module_ethercat which uses a better pi-control\n"
@@ -147,9 +175,6 @@ master::master(const std::string& name, const YAML::Node& node) :
             format_string("%s.asyncthread", name.c_str()));
 
     pec->threaded_startup = threaded_startup;
-
-    // perform init_2_init transition
-    set_state(module_state_init);
 }
 
 void master::open() {
@@ -259,13 +284,35 @@ void master::open() {
 
         sp_slave_t slv = _slave_info[nr];
 
+        for (int sm_nr = 0; sm_nr < pec->slaves[nr].sm_ch; ++sm_nr) {
+            if (slv->_sm_map.find(sm_nr) == slv->_sm_map.end()) {
+                auto sm = make_shared<slave::sync_manager_settings_t>();
+                sm->_address = pec->slaves[nr].sm[sm_nr].adr;
+                sm->_length  = pec->slaves[nr].sm[sm_nr].len;
+                sm->_flags   = pec->slaves[nr].sm[sm_nr].flags;
+
+                if (sm->is_set())
+                    slv->_sm_map[sm_nr] = sm;
+            }
+        }
+
         if (slv->dc.has_dc)
             pec->slaves[nr].dc.use_dc = 1;
         else 
             pec->slaves[nr].dc.use_dc = 0;
 
         slv->post_state_transition(module_state_init, module_state_init);
+
+        config["slaves"][nr] = slv->to_yaml();
     }
+
+    auto mdl = kernel::get_instance()->get_module(name);
+    YAML::Emitter emit;
+    emit << config;
+
+    printf("setting new config: %s\n", emit.c_str());
+
+    mdl->config = emit.c_str();
 }
 
 //! destruction 
@@ -462,11 +509,12 @@ int master::set_state(module_state_t state) {
                                 it->second->_length,
                                 it->second->_flags);
 
-                        pec->slaves[nr].sm[sm_nr].adr = it->second->_address;
-                        pec->slaves[nr].sm[sm_nr].len = it->second->_length;
+                        pec->slaves[nr].sm[sm_nr].adr   = it->second->_address;
+                        pec->slaves[nr].sm[sm_nr].len   = it->second->_length;
                         pec->slaves[nr].sm[sm_nr].flags = it->second->_flags;
-                        pec->slaves[nr].sm_set_by_user = 1;
                     }
+                        
+                    pec->slaves[nr].sm_set_by_user  = slv->sm_set_by_user;
                 }
             }
 
@@ -479,6 +527,12 @@ int master::set_state(module_state_t state) {
             // ====> start receiving measurements
             dc_sync.first_run = true;
             
+            if (recv_error_trigger)
+                k.remove_device(recv_error_trigger);
+            
+            recv_error_trigger = make_shared<robotkernel::trigger>(name, "recv_error");
+            k.add_device(recv_error_trigger);
+
             // start cyclic operation via trigger
             pec->tx_sync = 0;
             start();
@@ -510,12 +564,6 @@ int master::set_state(module_state_t state) {
 
                 sp_slave_t slv = _slave_info[nr];
             }
-
-            if (recv_error_trigger)
-                k.remove_device(recv_error_trigger);
-            
-            recv_error_trigger = make_shared<robotkernel::trigger>(name, "recv_error");
-            k.add_device(recv_error_trigger);
 
             // distributed clock info process data
             if (pdin_dc)
