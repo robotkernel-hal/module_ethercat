@@ -213,7 +213,7 @@ slave::slave(const YAML::Node& node, master *master_dev) :
                 it != node["sm"].end(); ++it) {
         
             int sm_nr = it->first.as<int>();
-            _sm_map[sm_nr] = new sync_manager_settings(it->second);
+            _sm_map[sm_nr] = make_shared<sync_manager_settings_t>(it->second);
         }
     }
     

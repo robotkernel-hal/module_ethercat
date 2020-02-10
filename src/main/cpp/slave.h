@@ -365,7 +365,7 @@ class slave :
                 (_flags != 0) || (_length != 0); }
         } sync_manager_settings_t;
 
-        typedef std::map<int, sync_manager_settings_t *> sm_map_t;
+        typedef std::map<int, std::shared_ptr<sync_manager_settings_t> > sm_map_t;
         sm_map_t _sm_map;       //! sync manager configs
 
         std::string name;       //!< slave name
