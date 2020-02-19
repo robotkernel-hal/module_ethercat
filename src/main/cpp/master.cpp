@@ -652,7 +652,7 @@ void master::tick() {
             max_timeout = g->recv_timeout;
     }
 
-    if (pec->dc.have_dc) {
+    if ((pec->dc.rtc_time != 0) && pec->dc.have_dc) {
         log(verbose, "sending distributed clock sync\n");
 
         dc_sent = ec_send_distributed_clocks_sync(pec) == 0;
