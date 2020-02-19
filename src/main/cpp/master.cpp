@@ -752,8 +752,8 @@ void master::tick() {
                 double margin = dc_sync.start_timer * 0.01;
 
                 if ((diff > margin) || (diff < -1 * margin))
-                    log(info, "DC diff did not converge until now... (start_timer %10.7f, margin %d, diff %10.7f\n",
-                            dc_sync.start_timer, margin, diff);
+                    log(info, "DC diff did not converge until now... (start_timer %10.7f, act_timer %10.7f, margin %10.7f, diff %10.7f\n",
+                            dc_sync.start_timer, act_timer, margin, diff);
                 else {
                     log(info, "DC diff converged!\n");
                     dc_sync.diff_converged = true;
