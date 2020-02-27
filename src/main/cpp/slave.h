@@ -335,22 +335,40 @@ class slave :
              * \param node yaml intialization node
              */
             slave_dc(const YAML::Node& node);
+            
+            //! emit yaml node
+            YAML::Node to_yaml();
+
+            //! is dc set
+            bool is_set() { return (cycle_time_0 != 0) || 
+                (cycle_time_1 != 0) || (cycle_shift != 0); }
         } dc;
 
         typedef struct sync_manager_settings {
-            int      _address;      //! sync manager address
-            unsigned _flags;        //! sync manager flags
-            unsigned _length;       //! sync manager length
+            int      _address;      //!< sync manager address
+            unsigned _flags;        //!< sync manager flags
+            unsigned _length;       //!< sync manager length
             
+            //! default construction
+            sync_manager_settings() {};
+
             //! construction
             /*!
              * \param node yaml intialization node
              */
             sync_manager_settings(const YAML::Node& node);
+
+            //! emit yaml node
+            YAML::Node to_yaml();
+
+            //! is sync manager set
+            bool is_set() { return (_address != 0) || 
+                (_flags != 0) || (_length != 0); }
         } sync_manager_settings_t;
 
-        typedef std::map<int, sync_manager_settings_t *> sm_map_t;
+        typedef std::map<int, std::shared_ptr<sync_manager_settings_t> > sm_map_t;
         sm_map_t _sm_map;       //! sync manager configs
+        bool   sm_set_by_user;  //!< sync manager read from config 
 
         std::string name;       //!< slave name
         int index;              //!< slave bus index
@@ -387,10 +405,13 @@ class slave :
          * \param node yaml intialization node
          * \param master_dev master device
          */
-        slave(const YAML::Node& node, master *master_dev);
+        slave(int index, const YAML::Node& node, master *master_dev);
 
         //! destruction
         ~slave();
+            
+        //! emit yaml node
+        YAML::Node to_yaml();
 
         void init_key_value();
 
@@ -434,6 +455,14 @@ class slave :
          */
         void get_pdout(service_provider::process_data_inspection::pd_t& pd);
 };
+
+//! Emit YAML status of module instance.
+/*! 
+ * \param[out] out  Emitter output stream.
+ * \param[in] sm    Module instance.
+ * \return  Output emitter.
+ */
+YAML::Emitter& operator << (YAML::Emitter& out, slave::sync_manager_settings& sm);
 
 //! module_ethercat::
 };

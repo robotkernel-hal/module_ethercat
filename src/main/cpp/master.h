@@ -127,6 +127,8 @@ class master :
 
         robotkernel::sp_trigger_t      recv_error_trigger;
 
+        YAML::Node config;
+
     public:
         //! construction
         /*!
@@ -136,6 +138,9 @@ class master :
 
         //! destruction 
         ~master();
+
+        //! second stage init routine
+        void init();
 
         void open();
 
