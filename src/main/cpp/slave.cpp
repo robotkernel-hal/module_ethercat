@@ -193,7 +193,7 @@ slave::slave(int index, master *master_dev) :
  */
 slave::slave(int index, const YAML::Node& node, master *master_dev) : 
     service_provider::process_data_inspection::base(master_dev->name, 
-            format_string("slave_%d", "index")), 
+            format_string("slave_%d", index)), 
     key_value_slave(master_dev->name, format_string("slave_%d", index)),
     pd_provider(master_dev->name + format_string(".slave_%d", index)),
     pd_consumer(master_dev->name + format_string(".slave_%d", index)),
