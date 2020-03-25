@@ -56,7 +56,7 @@ void log_func(int lvl, void *user, const char *format, ...) {
         loglvl = info;
     if (lvl < 10)
         loglvl = warning;
-    if (lvl < 1)
+    if (lvl <= 1)
         loglvl = error;
 
     char buf[1024];
