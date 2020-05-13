@@ -632,6 +632,10 @@ string slave::canopen::get_pdo_description(uint16_t idx) {
         }
 
     }
+                    
+    out << YAML::BeginMap;
+    out << YAML::Key << "uint8_t" << YAML::Value << "sync_manager_status";
+    out << YAML::EndMap;
 
     out << YAML::EndSeq;
     return out.c_str();
