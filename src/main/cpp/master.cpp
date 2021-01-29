@@ -162,7 +162,9 @@ void master::init() {
                 "and \"dc_sync_ki\" in your config file. (Using kp=%7.3f, ki=%7.3f)\n", dc_sync.ki, dc_sync.kp);
 
     pd_cookie = 0;
-    
+}
+
+void master::open() {
     // -----------------------------------------------------------
     // open ethercat interface
     int ret = ec_open(&pec, ifname.c_str(), recv_prio, recv_mask, log_eeprom_data);
@@ -175,9 +177,7 @@ void master::init() {
             format_string("%s.asyncthread", name.c_str()));
 
     pec->threaded_startup = threaded_startup;
-}
 
-void master::open() {
     // -----------------------------------------------------------
     // setting init commands and distributed clocks
     for (slave_map_t::iterator it = _slave_info.begin(); 
@@ -411,23 +411,26 @@ int master::set_state(module_state_t state) {
         case preop_2_boot:
             // ====> deinit devices
             t_dev = nullptr;
+
+            ec_close(pec);
+            pec = nullptr;
         case init_2_init:
             // ====> re-/open ethercat device
-
-            STATE_TRANSITION(pre, module_state_init);
-            ec_set_state(pec, EC_STATE_INIT);
-            STATE_TRANSITION(post, module_state_init);
-            
+            if (state == module_state_init)
+                break;
+        case init_2_boot:
             try {
                 open();
             } catch (exception& e) {
                 log(error, e.what());
                 state = module_state_init;
+                return state;
             }
-
-            if (state == module_state_init)
-                break;
-        case init_2_boot:
+            
+            STATE_TRANSITION(pre, module_state_init);
+            ec_set_state(pec, EC_STATE_INIT);
+            STATE_TRANSITION(post, module_state_init);
+            
             STATE_TRANSITION(pre, module_state_boot);
             ec_set_state(pec, EC_STATE_BOOT);
             STATE_TRANSITION(post, module_state_boot);
@@ -437,22 +440,30 @@ int master::set_state(module_state_t state) {
         case boot_2_safeop:
         case boot_2_op:
             // ====> re-/open ethercat device
-            try {
-                open();
-            } catch (exception& e) {
-                log(error, e.what());
-                state = module_state_init;
-            }
-
             STATE_TRANSITION(pre, module_state_init);
             ec_set_state(pec, EC_STATE_INIT);
             STATE_TRANSITION(post, module_state_init);
+
+            ec_close(pec);
+            pec = nullptr;
 
             if (state == module_state_init)
                 break;
         case init_2_op:
         case init_2_safeop:
         case init_2_preop: {
+            try {
+                open();
+            } catch (exception& e) {
+                log(error, e.what());
+                state = module_state_init;
+                return state;
+            }
+
+            STATE_TRANSITION(pre, module_state_init);
+            ec_set_state(pec, EC_STATE_INIT);
+            STATE_TRANSITION(post, module_state_init);
+
             pec->dc.mode = dc_sync.mode_string == "ref_clock" ? 
                 ec_dc_info::dc_mode_ref_clock : ec_dc_info::dc_mode_master_clock;
             
