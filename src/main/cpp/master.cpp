@@ -318,13 +318,13 @@ void master::open() {
         config["slaves"][nr] = slv->to_yaml();
     }
 
-    auto mdl = kernel::get_instance()->get_module(name);
-    YAML::Emitter emit;
-    emit << config;
-
-    log(verbose, "setting new config: %s\n", emit.c_str());
-
-    mdl->config = emit.c_str();
+//    auto mdl = kernel::get_instance()->get_module(name);
+//    YAML::Emitter emit;
+//    emit << config;
+//
+//    log(verbose, "setting new config: %s\n", emit.c_str());
+//
+//    mdl->config = emit.c_str();
 }
 
 //! destruction 
