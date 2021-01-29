@@ -822,11 +822,21 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                 pdin = nullptr; 
             }
 
+            if (pdin_trigger) {
+                k.remove_device(pdin_trigger);
+                pdin_trigger = nullptr;
+            }
+
             if (pdout) { 
                 pdout->reset_consumer(consumer_hash);
                 consumer_hash = 0;
                 k.remove_device(pdout); 
                 pdout = nullptr; 
+            }
+
+            if (pdout_trigger) {
+                k.remove_device(pdout_trigger);
+                pdout_trigger = nullptr;
             }
 
             if (to == module_state_preop)
