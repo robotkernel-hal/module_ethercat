@@ -840,15 +840,19 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                 for (unsigned atn = 0; atn < _mbx_soe_list.size(); ++atn)
                     REMOVE_SERVICE_COLLECTOR(_mbx_soe_list[atn]);
             }
+
+            REMOVE_SERVICE_COLLECTOR(_eeprom_mi);
+            REMOVE_SERVICE_COLLECTOR(_memory_mi);
+            REMOVE_SERVICE_COLLECTOR(_eeprom_coe);
         case init_2_init:
             // ====> re-/open ethercat device
+            if (to == module_state_init)
+                break;
+        case init_2_boot:
             ADD_SERVICE_COLLECTOR_CLASS(_eeprom_mi, slave::memory_inspection, request_type_eeprom);
             ADD_SERVICE_COLLECTOR_CLASS(_memory_mi, slave::memory_inspection, request_type_memory);
             ADD_SERVICE_COLLECTOR_CLASS(_eeprom_coe, slave::canopen, request_type_eeprom);
 
-            if (to == module_state_init)
-                break;
-        case init_2_boot:
             ADD_SERVICE_COLLECTOR_CLASS(_mbx_foe, slave::file_protocol);
             break;
         case boot_2_init:
@@ -858,6 +862,10 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
             // ====> re-/open ethercat device
             REMOVE_SERVICE_COLLECTOR(_mbx_foe);
 
+            REMOVE_SERVICE_COLLECTOR(_eeprom_mi);
+            REMOVE_SERVICE_COLLECTOR(_memory_mi);
+            REMOVE_SERVICE_COLLECTOR(_eeprom_coe);
+
             if (to == module_state_init)
                 break;
         case init_2_op:
@@ -865,6 +873,10 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
         case init_2_preop:
         case preop_2_preop: {
             // ====> initial devices            
+            ADD_SERVICE_COLLECTOR_CLASS(_eeprom_mi, slave::memory_inspection, request_type_eeprom);
+            ADD_SERVICE_COLLECTOR_CLASS(_memory_mi, slave::memory_inspection, request_type_memory);
+            ADD_SERVICE_COLLECTOR_CLASS(_eeprom_coe, slave::canopen, request_type_eeprom);
+
             init_key_value();
             
             k.add_device(std::static_pointer_cast<

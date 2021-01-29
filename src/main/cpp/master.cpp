@@ -45,9 +45,19 @@ const string module_ethercat::state_strings[] = {
     "EtherCAT OP"
 };
 
+class ec_log_printer :
+    public robotkernel::log_base 
+{
+    public:
+        ec_log_printer() :
+            log_base("libethercat", "module_ethercat", "libethercat")
+        {};
+};
+
+ec_log_printer elp;
 
 void log_func(int lvl, void *user, const char *format, ...) {
-    master *e = (master *)user;
+//    master *e = (master *)user;
     va_list ap;
     va_start(ap, format);
 
@@ -64,7 +74,7 @@ void log_func(int lvl, void *user, const char *format, ...) {
 //    e->log(loglvl, format, ap);
     va_end(ap);
 
-    e->log(loglvl, buf);
+    elp.log(loglvl, buf);
 }
 
 
@@ -175,6 +185,8 @@ void master::open() {
             format_string("%s.rxthread", name.c_str()));
     robotkernel::set_thread_name(pec->async_loop->loop_tid, 
             format_string("%s.asyncthread", name.c_str()));
+
+    ec_set_state(pec, EC_STATE_INIT);
 
     pec->threaded_startup = threaded_startup;
 
@@ -310,7 +322,7 @@ void master::open() {
     YAML::Emitter emit;
     emit << config;
 
-    printf("setting new config: %s\n", emit.c_str());
+    log(verbose, "setting new config: %s\n", emit.c_str());
 
     mdl->config = emit.c_str();
 }
@@ -410,6 +422,10 @@ int master::set_state(module_state_t state) {
         case preop_2_init:
         case preop_2_boot:
             // ====> deinit devices
+            STATE_TRANSITION(pre, module_state_init);
+            ec_set_state(pec, EC_STATE_INIT);
+            STATE_TRANSITION(post, module_state_init);
+
             t_dev = nullptr;
 
             ec_close(pec);
@@ -426,10 +442,6 @@ int master::set_state(module_state_t state) {
                 state = module_state_init;
                 return state;
             }
-            
-            STATE_TRANSITION(pre, module_state_init);
-            ec_set_state(pec, EC_STATE_INIT);
-            STATE_TRANSITION(post, module_state_init);
             
             STATE_TRANSITION(pre, module_state_boot);
             ec_set_state(pec, EC_STATE_BOOT);
@@ -459,10 +471,6 @@ int master::set_state(module_state_t state) {
                 state = module_state_init;
                 return state;
             }
-
-            STATE_TRANSITION(pre, module_state_init);
-            ec_set_state(pec, EC_STATE_INIT);
-            STATE_TRANSITION(post, module_state_init);
 
             pec->dc.mode = dc_sync.mode_string == "ref_clock" ? 
                 ec_dc_info::dc_mode_ref_clock : ec_dc_info::dc_mode_master_clock;
