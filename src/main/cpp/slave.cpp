@@ -691,6 +691,9 @@ void slave::pre_state_transition(module_state_t from, module_state_t to) {
             if (to == module_state_preop)
                 break;
         case preop_2_init:
+            for (const auto& cmd : coe_init_cmds) {
+                cmd->already_added = false;
+            }
         case preop_2_boot:
             // ====> deinit devices
             for (int i = 0; i < master_dev->pec->slaves[index].sm_ch; ++i) {
