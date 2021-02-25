@@ -77,6 +77,17 @@ void log_func(int lvl, void *user, const char *format, ...) {
     elp.log(loglvl, buf);
 }
 
+/*! run */
+void dc_clock_setter::run() {
+    while (running()) {
+        std::unique_lock<std::mutex> lk(sync_m);
+
+        if (sync_cv.wait_for(lk, 100ms) == std::cv_status::no_timeout) {
+            /* got signal here */
+            parent->dc_set_clock();
+        }
+    }
+}
 
 //! construction
 /*!
@@ -100,6 +111,9 @@ void master::init() {
     get_yaml(bool,     log_eeprom_data, false);
     get_yaml(bool,     threaded_startup, true);
     get_yaml(bool,     monitor_state, false);
+
+    /* creating dccs */
+    dccs = make_shared<dc_clock_setter>(shared_from_this());
 
     thread_name = format_string("%s.mbxhandler", name.c_str());
 
@@ -391,6 +405,7 @@ int master::set_state(module_state_t state) {
         case safeop_2_init:
         case safeop_2_boot:
             // ====> stop receiving measurements
+            dccs->stop();
             stop();
             pec->tx_sync = 1;
 
@@ -555,6 +570,7 @@ int master::set_state(module_state_t state) {
             // start cyclic operation via trigger
             pec->tx_sync = 0;
             start();
+            dccs->start();
 
             // add group trigger devices
             for (auto& kv : groups) {
@@ -734,6 +750,8 @@ void master::tick() {
 
         if (    (pec->dc.mode == ec_dc_info::dc_mode_ref_clock) && 
                 (pec->dc.offset_compensation_cnt == 0)) {
+            dccs->signal();
+#if old
             double diff = (pec->dc.act_diff / 1E9);
 
             // sum it up for integral part
@@ -778,6 +796,7 @@ void master::tick() {
                     dc_sync.diff_converged = true;
                 }
             }
+#endif
         }        
 
         if (pdin_dc) {
@@ -789,6 +808,54 @@ void master::tick() {
     
     if (monitor_state)
         ec_receive_brd_ec_state(pec, &ec_state_timeout); 
+}
+
+/*! Correct Master clock according to distributed clock. */
+void master::dc_set_clock() {
+    double diff = (pec->dc.act_diff / 1E9);
+
+    // sum it up for integral part
+    dc_sync.diffsum += dc_sync.ki * diff * pec->dc.offset_compensation_cycles * dc_sync.start_timer;
+
+    // limit diffsum
+    double diffsum_limit = dc_sync.start_timer / 2.;
+
+    if (dc_sync.diffsum > diffsum_limit)
+        dc_sync.diffsum = diffsum_limit;
+    else if (dc_sync.diffsum < (-1 * diffsum_limit))
+        dc_sync.diffsum = -1 * diffsum_limit;
+
+    // calculate new rate in [s]
+    double act_timer = dc_sync.start_timer + 
+        (dc_sync.kp * diff) + dc_sync.diffsum;
+
+    try {
+        rate = 1.f / act_timer;
+        t_dev->set_rate(rate);
+
+        if (dc_sync.log) 
+            log(verbose, "setting new clock rate to %7.3f [Hz], clock diff %7.3f [us]\n",
+                    rate, diff * 1E6);
+    } catch (exception& e) {
+        log(warning, "setting new clock failed: %s\n", e.what());
+    }
+
+    dc_sync.first_run = false;
+    dc_sync.last_diff = diff;
+
+    // check if diff converged
+    if (    dc_sync.diff_converge_cycles && !dc_sync.diff_converged &&
+            ((++dc_sync.diff_converge_cnt % dc_sync.diff_converge_cycles) == 0)) {
+        double margin = dc_sync.start_timer * 0.01;
+
+        if ((diff > margin) || (diff < -1 * margin))
+            log(info, "DC diff did not converge until now... (start_timer %10.7f, act_timer %10.7f, margin %10.7f, diff %10.7f\n",
+                    dc_sync.start_timer, act_timer, margin, diff);
+        else {
+            log(info, "DC diff converged!\n");
+            dc_sync.diff_converged = true;
+        }
+    }
 }
 
 //! async handler thread
