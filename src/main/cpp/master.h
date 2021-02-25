@@ -53,8 +53,31 @@ namespace module_ethercat {
 }
 #endif
 
+/* forward declarations */
+class master;
 class slave;
 extern const std::string state_strings[];
+
+class dc_clock_setter :
+    public robotkernel::runnable
+{
+    private:
+        std::shared_ptr<master> parent;
+
+        std::mutex sync_m;
+        std::condition_variable sync_cv;
+
+    public:
+        dc_clock_setter(std::shared_ptr<master> parent) : parent(parent) {};
+        
+        /*! signal waiter */
+        void signal() {
+            sync_cv.notify_one();
+        }
+
+        /* run thread */
+        void run();
+};
 
 class master :
     public std::enable_shared_from_this<master>,
@@ -129,6 +152,7 @@ class master :
 
         YAML::Node config;
 
+        std::shared_ptr<dc_clock_setter> dccs;
     public:
         //! construction
         /*!
@@ -156,6 +180,9 @@ class master :
 
         //! async handler thread
         void run();
+
+        /*! Correct Master clock according to distributed clock. */
+        void dc_set_clock();
 };
 
 //! module_ethercat::
