@@ -737,52 +737,6 @@ void master::tick() {
         if (    (pec->dc.mode == ec_dc_info::dc_mode_ref_clock) && 
                 (pec->dc.offset_compensation_cnt == 0)) {
             dccs->signal();
-#if old
-            double diff = (pec->dc.act_diff / 1E9);
-
-            // sum it up for integral part
-            dc_sync.diffsum += dc_sync.ki * diff * pec->dc.offset_compensation_cycles * dc_sync.start_timer;
-
-            // limit diffsum
-            double diffsum_limit = dc_sync.start_timer / 2.;
-
-            if (dc_sync.diffsum > diffsum_limit)
-                dc_sync.diffsum = diffsum_limit;
-            else if (dc_sync.diffsum < (-1 * diffsum_limit))
-                dc_sync.diffsum = -1 * diffsum_limit;
-
-            // calculate new rate in [s]
-            double act_timer = dc_sync.start_timer + 
-                (dc_sync.kp * diff) + dc_sync.diffsum;
-
-            try {
-                rate = 1.f / act_timer;
-                t_dev->set_rate(rate);
-
-                if (dc_sync.log) 
-                    log(verbose, "setting new clock rate to %7.3f [Hz], clock diff %7.3f [us]\n",
-                            rate, diff * 1E6);
-            } catch (exception& e) {
-                log(warning, "setting new clock failed: %s\n", e.what());
-            }
-
-            dc_sync.first_run = false;
-            dc_sync.last_diff = diff;
-
-            // check if diff converged
-            if (    dc_sync.diff_converge_cycles && !dc_sync.diff_converged &&
-                    ((++dc_sync.diff_converge_cnt % dc_sync.diff_converge_cycles) == 0)) {
-                double margin = dc_sync.start_timer * 0.01;
-
-                if ((diff > margin) || (diff < -1 * margin))
-                    log(info, "DC diff did not converge until now... (start_timer %10.7f, act_timer %10.7f, margin %10.7f, diff %10.7f\n",
-                            dc_sync.start_timer, act_timer, margin, diff);
-                else {
-                    log(info, "DC diff converged!\n");
-                    dc_sync.diff_converged = true;
-                }
-            }
-#endif
         }        
 
         if (pdin_dc) {
