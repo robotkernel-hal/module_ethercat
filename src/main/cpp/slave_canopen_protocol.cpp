@@ -419,8 +419,8 @@ void slave::canopen::write_element(const uint16_t& index, const uint8_t& sub_ind
  */
 void slave::canopen::pop_emergency_message(
         service_provider::canopen_protocol::emergency_message_t& msg) {
-    ec_emergency_message_entry_t *entry;
-    entry = TAILQ_FIRST(&slv->master_dev->pec->slaves[slv->index].mbx_coe_emergencies);
+    ec_coe_emergency_message_entry_t *entry;
+    entry = TAILQ_FIRST(&slv->master_dev->pec->slaves[slv->index].mbx.coe.emergencies);
     if (!entry)
         throw str_exception("slave %2d: there are no more emergency messages\n", slv->index);
 
@@ -432,7 +432,7 @@ void slave::canopen::pop_emergency_message(
     for (unsigned i = 3; i < entry->msg_len; ++i)
         msg.data.push_back(entry->msg[i]);
 
-    TAILQ_REMOVE(&slv->master_dev->pec->slaves[slv->index].mbx_coe_emergencies, entry, qh);
+    TAILQ_REMOVE(&slv->master_dev->pec->slaves[slv->index].mbx.coe.emergencies, entry, qh);
 
     free(entry);
 }
@@ -633,9 +633,11 @@ string slave::canopen::get_pdo_description(uint16_t idx) {
 
     }
                     
-    out << YAML::BeginMap;
-    out << YAML::Key << "uint8_t" << YAML::Value << "sync_manager_status";
-    out << YAML::EndMap;
+    if (idx == 0x1C13) {
+        out << YAML::BeginMap;
+        out << YAML::Key << "uint8_t" << YAML::Value << "sync_manager_status";
+        out << YAML::EndMap;
+    }
 
     out << YAML::EndSeq;
     return out.c_str();
