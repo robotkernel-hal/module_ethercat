@@ -406,7 +406,6 @@ int master::set_state(module_state_t state) {
         case safeop_2_boot:
             // ====> stop receiving measurements
             dccs->stop();
-            stop();
             pec->tx_sync = 1;
 
             if (pdin_dc) {
@@ -569,7 +568,6 @@ int master::set_state(module_state_t state) {
 
             // start cyclic operation via trigger
             pec->tx_sync = 0;
-            start();
             dccs->start();
 
             // add group trigger devices
@@ -731,18 +729,6 @@ void master::tick() {
         g->trigger_modules();
     }
 
-    int slave;
-    for (slave = 0; slave < pec->slave_cnt; ++slave) {
-        ec_slave_t *slv = &pec->slaves[slave];
-
-        if (slv->eeprom.mbx_supported && slv->mbx_read.sm_state) {
-            if (*slv->mbx_read.sm_state & 0x08) {
-                async_cond.notify_all();
-                break;
-            }
-        }
-    }
-
     if (dc_sent && pec->dc.have_dc) {
         ec_receive_distributed_clocks_sync(pec, &dc_timeout);
 
@@ -856,53 +842,5 @@ void master::dc_set_clock() {
             dc_sync.diff_converged = true;
         }
     }
-}
-
-//! async handler thread
-void master::run() {
-    log(info, "async handler thread running\n");
-
-    std::unique_lock<std::mutex> lock(async_mtx);
-
-    while (running()) {
-        if (async_cond.wait_for(lock, std::chrono::seconds(1))
-                == std::cv_status::timeout)
-            continue;
-
-        int slave;
-        for (slave = 0; slave < pec->slave_cnt; ++slave) {
-            ec_slave_t *slv = &pec->slaves[slave];
-
-            if (slv->eeprom.mbx_supported && slv->mbx_read.sm_state) {
-                if (slv->mbx_read.skip_next == 1) {
-                    slv->mbx_read.skip_next = 0;
-                    continue;
-                }
-
-                if (pthread_mutex_trylock(&slv->mbx_lock) != 0)
-                    continue;
-
-                if (slv->mbx_read.sm_state && ((*slv->mbx_read.sm_state) & 0x08) == 0x08) {
-                    log(verbose, "async worker: slave %d read mailbox is full\n", slave);
-
-                    char buf[1024];
-                    int wkc = ec_mbx_receive(pec, slave, EC_DEFAULT_TIMEOUT_MBX);
-                    if (wkc) {
-                        int cnt = sprintf(buf, "wkc %d: ", wkc);
-
-                        ec_mbx_header_t *mbx_hdr = (ec_mbx_header_t *)(slv->mbx_read.buf);
-                        for (unsigned z = 0; z < mbx_hdr->length + sizeof(ec_mbx_header_t); ++z)
-                            cnt += snprintf(buf+cnt, 1024 - cnt, "%02X ", slv->mbx_read.buf[z]);
-                    
-                        log(info, "async worker %s\n", buf);
-                    }
-                }
-
-                pthread_mutex_unlock(&slv->mbx_lock);
-            }
-        }
-    }
-
-    log(info, "async handler thread stopped\n");
 }
 

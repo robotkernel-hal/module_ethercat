@@ -82,8 +82,7 @@ class dc_clock_setter :
 class master :
     public std::enable_shared_from_this<master>,
     public robotkernel::pd_provider,
-    public robotkernel::module_base, 
-    public robotkernel::runnable 
+    public robotkernel::module_base
 {
     public:
         friend class slave;
@@ -177,9 +176,6 @@ class master :
          * \return success or failure
          */
         int set_state(module_state_t state);
-
-        //! async handler thread
-        void run();
 
         /*! Correct Master clock according to distributed clock. */
         void dc_set_clock();
