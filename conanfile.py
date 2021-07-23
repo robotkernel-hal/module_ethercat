@@ -15,7 +15,7 @@ class MainProject(base.RobotkernelConanFile):
             "service_provider_sercos_protocol/[~=6]@robotkernel/unstable",
             "service_provider_file_protocol/[~=6]@robotkernel/unstable",
             "service_provider_process_data_inspection/[~=6]@robotkernel/unstable",
-            "libethercat/[~=0.2]@common/stable" )
+            "libethercat/[~=0.3]@common/unstable" )
 
     def package_info(self):
         super(base.RobotkernelConanFile, self).package_info()

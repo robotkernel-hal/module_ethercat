@@ -118,6 +118,11 @@ class master :
             bool diff_converged;
         } dc_sync;
 
+        struct {
+            bool configure_tun;
+            uint8_t ip_address[4];
+        } tun_settings;
+
         ec_t *pec;
 
         int recv_prio;

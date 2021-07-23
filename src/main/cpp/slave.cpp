@@ -134,6 +134,48 @@ YAML::Node slave::slave_dc::to_yaml() {
     return node;
 }
             
+//! construction
+/*!
+ * \param[in]   node        YAML initialization node.
+ */
+slave::slave_eoe::slave_eoe(const YAML::Node& node) {
+    has_eoe = true;
+
+    if (node["mac"]) {
+        mac.resize(6);
+        sscanf(get_as<string>(node, "mac").c_str(), "%hhX:%hhX:%hhX:%hhX:%hhX:%hhX", 
+                &mac[0], &mac[1], &mac[2], &mac[3], &mac[4], &mac[5]);
+    }
+    
+    if (node["ip_address"]) {
+        ip_address.resize(4);
+        sscanf(get_as<string>(node, "ip_address").c_str(), "%hhu.%hhu.%hhu.%hhu", 
+                &ip_address[3], &ip_address[2], &ip_address[1], &ip_address[0]);
+    }
+    
+    if (node["subnet"]) {
+        subnet.resize(4);
+        sscanf(get_as<string>(node, "subnet").c_str(), "%hhu.%hhu.%hhu.%hhu", 
+                &subnet[0], &subnet[1], &subnet[2], &subnet[3]);
+    }
+    
+    if (node["gateway"]) {
+        gateway.resize(4);
+        sscanf(get_as<string>(node, "gateway").c_str(), "%hhu.%hhu.%hhu.%hhu", 
+                &gateway[0], &gateway[1], &gateway[2], &gateway[3]);
+    }
+    
+    if (node["dns"]) {
+        dns.resize(4);
+        sscanf(get_as<string>(node, "dns").c_str(), "%hhu.%hhu.%hhu.%hhu", 
+                &dns[0], &dns[1], &dns[2], &dns[3]);
+    }
+
+    if (node["dns_name"]) {
+        dns_name = get_as<string>(node, "dns_server");
+    }
+}
+
 //! emit yaml node
 YAML::Node slave::sync_manager_settings::to_yaml() {
     YAML::Node node(YAML::NodeType::Map);
@@ -221,6 +263,10 @@ slave::slave(int index, const YAML::Node& node, master *master_dev) :
     
     if (node["dc"])
         dc = slave_dc(node["dc"]);
+   
+    if (node["eoe"]) {
+        eoe = slave_eoe(node["eoe"]);
+    }
 
     if (node["init_cmds"]) {
         master_dev->log(verbose,
@@ -643,7 +689,7 @@ void slave::add_init_cmds() {
         }
         
         if (cmd->data) {
-            ec_slave_add_init_cmd(master_dev->pec, index, EC_MBX_COE, 
+            ec_slave_add_coe_init_cmd(master_dev->pec, index, 
                     (int)cmd->transition, cmd->index, cmd->subindex, 
                     cmd->ca, cmd->data, cmd->datalen);
 
@@ -659,9 +705,9 @@ void slave::add_init_cmds() {
         if (cmd->already_added)
             continue;
 
-        ec_slave_add_init_cmd(master_dev->pec, index, EC_MBX_SOE, 
-                (int)cmd->transition, cmd->idn, cmd->element, 
-                cmd->atn, cmd->data, cmd->datalen);
+//TODO        ec_slave_add_init_cmd(master_dev->pec, index, EC_MBX_SOE, 
+//                (int)cmd->transition, cmd->idn, cmd->element, 
+//                cmd->atn, cmd->data, cmd->datalen);
 
         cmd->already_added = true;
     }
