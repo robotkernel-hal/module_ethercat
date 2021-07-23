@@ -82,7 +82,7 @@ void dc_clock_setter::run() {
     while (running()) {
         std::unique_lock<std::mutex> lk(sync_m);
 
-        if (sync_cv.wait_for(lk, 100ms) == std::cv_status::no_timeout) {
+        if (sync_cv.wait_for(lk, std::chrono::milliseconds(100)) == std::cv_status::no_timeout) {
             /* got signal here */
             parent->dc_set_clock();
         }
