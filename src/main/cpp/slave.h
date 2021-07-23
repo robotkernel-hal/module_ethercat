@@ -344,6 +344,26 @@ class slave :
                 (cycle_time_1 != 0) || (cycle_shift != 0); }
         } dc;
 
+        struct slave_eoe {
+            bool has_eoe;
+
+            std::vector<uint8_t> mac;
+            std::vector<uint8_t> ip_address;
+            std::vector<uint8_t> subnet;
+            std::vector<uint8_t> gateway;
+            std::vector<uint8_t> dns;
+            std::string dns_name;
+
+            //! default construction
+            slave_eoe() { has_eoe = false; };
+
+            //! construction
+            /*!
+             * \param[in]   node        YAML initialization node.
+             */
+            slave_eoe(const YAML::Node& node);
+        } eoe;
+
         typedef struct sync_manager_settings {
             int      _address;      //!< sync manager address
             unsigned _flags;        //!< sync manager flags

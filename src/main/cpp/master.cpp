@@ -94,8 +94,7 @@ void dc_clock_setter::run() {
  * \param node yaml intialization node
  */
 master::master(const std::string& name, const YAML::Node& node) :
-    pd_provider(name), module_base("module_ethercat", name, node),
-    runnable(node), pec(NULL) 
+    pd_provider(name), module_base("module_ethercat", name, node), pec(NULL) 
 {
     config = YAML::Clone(node);
 } 
@@ -115,10 +114,20 @@ void master::init() {
     /* creating dccs */
     dccs = make_shared<dc_clock_setter>(shared_from_this());
 
-    thread_name = format_string("%s.mbxhandler", name.c_str());
-
     ec_log_func_user = this;
     ec_log_func = log_func;
+
+    if (config["tun_ip"]) {
+        tun_settings.configure_tun = true;
+
+        sscanf(get_as<string>(config, "tun_ip").c_str(), "%hhu.%hhu.%hhu.%hhu", 
+                &tun_settings.ip_address[3], 
+                &tun_settings.ip_address[2], 
+                &tun_settings.ip_address[1], 
+                &tun_settings.ip_address[0]);
+    } else {
+        tun_settings.configure_tun = false;
+    }
 
     // group settings
     if (config["groups"]) {
@@ -205,7 +214,7 @@ void master::open() {
     pec->threaded_startup = threaded_startup;
 
     // -----------------------------------------------------------
-    // setting init commands and distributed clocks
+    // setting init commands, distributed clocks and eoe
     for (slave_map_t::iterator it = _slave_info.begin(); 
             it != _slave_info.end(); ++it) {
         int slave_nr = it->first;
@@ -223,6 +232,16 @@ void master::open() {
                     slv->dc.cycle_time_1, slv->dc.cycle_shift);
         else 
             ec_slave_set_dc_config(pec, slave_nr, 0, 0, 0, 0, 0);
+
+        if (slv->eoe.has_eoe) {
+            uint8_t *mac = slv->eoe.mac.size() > 0 ? &slv->eoe.mac[0] : NULL;
+            uint8_t *ip_address = slv->eoe.ip_address.size() > 0 ? &slv->eoe.ip_address[0] : NULL;
+            uint8_t *subnet = slv->eoe.subnet.size() > 0 ? &slv->eoe.subnet[0] : NULL;
+            uint8_t *gateway = slv->eoe.gateway.size() > 0 ? &slv->eoe.gateway[0] : NULL;
+            uint8_t *dns = slv->eoe.dns.size() > 0 ? &slv->eoe.dns[0] : NULL;
+            char *dns_name = slv->eoe.dns_name.size() > 0 ? (char *)slv->eoe.dns_name.c_str() : NULL; 
+            ec_slave_set_eoe_settings(pec, slave_nr, mac, ip_address, subnet, gateway, dns, dns_name);
+        }
     }
 
     // -----------------------------------------------------------
@@ -277,7 +296,7 @@ void master::open() {
                         slave_nr, *mit);
             }
 
-            ec_slave_add_init_cmd(pec, slave_nr, EC_MBX_COE, 0x24, 0x1C13, 
+            ec_slave_add_coe_init_cmd(pec, slave_nr, 0x24, 0x1C13, 
                     0, 1, (char *)mapping, 2 * (mapping_entries + 1));
         }
 
@@ -295,7 +314,7 @@ void master::open() {
                         slave_nr, *mit);
             }
 
-            ec_slave_add_init_cmd(pec, slave_nr, EC_MBX_COE, 0x24, 0x1C12, 
+            ec_slave_add_coe_init_cmd(pec, slave_nr, 0x24, 0x1C12, 
                     0, 1, (char *)mapping, 2 * (mapping_entries + 1));
         }
     }
@@ -330,6 +349,10 @@ void master::open() {
         slv->post_state_transition(module_state_init, module_state_init);
 
         config["slaves"][nr] = slv->to_yaml();
+    }
+
+    if (tun_settings.configure_tun) {
+        ec_configure_tun(pec, tun_settings.ip_address);
     }
 
 //    auto mdl = kernel::get_instance()->get_module(name);
@@ -391,7 +414,6 @@ int master::set_state(module_state_t state) {
                     (state == module_state_init)  ||
                     (state == module_state_boot)) {
                 // trigger is already deregistered by robotkernel
-                stop();
                 pec->tx_sync = 1;
             }
 
@@ -671,7 +693,7 @@ void master::tick() {
         if ((++g->_divisor_cnt % g->divisor) != 0)
             continue; 
 
-        log(verbose, "sending group %d\n", i);
+        //log(verbose, "sending group %d\n", i);
 
         for (const auto& slave : g->_slaves)
             _slave_info[slave]->pdout_handler();
@@ -686,7 +708,7 @@ void master::tick() {
     }
 
     if ((pec->dc.rtc_time != 0) && pec->dc.have_dc) {
-        log(verbose, "sending distributed clock sync\n");
+        //log(verbose, "sending distributed clock sync\n");
 
         dc_sent = ec_send_distributed_clocks_sync(pec) == 0;
         ec_timer_init(&dc_timeout, max_timeout);
@@ -719,7 +741,7 @@ void master::tick() {
             }
         }
 
-        log(verbose, "received group %d\n", i);
+        //log(verbose, "received group %d\n", i);
 
         for (auto it = g->_slaves.begin(); it != g->_slaves.end(); ++it) {
             int slave = *it;
@@ -732,7 +754,7 @@ void master::tick() {
     if (dc_sent && pec->dc.have_dc) {
         ec_receive_distributed_clocks_sync(pec, &dc_timeout);
 
-        log(verbose, "received distributed clock sync\n");
+        //log(verbose, "received distributed clock sync\n");
 
         if (    (pec->dc.mode == ec_dc_info::dc_mode_ref_clock) && 
                 (pec->dc.offset_compensation_cnt == 0)) {
