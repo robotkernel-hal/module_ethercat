@@ -132,14 +132,15 @@ void slave::canopen::get_object_description(const uint16_t& index,
         }
         case request_type_mailbox: {
             // get description
+            uint32_t error_code = 0;
             ec_coe_sdo_desc_t obj_desc;
             memset(&obj_desc, 0, sizeof(obj_desc));
-            int ret = ec_coe_sdo_desc_read(slv->master_dev->pec, slv->index, index, &obj_desc);
+            int ret = ec_coe_sdo_desc_read(slv->master_dev->pec, slv->index, index, &obj_desc, &error_code);
 
             if (ret != 0) {
                 // decode ret
                 throw str_exception("slave %2d: reading CoE object description index 0x%X "
-                        "returned errorcode 0x%X!\n", slv->index, index, ret);
+                        "returned errorcode 0x%X: %s!\n", slv->index, index, error_code, get_sdo_info_error_string(error_code));
             }
 
             desc.data_type      = obj_desc.data_type;
@@ -228,16 +229,16 @@ void slave::canopen::get_element_description(const uint16_t& index, const uint8_
         }
         case request_type_mailbox: {
             // get description
+            uint32_t error_code = 0;
             ec_coe_sdo_entry_desc_t entry_desc;
             memset(&entry_desc, 0, sizeof(entry_desc));
             int ret = ec_coe_sdo_entry_desc_read(slv->master_dev->pec, slv->index, index, 
-                    sub_index, 0x7F, &entry_desc);
+                    sub_index, 0x7F, &entry_desc, &error_code);
 
             if (ret != 0) {
                 // decode ret
-                throw str_exception("slave %2d: reading CoE element description index 0x%X "
-                        "sub index %d returned errorcode 0x%X!\n", slv->index, 
-                        index, sub_index, ret);
+                throw str_exception("slave %2d: reading CoE element description index 0x%X sub index %d"
+                        "returned errorcode 0x%X: %s!\n", slv->index, index, sub_index, error_code, get_sdo_info_error_string(error_code));
             }
 
             desc.value_info    = entry_desc.value_info;
@@ -360,8 +361,9 @@ void slave::canopen::read_element(const uint16_t& index, const uint8_t& sub_inde
                     0, &buf, &buf_len, &abort_code);
 
             if (ret != 0) {
-                if (ret == EC_ERROR_MAILBOX_ABORT)
+                if (ret == EC_ERROR_MAILBOX_ABORT) {
                     throw service_provider::canopen_protocol::sdo_abort_exception(abort_code);
+                }
 
                 // decode ret
                 throw str_exception("slave %2d: reading CoE element index 0x%X "
@@ -574,7 +576,7 @@ string slave::canopen::get_pdo_description(uint16_t idx) {
                 ss << "int" << (entry & 0x000000FF) << "_t";
                 data_type = ss.str();
             } else {
-                if ((_data_type_desc.bitsize >= 0) && (_data_type_desc.bitsize != (entry & 0x000000FF))) {
+                if ((_data_type_desc.bitsize >= 0) && (_data_type_desc.bitsize != (entry & 0x000000FFu))) {
                     slv->master_dev->log(warning, "    subindex %d, mappend bitsize %d, datatype bitsize %d mismatch!\n", 
                             entry_sub_idx, (entry & 0x000000FF), _data_type_desc.bitsize);
 
