@@ -156,13 +156,13 @@ slave::slave_eoe::slave_eoe(const YAML::Node& node) {
     if (node["subnet"]) {
         subnet.resize(4);
         sscanf(get_as<string>(node, "subnet").c_str(), "%hhu.%hhu.%hhu.%hhu", 
-                &subnet[0], &subnet[1], &subnet[2], &subnet[3]);
+                &subnet[3], &subnet[2], &subnet[1], &subnet[0]);
     }
     
     if (node["gateway"]) {
         gateway.resize(4);
         sscanf(get_as<string>(node, "gateway").c_str(), "%hhu.%hhu.%hhu.%hhu", 
-                &gateway[0], &gateway[1], &gateway[2], &gateway[3]);
+                &gateway[3], &gateway[2], &gateway[1], &gateway[0]);
     }
     
     if (node["dns"]) {
