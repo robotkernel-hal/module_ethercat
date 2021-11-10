@@ -49,7 +49,7 @@ void slave::file_protocol::file_read(
     strncpy(file_name, info.file_name.c_str(), MAX_FILE_NAME_SIZE-1);
 
     // others
-    uint32_t password = 0;
+    uint32_t password = info.password;
     const char *error_message = NULL; 
 
     ec_foe_read(
@@ -88,7 +88,7 @@ void slave::file_protocol::file_write(
     strncpy(file_name, info.file_name.c_str(), MAX_FILE_NAME_SIZE-1);
 
     // others
-    uint32_t password = 0;
+    uint32_t password = info.password;
     const char *error_message = NULL; 
             
     // local copy, cause it's const
