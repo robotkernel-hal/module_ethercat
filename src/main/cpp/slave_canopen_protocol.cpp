@@ -576,7 +576,7 @@ string slave::canopen::get_pdo_description(uint16_t idx) {
                 ss << "int" << (entry & 0x000000FF) << "_t";
                 data_type = ss.str();
             } else {
-                if ((_data_type_desc.bitsize >= 0) && (_data_type_desc.bitsize != (entry & 0x000000FFu))) {
+                if ((_data_type_desc.bitsize >= 0) && ((unsigned)_data_type_desc.bitsize != (entry & 0x000000FFu))) {
                     slv->master_dev->log(warning, "    subindex %d, mappend bitsize %d, datatype bitsize %d mismatch!\n", 
                             entry_sub_idx, (entry & 0x000000FF), _data_type_desc.bitsize);
 
