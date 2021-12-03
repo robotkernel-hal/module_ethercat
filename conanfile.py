@@ -1,13 +1,14 @@
-from conans import tools, python_requires
+from conans import ConanFile, tools
 import os
 
-base = python_requires("conan_template/[~=5]@robotkernel/stable")
+class MainProject(ConanFile):
+    python_requires = "conan_template_ln_generator/[~=5 >=5.0.7]@robotkernel/stable"
+    python_requires_extend = "conan_template_ln_generator.RobotkernelLNGeneratorConanFile"
 
-class MainProject(base.RobotkernelConanFile):
     name = "module_ethercat"
-    description = "robotkernel-5 EtherCAT master module based on libethercat."
+    description = "robotkernel EtherCAT master module based on libethercat."
     exports_sources = ["*", "!.gitignore"] + ["!%s" % x for x in tools.Git().excluded_files()]
-    requires = (
+    requires = [
             "robotkernel/[~=5]@robotkernel/stable",
             "service_provider_memory_inspection/[~=5]@robotkernel/stable",
             "service_provider_canopen_protocol/[~=5]@robotkernel/stable",
@@ -15,9 +16,11 @@ class MainProject(base.RobotkernelConanFile):
             "service_provider_sercos_protocol/[~=5]@robotkernel/stable",
             "service_provider_file_protocol/[~=5]@robotkernel/stable",
             "service_provider_process_data_inspection/[~=5]@robotkernel/stable",
-            "libethercat/0.3.0@common/stable" )
+            "libethercat/[~=0.3]@common/unstable" ]
 
     def package_info(self):
-        super(base.RobotkernelConanFile, self).package_info()
-        self.env_info.PYTHONPATH.append(os.path.join(self.package_folder, "bindings/python/rk_gui_plugin"))
+        base = self.python_requires["conan_template_ln_generator"].module.RobotkernelLNGeneratorConanFile
+        base.package_info(self)
+
+        self.env_info.PYTHONPATH.append(os.path.join(self.package_folder, "bindings/python"))
 
