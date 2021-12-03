@@ -617,7 +617,6 @@ void slave::add_init_cmds() {
                         (*(uint8_t *)cmd->data) = (unsigned int)*pintval;
                         break;
                     case ECT_UNSIGNED16:
-                        master_dev->log(warning, "this case unsigned 16\n");
                         if (!pintval)
                             break;
 
