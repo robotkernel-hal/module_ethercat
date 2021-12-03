@@ -546,6 +546,7 @@ string slave::canopen::get_pdo_description(uint16_t idx) {
             uint32_t entry = *(uint32_t *)&element[0];
 
             service_provider::canopen_protocol::element_description_t desc;
+            service_provider::canopen_protocol::object_description_t obj_desc;
 
             uint16_t pdo_entry_id = (entry & 0xFFFF0000) >> 16;
             uint16_t pdo_entry_subid = (entry & 0x0000FF00) >> 8;
@@ -559,14 +560,32 @@ string slave::canopen::get_pdo_description(uint16_t idx) {
                 } catch (std::exception& e) {
                     slv->master_dev->log(verbose, "%s\n", e.what());
                 }
+            
+                if ((pdo_entry_subid == 0) || slv->prefer_obj_names) {
+                    try {
+                        get_object_description(pdo_entry_id, obj_desc);
+                        slv->master_dev->log(verbose, "got obj_desc.name %s\n", obj_desc.name.c_str());
+
+                        if (obj_desc.name != "") {
+                            desc.name = obj_desc.name;
+                        }
+                    } catch (std::exception& e) {
+                        slv->master_dev->log(verbose, "%s\n", e.what());
+                    }
+                }
             }
 
-            if ((signed)desc.name.length() != std::count_if(desc.name.begin(), desc.name.end(), 
-                        [](unsigned char c){ return std::isprint(c); } ))
-                desc.name = format_string("no_text_%d", entry_sub_idx); // name is not printable
-            
-            if (desc.name == "") 
+            desc.name.erase(remove_if(desc.name.begin(), desc.name.end(), 
+                        [](unsigned char c){ return !std::isprint(c); }), desc.name.end());  
+
+            //if ((signed)desc.name.length() != std::count_if(desc.name.begin(), desc.name.end(), 
+            //            [](unsigned char c){ return std::isprint(c); } )) {
+            //    desc.name = format_string("no_text_%d", entry_sub_idx); // name is not printable
+            //}
+
+            if (desc.name == "") {
                 desc.name = format_string("padding_%d", entry_sub_idx);
+            }
 
             auto& _data_type_desc = data_type_2_desc[desc.data_type];
             string data_type = _data_type_desc.data_type;
@@ -576,7 +595,7 @@ string slave::canopen::get_pdo_description(uint16_t idx) {
                 ss << "int" << (entry & 0x000000FF) << "_t";
                 data_type = ss.str();
             } else {
-                if ((_data_type_desc.bitsize >= 0) && (_data_type_desc.bitsize != (entry & 0x000000FFu))) {
+                if ((_data_type_desc.bitsize >= 0) && ((unsigned)_data_type_desc.bitsize != (entry & 0x000000FFu))) {
                     slv->master_dev->log(warning, "    subindex %d, mappend bitsize %d, datatype bitsize %d mismatch!\n", 
                             entry_sub_idx, (entry & 0x000000FF), _data_type_desc.bitsize);
 

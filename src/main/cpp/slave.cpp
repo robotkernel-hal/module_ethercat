@@ -284,9 +284,12 @@ slave::slave(int index, const YAML::Node& node, master *master_dev) :
         }
     }
 
+    prefer_obj_names = false;
+
     if (node["mapping"]) {
         const YAML::Node& mapping_node = node["mapping"];
         string type = get_as<string>(mapping_node, "type");
+        prefer_obj_names = get_as<bool>(mapping_node, "prefer_obj_names", false);
 
         master_dev->log(verbose, 
                 "slave %s parsing mapping type %s\n", 

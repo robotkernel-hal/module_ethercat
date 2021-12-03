@@ -317,6 +317,7 @@ class slave :
         typedef std::list<int> mapping_t;
         mapping_t input_mapping;    //! process data input mapping values
         mapping_t output_mapping;   //! process data output mapping values
+        bool prefer_obj_names;
 
         //! slave distributed clocks
         struct slave_dc {
