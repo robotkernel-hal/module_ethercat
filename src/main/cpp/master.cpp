@@ -509,7 +509,8 @@ int master::set_state(module_state_t state) {
             }
 
             pec->dc.mode = dc_sync.mode_string == "ref_clock" ? 
-                ec_dc_info::dc_mode_ref_clock : ec_dc_info::dc_mode_master_clock;
+                ec_dc_info::dc_mode_ref_clock : dc_sync.mode_string == "master_as_ref_clock" ?
+                ec_dc_info::dc_mode_master_as_ref_clock : ec_dc_info::dc_mode_master_clock;
             
             STATE_TRANSITION(pre, module_state_preop);
             ec_set_state(pec, EC_STATE_PREOP);
