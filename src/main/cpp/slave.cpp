@@ -708,9 +708,9 @@ void slave::add_init_cmds() {
         if (cmd->already_added)
             continue;
 
-//TODO        ec_slave_add_init_cmd(master_dev->pec, index, EC_MBX_SOE, 
-//                (int)cmd->transition, cmd->idn, cmd->element, 
-//                cmd->atn, cmd->data, cmd->datalen);
+	ec_slave_add_soe_init_cmd(master_dev->pec, index, 
+			(int)cmd->transition, cmd->idn, cmd->element, 
+			cmd->atn, cmd->data, cmd->datalen);
 
         cmd->already_added = true;
     }
@@ -1043,6 +1043,53 @@ slave::sercos::sercos(std::shared_ptr<slave> slv, int atn)
         format_string("slave_%d.atn_%d", slv->index, atn)), slv(slv), atn(atn) {
 }
 
+
+static int decode_soe_answer(uint8_t *tmp, service_provider::sercos_protocol::sercos_service_attribute_t attr, 
+    std::vector<uint16_t>& value) 
+{
+    bool is_fix = true;
+    size_t elem_size = 1;
+
+    switch (attr.datalength) {
+        case service_provider::sercos_protocol::SSA_DATALENGTH_2BYTEFIX:
+            elem_size = 2;
+            break;
+        case service_provider::sercos_protocol::SSA_DATALENGTH_4BYTEFIX:
+            elem_size = 4;
+            break;
+        case service_provider::sercos_protocol::SSA_DATALENGTH_8BYTEFIX:
+            elem_size = 8;
+            break;
+        case service_provider::sercos_protocol::SSA_DATALENGTH_1BYTEVAR:
+            is_fix = false;
+            elem_size = 1;
+            break;
+        case service_provider::sercos_protocol::SSA_DATALENGTH_2BYTEVAR:
+            is_fix = false;
+            elem_size = 2;
+            break;
+        case service_provider::sercos_protocol::SSA_DATALENGTH_4BYTEVAR:
+            is_fix = false;
+            elem_size = 4;
+            break;
+        case service_provider::sercos_protocol::SSA_DATALENGTH_8BYTEVAR:
+            is_fix = false;
+            elem_size = 8;
+            break;
+    }
+
+    if (is_fix) {
+        value.resize((elem_size+1)/2);
+        memcpy(&value[0], tmp, (elem_size));
+        return elem_size;
+    }
+        
+    uint16_t array_len = *(uint16_t *)tmp;
+    value.resize(4 + (elem_size+1)/2 * array_len);
+    memcpy(&value[0], tmp, 4 + elem_size * array_len);
+    return (4 + elem_size * array_len);
+}
+
 //! read sercos id number
 /*!
  * \param idn id number to read
@@ -1053,20 +1100,53 @@ void slave::sercos::sercos_read_idn(const uint16_t& idn,
         const service_provider::sercos_protocol::sercos_service_elements_t& elements, 
         service_provider::sercos_protocol::service_data_t& data) {
     uint8_t *buf = NULL; 
+    uint8_t serc_elements = (elements | service_provider::sercos_protocol::SSE_ATTR) >> 1;
     size_t buf_len = 0;
     int ret;
-        
+
     if ((ret = ec_soe_read(slv->master_dev->pec, slv->index, atn, idn,
-                elements >> 1, buf, &buf_len)) != 0) {
+                &serc_elements, &buf, &buf_len)) != 0) {
         throw str_exception("slave %2d: reading sercos atn %d idn 0x%X "
                 "elements 0x%X returned errorcode 0x%X!\n", slv->index, 
-                atn, idn, elements, ret);
+                atn, idn, serc_elements, ret);
     }
 
-    
-    // todo decode answer
+    if (buf) {
+        // todo decode answer
+        uint8_t *tmp = buf;
+        if (serc_elements & (service_provider::sercos_protocol::SSE_NAME >> 1)) {
+            uint16_t name_len = *(uint16_t *)tmp; 
+            tmp += 4;
+            data.name = string((char *)tmp, (size_t)name_len);
+            tmp += name_len;
+        }
+        
+        if (serc_elements & (service_provider::sercos_protocol::SSE_ATTR >> 1)) {
+            data.attr = *(service_provider::sercos_protocol::sercos_service_attribute *)tmp;
+            tmp += 4;
+        }
 
-    free(buf);
+        if (serc_elements & (service_provider::sercos_protocol::SSE_UNIT >> 1)) {
+            uint16_t unit_len = *(uint16_t *)tmp; 
+            tmp += 4;
+            data.unit = string((char *)tmp, (size_t)unit_len);
+            tmp += unit_len;
+        }
+        
+        if (serc_elements & (service_provider::sercos_protocol::SSE_MAXVAL >> 1)) {
+            tmp += decode_soe_answer(tmp, data.attr, data.min_value);
+        }
+
+        if (serc_elements & (service_provider::sercos_protocol::SSE_MINVAL >> 1)) {
+            tmp += decode_soe_answer(tmp, data.attr, data.max_value);
+        }
+        
+        if (serc_elements & (service_provider::sercos_protocol::SSE_DATA >> 1)) {
+            tmp += decode_soe_answer(tmp, data.attr, data.value);
+        }
+
+        free(buf);
+    }
 }
 
 //! write sercos id number
@@ -1079,6 +1159,15 @@ void slave::sercos::sercos_write_idn(const uint16_t& idn,
         const service_provider::sercos_protocol::sercos_service_elements_t& elements, 
         service_provider::sercos_protocol::service_data_t& data) {
         // todo implement
+    uint8_t serc_elements = (elements | service_provider::sercos_protocol::SSE_ATTR) >> 1;
+    int ret;
+
+    if ((ret = ec_soe_write(slv->master_dev->pec, slv->index, atn, idn,
+                serc_elements, (uint8_t *)&data.value[0], data.value.size() * 2)) != 0) {
+        throw str_exception("slave %2d: writing sercos atn %d idn 0x%X "
+                "elements 0x%X returned errorcode 0x%X!\n", slv->index, 
+                atn, idn, serc_elements, ret);
+    }
 }
 	    
 //! return input process data (measurements)
