@@ -54,8 +54,8 @@ At least one group needs to be specified. Each group can have it's own trigger d
 Specifying slaves is necessary if the slaves need a specific configuration to reach the operational phase. For each slaves missing in the '''slaves''' section the EtherCAT-master tries configure it automatically.
 
  slaves:
- -   name: ax5000
-     index: 0
+   0:
+     name: ax5000
      sm: # see ''sync manager configuration''
      dc: # see ''distributed clock settings''
      init_cmds:
