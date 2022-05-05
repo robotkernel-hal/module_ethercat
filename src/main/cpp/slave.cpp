@@ -899,8 +899,9 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
             REMOVE_SERVICE_COLLECTOR(mbx_coe);
 
             if (mbx_sup & EC_EEPROM_MBX_SOE) {
-                for (unsigned atn = 0; atn < _mbx_soe_list.size(); ++atn)
+                for (unsigned atn = 0; atn < _mbx_soe_list.size(); ++atn) {
                     REMOVE_SERVICE_COLLECTOR(_mbx_soe_list[atn]);
+                }
             }
 
             REMOVE_SERVICE_COLLECTOR(_eeprom_mi);
@@ -970,7 +971,7 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
             if (mbx_sup & EC_EEPROM_MBX_SOE) {
                 for (unsigned atn = 0; atn < _mbx_soe_list.size(); ++atn) {
                     // register soe process data inspection
-//                    ADD_SERVICE_COLLECTOR_CLASS(_mbx_soe_list[atn], slave_servodrive, atn);
+                    ADD_SERVICE_COLLECTOR_CLASS(_mbx_soe_list[atn], slave_servodrive, atn);
                 }
             }
     
