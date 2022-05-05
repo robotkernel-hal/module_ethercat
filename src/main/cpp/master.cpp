@@ -204,11 +204,6 @@ void master::open() {
     if (ret != 0) 
         throw str_exception("ec_open failed: %s!\n", strerror(ret));
         
-    robotkernel::set_thread_name(pec->phw->rxthread, 
-            format_string("%s.rxthread", name.c_str()));
-    robotkernel::set_thread_name(pec->async_loop->loop_tid, 
-            format_string("%s.asyncthread", name.c_str()));
-
     ec_set_state(pec, EC_STATE_INIT);
 
     pec->threaded_startup = threaded_startup;
