@@ -968,13 +968,6 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
             k.add_device(std::static_pointer_cast<
                     service_provider::process_data_inspection::base>(shared_from_this()));
             
-            if (mbx_sup & EC_EEPROM_MBX_SOE) {
-                for (unsigned atn = 0; atn < _mbx_soe_list.size(); ++atn) {
-                    // register soe process data inspection
-                    ADD_SERVICE_COLLECTOR_CLASS(_mbx_soe_list[atn], slave_servodrive, atn);
-                }
-            }
-    
             if (slv->pdin.len) {
                 if (pdin)
                     k.remove_device(pdin);
