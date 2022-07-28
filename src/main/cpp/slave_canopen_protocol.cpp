@@ -28,6 +28,8 @@ using namespace robotkernel;
 using namespace string_util;
 using namespace module_ethercat;
 
+#define COE_DATA_MAXLEN     512
+
 slave::canopen::canopen(std::shared_ptr<slave> slv, const request_type& type) :
     service_provider::canopen_protocol::base(slv->master_dev->name, format_string(
                 "slave_%d.%s", slv->index, type == request_type_eeprom ? "eeprom" : "mailbox")), 
@@ -63,9 +65,9 @@ void slave::canopen::get_object_dictionary_list(
             break;
         }
         case request_type_mailbox: {
-            uint8_t *buf = NULL;
-            size_t len = 0;
-            int ret = ec_coe_odlist_read(slv->master_dev->pec, slv->index, &buf, &len);
+            uint8_t buf[COE_DATA_MAXLEN];
+            size_t len = COE_DATA_MAXLEN;
+            int ret = ec_coe_odlist_read(slv->master_dev->pec, slv->index, buf, &len);
 
             if (ret != 0) {
                 throw str_exception("slave %2d: reading CoE object dictionary list "
@@ -247,7 +249,7 @@ void slave::canopen::get_element_description(const uint16_t& index, const uint8_
             desc.obj_access    = entry_desc.obj_access;
             desc.unit          = 0;
 
-            if (entry_desc.data) {
+            if (entry_desc.data_len > 0) {
                 // decode data
                 uint8_t *tmp = entry_desc.data;
                 if (entry_desc.value_info & EC_COE_SDO_VALUE_INFO_UNIT) {
@@ -358,7 +360,7 @@ void slave::canopen::read_element(const uint16_t& index, const uint8_t& sub_inde
             uint32_t abort_code = 0;
 
             int ret = ec_coe_sdo_read(slv->master_dev->pec, slv->index, index, sub_index, 
-                    0, &buf, &buf_len, &abort_code);
+                    0, buf, &buf_len, &abort_code);
 
             if (ret != 0) {
                 if (ret == EC_ERROR_MAILBOX_ABORT) {

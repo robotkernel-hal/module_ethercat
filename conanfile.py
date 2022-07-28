@@ -16,7 +16,7 @@ class MainProject(ConanFile):
             "service_provider_sercos_protocol/[~=5]@robotkernel/stable",
             "service_provider_file_protocol/[~=5]@robotkernel/stable",
             "service_provider_process_data_inspection/[~=5]@robotkernel/stable",
-            "libethercat/[~=0.3]@common/stable" ]
+            "libethercat/misra-2012@common/snapshot" ]
 
     def package_info(self):
         base = self.python_requires["conan_template_ln_generator"].module.RobotkernelLNGeneratorConanFile

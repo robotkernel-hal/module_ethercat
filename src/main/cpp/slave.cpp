@@ -563,7 +563,6 @@ void slave::add_init_cmds() {
             // get description
             uint32_t error_code = 0;
             ec_coe_sdo_entry_desc_t entry_desc;
-            entry_desc.data = NULL;
             int ret2 = ec_coe_sdo_entry_desc_read(master_dev->pec, index, 
                     cmd->index, cmd->subindex, 0x7F, &entry_desc, &error_code);
 
