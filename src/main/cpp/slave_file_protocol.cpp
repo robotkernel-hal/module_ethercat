@@ -42,7 +42,7 @@ void slave::file_protocol::file_read(
         service_provider::file_protocol::file_readwrite_info_t& info) {
     // file data buffer
     uint8_t *buffer = NULL;
-    ssize_t  buffer_len = 0;
+    size_t buffer_len = 0;
 
     // file name truncation
     char file_name[MAX_FILE_NAME_SIZE];
@@ -50,7 +50,7 @@ void slave::file_protocol::file_read(
 
     // others
     uint32_t password = 0;
-    char *error_message = NULL; 
+    const char *error_message = NULL; 
 
     ec_foe_read(
             slv->master_dev->pec,   // ethercat master device
@@ -66,7 +66,6 @@ void slave::file_protocol::file_read(
             free(buffer);
 
         std::string msg = string(error_message);
-        free(error_message);
         throw str_exception(msg.c_str());
     }
 
@@ -90,7 +89,7 @@ void slave::file_protocol::file_write(
 
     // others
     uint32_t password = 0;
-    char *error_message = NULL; 
+    const char *error_message = NULL; 
             
     // local copy, cause it's const
     auto file_data = info.file_data;
@@ -106,7 +105,6 @@ void slave::file_protocol::file_write(
     
     if (error_message) {
         std::string msg = string(error_message);
-        free(error_message);
         slv->master_dev->log(robotkernel::error, "writing file failed: %s\n", 
                 msg.c_str());
 

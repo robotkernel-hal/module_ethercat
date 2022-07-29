@@ -78,8 +78,6 @@ void slave::canopen::get_object_dictionary_list(
             if (buf) {
                 list.resize(len/2);
                 memcpy(&list[0], buf, len);
-
-                free(buf);
             }
             break;
         }
@@ -151,7 +149,6 @@ void slave::canopen::get_object_description(const uint16_t& index,
 
             if (obj_desc.name) {
                 desc.name = std::string(obj_desc.name, obj_desc.name_len);
-                free(obj_desc.name);  // allocated by ec_coe_sdo_desc_read
             }
             break;
         }
@@ -297,8 +294,6 @@ void slave::canopen::get_element_description(const uint16_t& index, const uint8_
                                 [](unsigned char c){ return std::isprint(c); } ))
                         desc.name = format_string("subindex_%d", sub_index); // name is not printable
                 }
-
-                free(entry_desc.data);
             }
             break;
         }

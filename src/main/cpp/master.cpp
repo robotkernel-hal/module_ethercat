@@ -630,19 +630,19 @@ int master::set_state(module_state_t state) {
                 "- uint64_t: dc_time\n"
                 "- uint64_t: dc_cycle_sum\n"
                 "- uint64_t: dc_cycle\n"
-                "- int32_t: dc_cycle_cnt\n"
+                "- uint32_t: dc_cycle_cnt\n"
                 "- int64_t: dc_sto\n"
-                "- uint64_t: rtc_sto\n"
+                "- int64_t: rtc_sto\n"
                 "- uint64_t: rtc_time\n"
                 "- uint64_t: rtc_cycle_sum\n"
                 "- uint64_t: rtc_cycle\n"
-                "- int32_t: rtc_count\n"
+                "- uint32_t: rtc_count\n"
                 "- int32_t: act_diff\n"
                 "- int64_t: prev_rtc\n"
                 "- int64_t: prev_dc\n"
                 "- int32_t: offset_compensation_cycles\n"
                 "- int32_t: offset_compensation_cnt\n"
-                "- int32_t: offset_compensation_max\n"
+//                "- int32_t: offset_compensation_max\n"
                 "- int32_t: timer_override\n"
                 "- int64_t: timer_prev\n";
 
@@ -773,18 +773,33 @@ void master::dc_set_clock() {
     double diff = (pec->dc.act_diff / 1E9);
 
     // sum it up for integral part
-    dc_sync.diffsum += dc_sync.ki * diff * pec->dc.offset_compensation_cycles * dc_sync.start_timer;
+    dc_sync.diffsum += dc_sync.ki * diff * (pec->dc.offset_compensation_cycles * dc_sync.start_timer);
 
     // limit diffsum
-    double diffsum_limit = dc_sync.start_timer / 2.;
+    double diffsum_limit = dc_sync.start_timer / 100.; 
 
     if (dc_sync.diffsum > diffsum_limit)
         dc_sync.diffsum = diffsum_limit;
     else if (dc_sync.diffsum < (-1 * diffsum_limit))
         dc_sync.diffsum = -1 * diffsum_limit;
 
+    static uint64_t old_rtc_time = 0;
+
+    if (old_rtc_time == 0) {
+        old_rtc_time = pec->dc.rtc_time;
+        return;
+    }
+
+    double rtc_timer = (pec->dc.rtc_time - old_rtc_time) / 1E9 / pec->dc.offset_compensation_cycles;
+    double act_timer = 1. / t_dev->get_rate();
+    old_rtc_time = pec->dc.rtc_time;
+
+    diff = act_timer - rtc_timer;
+
+
+    log(verbose, "p part %1.12f, i_part %1.12f, i_antiwindup %1.12f\n", (dc_sync.kp * diff), dc_sync.diffsum, diffsum_limit);
     // calculate new rate in [s]
-    double act_timer = dc_sync.start_timer + 
+    act_timer += //dc_sync.start_timer + 
         (dc_sync.kp * diff) + dc_sync.diffsum;
 
     try {
