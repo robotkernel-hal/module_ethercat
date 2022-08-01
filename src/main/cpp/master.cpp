@@ -97,6 +97,7 @@ master::master(const std::string& name, const YAML::Node& node) :
     pd_provider(name), module_base("module_ethercat", name, node), pec(NULL) 
 {
     config = YAML::Clone(node);
+    elp.ll = ll;
 } 
 
 //! second stage init routine
@@ -183,7 +184,7 @@ void master::init() {
     dc_sync.ki                         = get_as<double>(config, "dc_sync_ki", 0.0025);
     dc_sync.timer_override             = get_as<int>(config, "dc_sync_timer_override", -1);
     dc_sync.offset_compensation_cycles = get_as<int>(config, "dc_sync_offset_compensation_cycles", 100);
-    dc_sync.diff_converge_cycles       = 0;
+    dc_sync.diff_converge_cycles       = 100;
     dc_sync.diff_converge_cnt          = 0;
     dc_sync.diff_converged             = false;
 
@@ -525,7 +526,7 @@ int master::set_state(module_state_t state) {
             
                 double rate = t_dev->get_rate() / t_divisor;
                 dc_sync.start_timer = (1.f / rate);
-                dc_sync.diff_converge_cycles = rate;
+                dc_sync.diff_converge_cycles = 100;//rate;
             }
 
             if (dc_sync.timer_override > 0) {
@@ -754,7 +755,8 @@ void master::tick() {
 
         if (    (pec->dc.mode == ec_dc_info::dc_mode_ref_clock) && 
                 (pec->dc.offset_compensation_cnt == 0)) {
-            dccs->signal();
+            printf("signalling\n");
+            dc_set_clock();//dccs->signal();
         }        
 
         if (pdin_dc) {
@@ -770,63 +772,68 @@ void master::tick() {
 
 /*! Correct Master clock according to distributed clock. */
 void master::dc_set_clock() {
-    double diff = (pec->dc.act_diff / 1E9);
+    double diff_round     = (pec->dc.act_diff / 1E9);
+    double diff_per_cycle = diff_round / pec->dc.offset_compensation_cycles;;
 
     // sum it up for integral part
-    dc_sync.diffsum += dc_sync.ki * diff * (pec->dc.offset_compensation_cycles * dc_sync.start_timer);
+    dc_sync.diffsum += dc_sync.ki * diff_per_cycle; // * (pec->dc.offset_compensation_cycles * dc_sync.start_timer);
 
     // limit diffsum
-    double diffsum_limit = dc_sync.start_timer / 100.; 
+    double diffsum_limit = dc_sync.start_timer / pec->dc.offset_compensation_cycles;//100000.; 
 
     if (dc_sync.diffsum > diffsum_limit)
         dc_sync.diffsum = diffsum_limit;
     else if (dc_sync.diffsum < (-1 * diffsum_limit))
         dc_sync.diffsum = -1 * diffsum_limit;
-
-    static uint64_t old_rtc_time = 0;
-
-    if (old_rtc_time == 0) {
-        old_rtc_time = pec->dc.rtc_time;
-        return;
-    }
-
-    double rtc_timer = (pec->dc.rtc_time - old_rtc_time) / 1E9 / pec->dc.offset_compensation_cycles;
+    
     double act_timer = 1. / t_dev->get_rate();
-    old_rtc_time = pec->dc.rtc_time;
+    log(verbose, "act_timer %8.3f\n", 1./act_timer);
 
-    diff = act_timer - rtc_timer;
-
-
-    log(verbose, "p part %1.12f, i_part %1.12f, i_antiwindup %1.12f\n", (dc_sync.kp * diff), dc_sync.diffsum, diffsum_limit);
+    log(verbose, "p part %1.12f, i_part %1.12f, i_antiwindup %1.12f\n", (dc_sync.kp * diff_per_cycle), dc_sync.diffsum, diffsum_limit);
     // calculate new rate in [s]
-    act_timer += //dc_sync.start_timer + 
-        (dc_sync.kp * diff) + dc_sync.diffsum;
+    //act_timer += //dc_sync.start_timer + 
+    //    (dc_sync.kp * diff_per_cycle) + dc_sync.diffsum;
+    static double v_part_old  = 0.;
+    static bool v_part_first_run = true;
+
+    double v_part = (dc_sync.kp * diff_per_cycle) + dc_sync.diffsum;
+    //if (v_part_first_run) {
+    //    v_part_first_run = false;
+    //    v_part_old = v_part;
+    //    return;
+    //}
+    log(verbose, "v_part %.10f, v_part_old %.10f, correction %.10f\n", v_part, v_part_old, v_part - v_part_old);
+    act_timer += (v_part - v_part_old);
+    v_part_old = v_part;
 
     try {
         rate = 1.f / act_timer;
         t_dev->set_rate(rate);
 
         if (dc_sync.log) 
-            log(verbose, "setting new clock rate to %7.3f [Hz], clock diff %7.3f [us]\n",
-                    rate, diff * 1E6);
+            log(verbose, "setting new clock rate to %8.3f [Hz], clock diff %8.3f [us]\n",
+                    rate, diff_per_cycle * 1E6);
     } catch (exception& e) {
         log(warning, "setting new clock failed: %s\n", e.what());
     }
 
     dc_sync.first_run = false;
-    dc_sync.last_diff = diff;
+    dc_sync.last_diff = diff_per_cycle;
 
     // check if diff converged
     if (    dc_sync.diff_converge_cycles && !dc_sync.diff_converged &&
             ((++dc_sync.diff_converge_cnt % dc_sync.diff_converge_cycles) == 0)) {
-        double margin = dc_sync.start_timer * 0.01;
+        double margin = dc_sync.start_timer / 100.;
 
-        if ((diff > margin) || (diff < -1 * margin))
+        if ((diff_round > margin) || (diff_round < -1 * margin)) {
             log(info, "DC diff did not converge until now... (start_timer %10.7f, act_timer %10.7f, margin %10.7f, diff %10.7f\n",
-                    dc_sync.start_timer, act_timer, margin, diff);
-        else {
+                    dc_sync.start_timer, act_timer, margin, diff_round);
+        } else {
             log(info, "DC diff converged!\n");
             dc_sync.diff_converged = true;
+
+            // lower dc update rate
+            pec->dc.offset_compensation_cycles *= 10;
         }
     }
 }
