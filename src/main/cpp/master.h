@@ -116,6 +116,8 @@ class master :
             int diff_converge_cycles;
             int diff_converge_cnt;
             bool diff_converged;
+
+            double v_part_old;
         } dc_sync;
 
         struct {
