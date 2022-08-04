@@ -623,20 +623,11 @@ int master::set_state(module_state_t state) {
 
             string pdo_desc = 
                 "- uint64_t: dc_time\n"
-                "- uint64_t: dc_cycle_sum\n"
-                "- uint64_t: dc_cycle\n"
-                "- uint32_t: dc_cycle_cnt\n"
                 "- int64_t: dc_sto\n"
-                "- int64_t: rtc_sto\n"
                 "- uint64_t: rtc_time\n"
-                "- uint64_t: rtc_cycle_sum\n"
-                "- uint64_t: rtc_cycle\n"
-                "- uint32_t: rtc_count\n"
-                "- int32_t: act_diff\n"
-                "- int64_t: prev_rtc\n"
-                "- int64_t: prev_dc\n"
-                "- int32_t: timer_override\n"
-                "- int64_t: timer_prev\n";
+                "- int64_t: rtc_sto\n"
+                "- int64_t: act_diff\n"
+                "- int64_t: timer_override\n";
 
             pdin_dc = make_shared<robotkernel::triple_buffer>(
                     (uint8_t *)&pec->dc.p_de_dc - (uint8_t *)&pec->dc.dc_time, 
