@@ -350,12 +350,12 @@ void slave::canopen::read_element(const uint16_t& index, const uint8_t& sub_inde
             break;
         }
         case request_type_mailbox: {
-            uint8_t *buf = NULL; 
-            size_t buf_len = 0;
+            uint8_t buf[64]; 
+            size_t buf_len = 64;
             uint32_t abort_code = 0;
 
             int ret = ec_coe_sdo_read(slv->master_dev->pec, slv->index, index, sub_index, 
-                    0, buf, &buf_len, &abort_code);
+                    0, &buf[0], &buf_len, &abort_code);
 
             if (ret != 0) {
                 if (ret == EC_ERROR_MAILBOX_ABORT) {
@@ -372,8 +372,6 @@ void slave::canopen::read_element(const uint16_t& index, const uint8_t& sub_inde
                 // ec_coe_sdo_read call did allocate buffer
                 value.resize(buf_len);    
                 memcpy(&value[0], buf, buf_len);
-
-                free(buf);
             }
             break;
         }
