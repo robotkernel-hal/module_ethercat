@@ -26,7 +26,8 @@
 #include <list>
 #include <string>
 
-#include "libethercat/timer.h"
+#include <libosal/timer.h>
+
 #include "yaml-cpp/yaml.h"
 #include "robotkernel/kernel.h"
 
@@ -61,7 +62,7 @@ class group :
         int _divisor_cnt;
         std::list<int> _slaves;
 
-        ec_timer_t timeout;
+        osal_timer_t timeout;
         master *parent;
 };
 

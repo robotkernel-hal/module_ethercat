@@ -662,7 +662,7 @@ void master::tick() {
     int i = 0;
     bool dc_sent = false;
     int64_t max_timeout = 0;
-    ec_timer_t dc_timeout, ec_state_timeout;
+    osal_timer_t dc_timeout, ec_state_timeout;
 
     if (!pec || (pec->tx_sync == 1))
         return;
@@ -680,7 +680,7 @@ void master::tick() {
         // reset divisor cnt and queue datagram
         g->_divisor_cnt = 0;
         ec_send_process_data_group(pec, i);
-        ec_timer_init(&g->timeout, g->recv_timeout);
+        osal_timer_init(&g->timeout, g->recv_timeout);
 
         if (max_timeout < g->recv_timeout)
             max_timeout = g->recv_timeout;
@@ -690,12 +690,12 @@ void master::tick() {
         //log(verbose, "sending distributed clock sync\n");
 
         dc_sent = ec_send_distributed_clocks_sync(pec) == 0;
-        ec_timer_init(&dc_timeout, max_timeout);
+        osal_timer_init(&dc_timeout, max_timeout);
     }
 
     if (monitor_state) {
         ec_send_brd_ec_state(pec); 
-        ec_timer_init(&ec_state_timeout, 1000000000);
+        osal_timer_init(&ec_state_timeout, 1000000000);
     }
 
     hw_tx(pec->phw);
