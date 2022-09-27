@@ -125,7 +125,9 @@ class master :
             uint8_t ip_address[4];
         } tun_settings;
 
-        ec_t *pec;
+        bool ec_opened;
+        ec_t ec;
+        std::list<ec_init_cmd_t> init_cmds;
 
         int recv_prio;
         int recv_mask;

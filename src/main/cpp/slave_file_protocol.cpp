@@ -53,7 +53,7 @@ void slave::file_protocol::file_read(
     const char *error_message = NULL; 
 
     ec_foe_read(
-            slv->master_dev->pec,   // ethercat master device
+            &slv->master_dev->ec,   // ethercat master device
             slv->index,             // slave index
             password,               // file password
             file_name,              // file name
@@ -95,7 +95,7 @@ void slave::file_protocol::file_write(
     auto file_data = info.file_data;
 
     ec_foe_write(
-            slv->master_dev->pec,   // ethercat master device
+            &slv->master_dev->ec,   // ethercat master device
             slv->index,             // slave index
             password,               // file password
             file_name,              // file name
