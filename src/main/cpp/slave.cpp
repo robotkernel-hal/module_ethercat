@@ -426,7 +426,7 @@ void slave::init_key_value() {
 #define _add_key_string(idx, name, desc) \
     if (((idx) > 0) && ((idx) <=master_dev->ec.slaves[index].eeprom.strings_cnt)) \
     _add_key(create_key_read_only<char *>(this, (name), \
-                &master_dev->ec.slaves[index].eeprom.strings[(idx) - 1], (desc)));
+                (osal_char_t **)&master_dev->ec.slaves[index].eeprom.strings[(idx) - 1], (desc)));
 #define _add_key_general_string(mbr, name, desc) \
     _add_key_string(master_dev->ec.slaves[index].eeprom.general.mbr, "eeprom.general." name, (desc)) 
 
@@ -452,7 +452,7 @@ void slave::init_key_value() {
     for (int i = 0; i < master_dev->ec.slaves[index].eeprom.strings_cnt; ++i) {
         auto prefix = format_string("eeprom.strings.%d", i);
         _add_key(create_key_read_only<char *>(this, prefix,
-                    &master_dev->ec.slaves[index].eeprom.strings[i], ""));
+                    (osal_char_t **)&master_dev->ec.slaves[index].eeprom.strings[i], ""));
     }
 
     for (int i = 0; i < master_dev->ec.slaves[index].eeprom.fmmus_cnt; ++i) {
@@ -1096,13 +1096,13 @@ static int decode_soe_answer(uint8_t *tmp, service_provider::sercos_protocol::se
 void slave::sercos::sercos_read_idn(const uint16_t& idn, 
         const service_provider::sercos_protocol::sercos_service_elements_t& elements, 
         service_provider::sercos_protocol::service_data_t& data) {
-    uint8_t *buf = NULL; 
+    uint8_t buf[1024]; 
     uint8_t serc_elements = (elements | service_provider::sercos_protocol::SSE_ATTR) >> 1;
-    size_t buf_len = 0;
+    size_t buf_len = 1024;
     int ret;
 
     if ((ret = ec_soe_read(&slv->master_dev->ec, slv->index, atn, idn,
-                &serc_elements, &buf, &buf_len)) != 0) {
+                &serc_elements, buf, &buf_len)) != 0) {
         throw str_exception("slave %2d: reading sercos atn %d idn 0x%X "
                 "elements 0x%X returned errorcode 0x%X!\n", slv->index, 
                 atn, idn, serc_elements, ret);
@@ -1141,8 +1141,6 @@ void slave::sercos::sercos_read_idn(const uint16_t& idn,
         if (serc_elements & (service_provider::sercos_protocol::SSE_DATA >> 1)) {
             tmp += decode_soe_answer(tmp, data.attr, data.value);
         }
-
-        free(buf);
     }
 }
 

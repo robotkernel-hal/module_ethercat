@@ -18,6 +18,18 @@ class MainProject(ConanFile):
             "service_provider_process_data_inspection/[~=5]@robotkernel/stable",
             "libethercat/misra-2012-libosal-no-alloc@common/snapshot" ]
 
+    def configure(self):
+        self.options["libethercat"].max_slaves          = 256
+        self.options["libethercat"].max_groups          = 8
+        self.options["libethercat"].max_pdlen           = 3036
+        self.options["libethercat"].max_mbx_entries     = 16
+        self.options["libethercat"].max_init_cmd_data   = 2048
+        self.options["libethercat"].max_slave_fmmu      = 8
+        self.options["libethercat"].max_slave_sm        = 8
+
+        base = self.python_requires["conan_template_ln_generator"].module.RobotkernelLNGeneratorConanFile
+        base.configure(self)
+
     def package_info(self):
         base = self.python_requires["conan_template_ln_generator"].module.RobotkernelLNGeneratorConanFile
         base.package_info(self)
