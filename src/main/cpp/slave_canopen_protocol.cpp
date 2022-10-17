@@ -416,7 +416,7 @@ void slave::canopen::write_element(const uint16_t& index, const uint8_t& sub_ind
  */
 void slave::canopen::pop_emergency_message(
         service_provider::canopen_protocol::emergency_message_t& msg) {
-    ec_coe_emergency_message_t *msg;
+    ec_coe_emergency_message_t *msg_tmp;
 //    entry = TAILQ_FIRST(&slv->master_dev->ec.slaves[slv->index].mbx.coe.emergencies);
 //    if (!entry)
 //        throw str_exception("slave %2d: there are no more emergency messages\n", slv->index);
