@@ -10,12 +10,12 @@ class MainProject(ConanFile):
     exports_sources = ["*", "!.gitignore"] + ["!%s" % x for x in tools.Git().excluded_files()]
     requires = [
             "robotkernel/[~=5]@robotkernel/stable",
-            "service_provider_memory_inspection/[~=5]@robotkernel/stable",
-            "service_provider_canopen_protocol/[~=5]@robotkernel/stable",
-            "service_provider_key_value/[~=5]@robotkernel/stable",
-            "service_provider_sercos_protocol/[~=5]@robotkernel/stable",
-            "service_provider_file_protocol/[~=5]@robotkernel/stable",
-            "service_provider_process_data_inspection/[~=5]@robotkernel/stable",
+            "service_provider_memory_inspection/gtk3@robotkernel/snapshot",
+            "service_provider_canopen_protocol/gtk3@robotkernel/snapshot",
+            "service_provider_key_value/gtk3@robotkernel/snapshot",
+            "service_provider_sercos_protocol/gtk3@robotkernel/snapshot",
+            "service_provider_file_protocol/gtk3@robotkernel/snapshot",
+            "service_provider_process_data_inspection/gtk3@robotkernel/snapshot",
             "libethercat/[~=0.3]@common/stable" ]
 
     def package_info(self):
