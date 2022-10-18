@@ -17,8 +17,14 @@ You should have received a copy of the GNU General Public License
 along with Robotkernel-GUI.  If not, see <http://www.gnu.org/licenses/>.
 '''
 
-import os, gtk, gobject
+import os
 import helpers
+
+import gi
+gi.require_version('Gtk', '3.0')
+gi.require_version('GLib', '2.0')
+from gi.repository import Gtk
+from gi.repository import GObject
 
 from service_provider_canopen_protocol import canopen_device
 from service_provider_canopen_protocol import canopen_protocol_view
@@ -35,26 +41,26 @@ class ethercat_canopen_subview(helpers.builder_base):
     def init_gui(self):
         # treeviews
         self.create_device_treeview()
-        hbox = gtk.HBox()
+        hbox = Gtk.HBox()
         self.devices.add_with_viewport(hbox)
-        self.devices.get_child().set_shadow_type(gtk.SHADOW_NONE)
+        self.devices.get_child().set_shadow_type(Gtk.ShadowType.NONE)
         hbox.add(self.treeview_devices)
         self.treeview_devices.connect("cursor-changed", self.on_treeview_devices_cursor_changed)
 
-        hbox = gtk.HBox()
+        hbox = Gtk.HBox()
         self.canopen_view = canopen_protocol_view(self.parent, hbox)
         self.values.add_with_viewport(hbox)
-        self.values.get_child().set_shadow_type(gtk.SHADOW_NONE)
+        self.values.get_child().set_shadow_type(Gtk.ShadowType.NONE)
 
         self.main.show_all()
 
     #CREATORS
     def create_device_treeview(self):
-        self.liststore_devices = store = gtk.ListStore(str, str, gobject.TYPE_PYOBJECT) # name, data
-        self.treeview_devices = view = gtk.TreeView(store)
+        self.liststore_devices = store = Gtk.ListStore(str, str, GObject.TYPE_PYOBJECT) # name, data
+        self.treeview_devices = view = Gtk.TreeView(store)
         view.set_model(store)
-        view.insert_column(gtk.TreeViewColumn("Slave", gtk.CellRendererText(), text=0), -1)
-        view.insert_column(gtk.TreeViewColumn("Name", gtk.CellRendererText(), text=1), -1)
+        view.insert_column(Gtk.TreeViewColumn("Slave", Gtk.CellRendererText(), text=0), -1)
+        view.insert_column(Gtk.TreeViewColumn("Name", Gtk.CellRendererText(), text=1), -1)
         view.connect("cursor-changed", self.on_treeview_devices_cursor_changed)
         store.set_sort_column_id(0, 0)
 
@@ -82,7 +88,7 @@ class ethercat_canopen_subview(helpers.builder_base):
             for t in ['mailbox', 'eeprom']:
                 devname = '.'.join([s, t])
                 sort_key = '%s %d' % (t, number)
-                gobject.timeout_add(10, add, module.robotkernel_name, sort_key, devname)
+                GObject.timeout_add(10, add, module.robotkernel_name, sort_key, devname)
 
     #CALLBACKS
     def on_treeview_devices_cursor_changed(self, widget):

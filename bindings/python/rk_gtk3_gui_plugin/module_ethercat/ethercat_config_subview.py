@@ -17,7 +17,15 @@ You should have received a copy of the GNU General Public License
 along with Robotkernel-GUI.  If not, see <http://www.gnu.org/licenses/>.
 '''
 
-import os, gtk, gobject
+import os
+
+import gi
+gi.require_version('Gtk', '3.0')
+gi.require_version('GLib', '2.0')
+from gi.repository import Gtk
+from gi.repository import GObject
+
+
 import helpers
 
 class ethercat_config_subview(helpers.builder_base):
@@ -33,16 +41,16 @@ class ethercat_config_subview(helpers.builder_base):
         # treeviews
         self.create_device_treeview()
 
-        #hbox = gtk.HBox()
+        #hbox = Gtk.HBox()
         #self.devices.add_with_viewport(hbox)
-        #self.devices.get_child().set_shadow_type(gtk.SHADOW_NONE)
+        #self.devices.get_child().set_shadow_type(Gtk.ShadowType.NONE)
         #hbox.add(self.treeview_devices)
         #self.treeview_devices.connect("cursor-changed", self.on_treeview_devices_cursor_changed)
 
-        #hbox = gtk.HBox()
+        #hbox = Gtk.HBox()
         #self.canopen_view = canopen_protocol_view(self.parent, hbox)
         #self.values.add_with_viewport(hbox)
-        #self.values.get_child().set_shadow_type(gtk.SHADOW_NONE)
+        #self.values.get_child().set_shadow_type(Gtk.ShadowType.NONE)
 
         self.main.show_all()
 
@@ -62,10 +70,10 @@ class ethercat_config_subview(helpers.builder_base):
 
     #CREATORS
     def create_device_treeview(self):
-        self.treestore_devices = store = gtk.TreeStore(gobject.TYPE_STRING) # name, data
+        self.treestore_devices = store = Gtk.TreeStore(GObject.TYPE_STRING) # name, data
         view = self.bus_treeview
         view.set_model(store)
-        view.insert_column(gtk.TreeViewColumn("Master", gtk.CellRendererText(), text=0), -1)
+        view.insert_column(Gtk.TreeViewColumn("Master", Gtk.CellRendererText(), text=0), -1)
         #view.connect("cursor-changed", self.on_treeview_devices_cursor_changed)
         #store.set_sort_column_id(0, 0)
 
@@ -93,7 +101,7 @@ class ethercat_config_subview(helpers.builder_base):
             for t in ['mailbox', 'eeprom']:
                 devname = '.'.join([s, t])
                 sort_key = '%s %d' % (t, number)
-                gobject.timeout_add(10, add, module.robotkernel_name, sort_key, devname)
+                GObject.timeout_add(10, add, module.robotkernel_name, sort_key, devname)
 
     #CALLBACKS
     def on_treeview_devices_cursor_changed(self, widget):
