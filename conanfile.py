@@ -40,6 +40,7 @@ class MainProject(ConanFile):
         self.options["libethercat"].max_data                    = 4096
         self.options["libethercat"].max_ds402_subdevs           = 4
         self.options["libethercat"].max_coe_emergencies         = 10
+        self.options["libethercat"].max_coe_emergency_msg_len   = 32
         self.options["libethercat"].ecat_device                 = self.options.ecat_device
 
         base = self.python_requires["conan_template"].module.RobotkernelConanFile

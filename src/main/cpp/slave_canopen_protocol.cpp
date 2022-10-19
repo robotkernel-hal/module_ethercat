@@ -410,28 +410,23 @@ void slave::canopen::write_element(const uint16_t& index, const uint8_t& sub_ind
     }
 }
 
-//! pop next emergency message, throw exception if non present
+//! pop next emer   gency message, throw exception if non present
 /*!
- * \param msg return emergency message
+ * \param msg ret   urn emergency message
  */
 void slave::canopen::pop_emergency_message(
         service_provider::canopen_protocol::emergency_message_t& msg) {
-    ec_coe_emergency_message_t *msg_tmp;
-//    entry = TAILQ_FIRST(&slv->master_dev->ec.slaves[slv->index].mbx.coe.emergencies);
-//    if (!entry)
-//        throw str_exception("slave %2d: there are no more emergency messages\n", slv->index);
-//
-//    msg.ts.tv_sec = entry->timestamp.sec;
-//    msg.ts.tv_nsec = entry->timestamp.nsec;
-//    msg.error_code = (uint16_t)entry->msg[0] | ((uint16_t)entry->msg[1] << 8);
-//    msg.error_register = entry->msg[2]; 
-//
-//    for (unsigned i = 3; i < entry->msg_len; ++i)
-//        msg.data.push_back(entry->msg[i]);
-//
-//    TAILQ_REMOVE(&slv->master_dev->ec.slaves[slv->index].mbx.coe.emergencies, entry, qh);
-//
-//    free(entry);
+    ec_coe_emergency_message_t msg_tmp;
+    if (ec_coe_emergency_get_next(&slv->master_dev->ec, slv->index, &msg_tmp) == EC_OK) {
+        msg.ts.tv_sec = msg_tmp.timestamp.sec;
+        msg.ts.tv_nsec = msg_tmp.timestamp.nsec;
+        msg.error_code = (uint16_t)msg_tmp.msg[0] | ((uint16_t)msg_tmp.msg[1] << 8);
+        msg.error_register = msg_tmp.msg[2]; 
+    
+        for (unsigned i = 3; i < msg_tmp.msg_len; ++i) {
+            msg.data.push_back(msg_tmp.msg[i]);
+        }
+    }
 }
 
 typedef struct data_type_desc {
