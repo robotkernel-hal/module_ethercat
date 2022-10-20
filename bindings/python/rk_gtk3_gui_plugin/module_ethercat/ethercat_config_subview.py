@@ -33,6 +33,13 @@ class ethercat_config_subview(helpers.builder_base):
         fn = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'configurator.ui')
         helpers.builder_base.__init__(self, fn, 'main')
 
+        # The next 3 lines are a workaround for the Gtk3 port. So far,
+        # liststore1 was defined in the configurator.ui builder file,
+        # but in Gtk3, this does not work as previously.
+        bus_treeview = self.builder.get_object("bus_treeview")
+        liststore1 = Gtk.ListStore(str,str)
+        bus_treeview.model = liststore1
+        
         self.parent = parent
         self.app = parent.app
         self.init_gui()
