@@ -41,13 +41,13 @@ class ethercat_canopen_subview(helpers.builder_base):
     def init_gui(self):
         # treeviews
         self.create_device_treeview()
-        hbox = Gtk.HBox()
+        hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         self.devices.add_with_viewport(hbox)
         self.devices.get_child().set_shadow_type(Gtk.ShadowType.NONE)
         hbox.add(self.treeview_devices)
         self.treeview_devices.connect("cursor-changed", self.on_treeview_devices_cursor_changed)
 
-        hbox = Gtk.HBox()
+        hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         self.canopen_view = canopen_protocol_view(self.parent, hbox)
         self.values.add_with_viewport(hbox)
         self.values.get_child().set_shadow_type(Gtk.ShadowType.NONE)
