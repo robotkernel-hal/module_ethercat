@@ -249,6 +249,9 @@ void master::open() {
             
     for (group_map_t::iterator it = groups.begin(); it != groups.end(); ++it) {
         int g_nr = it->first;
+        auto g = it->second;
+
+        ec.pd_groups[g_nr].divisor = g->divisor;
 
         for (std::list<int>::iterator it2 = it->second->_slaves.begin();
                 it2 != it->second->_slaves.end(); ++it2) {
@@ -665,8 +668,6 @@ int master::set_state(module_state_t state) {
 void master::tick() {
     int i = 0;
     bool dc_sent = false;
-    int64_t max_timeout = 0;
-    osal_timer_t dc_timeout, ec_state_timeout;
 
     if (!ec_opened || (ec.tx_sync == 1))
         return;
@@ -685,7 +686,6 @@ void master::tick() {
 
     if (monitor_state) {
         ec_send_brd_ec_state(&ec); 
-        osal_timer_init(&ec_state_timeout, 1000000000);
     }
 
     hw_tx(&ec.hw);
