@@ -673,29 +673,15 @@ void master::tick() {
 
     for (i = 0; i < ec.pd_group_cnt; ++i) {
         auto& g = groups[i];
-        if ((++g->_divisor_cnt % g->divisor) != 0)
-            continue; 
-
-        //log(verbose, "sending group %d\n", i);
-
-        for (const auto& slave : g->_slaves)
-            _slave_info[slave]->pdout_handler();
-
-        // reset divisor cnt and queue datagram
-        g->_divisor_cnt = 0;
-        ec_send_process_data_group(&ec, i);
-        osal_timer_init(&g->timeout, g->recv_timeout);
-
-        if (max_timeout < g->recv_timeout)
-            max_timeout = g->recv_timeout;
+        if (ec_group_will_be_sent(&ec, i) != 0) {
+            for (const auto& slave : g->_slaves) {
+                _slave_info[slave]->pdout_handler();
+            }
+        }
     }
 
-    if ((ec.dc.rtc_time != 0) && ec.dc.have_dc) {
-        //log(verbose, "sending distributed clock sync\n");
-
-        dc_sent = ec_send_distributed_clocks_sync(&ec) == 0;
-        osal_timer_init(&dc_timeout, max_timeout);
-    }
+    ec_send_process_data(&ec);
+    dc_sent = ec_send_distributed_clocks_sync(&ec) == EC_OK;
 
     if (monitor_state) {
         ec_send_brd_ec_state(&ec); 
@@ -707,35 +693,34 @@ void master::tick() {
     pd_cookie++;
     pd_cond.notify_all();
 
+    ec_receive_process_data(&ec);
+
     for (i = 0; i < ec.pd_group_cnt; ++i) {
-        auto& g = groups[i];
+        if (ec_group_was_sent(&ec, i) != 0) {
+            auto& g = groups[i];
 
-        if (g->_divisor_cnt != 0)
-            continue; 
+            if (ec.pd_groups[i].had_timeout == 1) {
+                recv_error_trigger->trigger_modules();
 
-        int ret = ec_receive_process_data_group(&ec, i, &g->timeout);
-
-        if (ret == -1) {
-            recv_error_trigger->trigger_modules();
-            
-            if (errno == ETIMEDOUT) {
-                log(warning, "receiving group %d returned timeout!\n");
-                continue;
+                if (errno == ETIMEDOUT) {
+                    log(warning, "receiving group %d returned timeout!\n");
+                    continue;
+                }
             }
+        
+            //log(verbose, "received group %d\n", i);
+
+            for (auto it = g->_slaves.begin(); it != g->_slaves.end(); ++it) {
+                int slave = *it;
+                _slave_info[slave]->pdin_handler();
+            }
+
+            g->trigger_modules();
         }
-
-        //log(verbose, "received group %d\n", i);
-
-        for (auto it = g->_slaves.begin(); it != g->_slaves.end(); ++it) {
-            int slave = *it;
-            _slave_info[slave]->pdin_handler();
-        }
-
-        g->trigger_modules();
     }
 
-    if (dc_sent && ec.dc.have_dc) {
-        ec_receive_distributed_clocks_sync(&ec, &dc_timeout);
+    if (dc_sent) {
+        ec_receive_distributed_clocks_sync(&ec);
 
         //log(verbose, "received distributed clock sync\n");
 
@@ -750,8 +735,9 @@ void master::tick() {
         }
     }
     
-    if (monitor_state)
-        ec_receive_brd_ec_state(&ec, &ec_state_timeout); 
+    if (monitor_state) {
+        ec_receive_brd_ec_state(&ec); 
+    }
 }
 
 /*! Correct Master clock according to distributed clock. */
