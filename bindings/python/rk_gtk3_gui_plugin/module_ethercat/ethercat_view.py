@@ -16,6 +16,8 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with Robotkernel-GUI.  If not, see <http://www.gnu.org/licenses/>.
 '''
+from __future__ import print_function
+from __future__ import absolute_import
 
 import gi
 gi.require_version('Gtk', '3.0')
@@ -23,9 +25,9 @@ gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk
 #from gi.repository import GObject
 
-from ethercat_canopen_subview import *
-from ethercat_sercos_subview import *
-from ethercat_config_subview import *
+from .ethercat_canopen_subview import *
+from .ethercat_sercos_subview import *
+from .ethercat_config_subview import *
 import helpers
 
 class module_ethercat_view():

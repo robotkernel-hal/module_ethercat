@@ -16,6 +16,7 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with Robotkernel-GUI.  If not, see <http://www.gnu.org/licenses/>.
 '''
+from __future__ import print_function
 
 import os
 
@@ -100,7 +101,7 @@ class ethercat_config_subview(helpers.builder_base):
                     self.liststore_devices.append( (sort_key, name, ethercat_device) )
                 except:
                     import traceback
-                    print traceback.format_exc()
+                    print(traceback.format_exc())
                     pass
 
             number = int(s.split('_')[-1])

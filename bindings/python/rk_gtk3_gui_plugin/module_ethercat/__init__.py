@@ -16,8 +16,9 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with Robotkernel-GUI.  If not, see <http://www.gnu.org/licenses/>.
 '''
+from __future__ import absolute_import
 
-from ethercat_view import *
+from .ethercat_view import *
 
 def init_plugin(parent):
     parent.add_module_gui('module_ethercat', module_ethercat_view, 'libmodule_ethercat.so')
