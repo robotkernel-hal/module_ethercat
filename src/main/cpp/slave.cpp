@@ -284,6 +284,8 @@ slave::slave(int index, const YAML::Node& node, master *master_dev) :
         }
     }
 
+    disable_mbx_sm_map = get_as<bool>(node, "disable_mbx_sm_map", false);
+
     prefer_obj_names = false;
 
     if (node["mapping"]) {
@@ -789,6 +791,10 @@ void slave::pre_state_transition(module_state_t from, module_state_t to) {
                 break;
         case preop_2_op:
         case preop_2_safeop:
+            if (disable_mbx_sm_map) {
+                master_dev->ec.slaves[index].mbx.map_mbx_state = OSAL_FALSE;
+            }
+
             // ====> sending init commands for safeop
             add_init_cmds();
 
