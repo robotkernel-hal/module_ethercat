@@ -1114,39 +1114,37 @@ void slave::sercos::sercos_read_idn(const uint16_t& idn,
                 atn, idn, serc_elements, ret);
     }
 
-    if (buf) {
-        // todo decode answer
-        uint8_t *tmp = buf;
-        if (serc_elements & (service_provider::sercos_protocol::SSE_NAME >> 1)) {
-            uint16_t name_len = *(uint16_t *)tmp; 
-            tmp += 4;
-            data.name = string((char *)tmp, (size_t)name_len);
-            tmp += name_len;
-        }
-        
-        if (serc_elements & (service_provider::sercos_protocol::SSE_ATTR >> 1)) {
-            data.attr = *(service_provider::sercos_protocol::sercos_service_attribute *)tmp;
-            tmp += 4;
-        }
+    // todo decode answer
+    uint8_t *tmp = buf;
+    if (serc_elements & (service_provider::sercos_protocol::SSE_NAME >> 1)) {
+        uint16_t name_len = *(uint16_t *)tmp; 
+        tmp += 4;
+        data.name = string((char *)tmp, (size_t)name_len);
+        tmp += name_len;
+    }
 
-        if (serc_elements & (service_provider::sercos_protocol::SSE_UNIT >> 1)) {
-            uint16_t unit_len = *(uint16_t *)tmp; 
-            tmp += 4;
-            data.unit = string((char *)tmp, (size_t)unit_len);
-            tmp += unit_len;
-        }
-        
-        if (serc_elements & (service_provider::sercos_protocol::SSE_MAXVAL >> 1)) {
-            tmp += decode_soe_answer(tmp, data.attr, data.min_value);
-        }
+    if (serc_elements & (service_provider::sercos_protocol::SSE_ATTR >> 1)) {
+        data.attr = *(service_provider::sercos_protocol::sercos_service_attribute *)tmp;
+        tmp += 4;
+    }
 
-        if (serc_elements & (service_provider::sercos_protocol::SSE_MINVAL >> 1)) {
-            tmp += decode_soe_answer(tmp, data.attr, data.max_value);
-        }
-        
-        if (serc_elements & (service_provider::sercos_protocol::SSE_DATA >> 1)) {
-            tmp += decode_soe_answer(tmp, data.attr, data.value);
-        }
+    if (serc_elements & (service_provider::sercos_protocol::SSE_UNIT >> 1)) {
+        uint16_t unit_len = *(uint16_t *)tmp; 
+        tmp += 4;
+        data.unit = string((char *)tmp, (size_t)unit_len);
+        tmp += unit_len;
+    }
+
+    if (serc_elements & (service_provider::sercos_protocol::SSE_MAXVAL >> 1)) {
+        tmp += decode_soe_answer(tmp, data.attr, data.min_value);
+    }
+
+    if (serc_elements & (service_provider::sercos_protocol::SSE_MINVAL >> 1)) {
+        tmp += decode_soe_answer(tmp, data.attr, data.max_value);
+    }
+
+    if (serc_elements & (service_provider::sercos_protocol::SSE_DATA >> 1)) {
+        tmp += decode_soe_answer(tmp, data.attr, data.value);
     }
 }
 

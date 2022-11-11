@@ -74,11 +74,8 @@ void slave::canopen::get_object_dictionary_list(
                         "returned errorcode 0x%X!\n", slv->index, ret);
             }
 
-            // buf is allocated by ec_coe_odlist_read
-            if (buf) {
-                list.resize(len/2);
-                memcpy(&list[0], buf, len);
-            }
+            list.resize(len/2);
+            memcpy(&list[0], buf, len);
             break;
         }
     }
@@ -368,8 +365,7 @@ void slave::canopen::read_element(const uint16_t& index, const uint8_t& sub_inde
                         index, sub_index, ret);
             }
 
-            if (buf && buf_len) {
-                // ec_coe_sdo_read call did allocate buffer
+            if (buf_len) {
                 value.resize(buf_len);    
                 memcpy(&value[0], buf, buf_len);
             }

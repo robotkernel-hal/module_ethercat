@@ -740,6 +740,8 @@ void master::tick() {
     }
 }
 
+#include <math.h>
+
 /*! Correct Master clock according to distributed clock. */
 void master::dc_set_clock() {
     double diff_per_cycle = (ec.dc.act_diff / 1E9);
@@ -747,7 +749,7 @@ void master::dc_set_clock() {
     double kp = dc_sync.kp;
     double ki = dc_sync.ki;
 
-    if (abs(diff_per_cycle) < (dc_sync.start_timer / 100.)) {
+    if (fabs(diff_per_cycle) < (dc_sync.start_timer / 100.)) {
         // lower factors
         kp /= 10.;
         ki /= 10.;
