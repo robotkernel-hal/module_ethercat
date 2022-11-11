@@ -19,6 +19,7 @@ along with Robotkernel-GUI.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import print_function
 from __future__ import absolute_import
 
+from builtins import object
 import gi
 gi.require_version('Gtk', '3.0')
 #gi.require_version('GLib', '2.0')
@@ -30,7 +31,7 @@ from .ethercat_sercos_subview import *
 from .ethercat_config_subview import *
 import helpers
 
-class module_ethercat_view():
+class module_ethercat_view(object):
     def __init__(self, parent):
         self.parent = parent
         self.app = parent.app

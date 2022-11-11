@@ -18,6 +18,7 @@ along with Robotkernel-GUI.  If not, see <http://www.gnu.org/licenses/>.
 '''
 from __future__ import print_function
 
+from builtins import map
 import os
 
 import gi
@@ -96,5 +97,5 @@ class ethercat_sercos_subview(helpers.builder_base):
         dev = self.get_selected_device(widget)
         self.treestore_dictionary.clear()
         ids = dev.list_dictionary()
-        map(lambda x: self.treestore_dictionary.insert(None, -1, [x, "", dev]), ids)
+        list(map(lambda x: self.treestore_dictionary.insert(None, -1, [x, "", dev]), ids))
 

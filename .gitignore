@@ -29,3 +29,4 @@
 /compile
 /workspace-release
 /share/ln/module_ethercat.inc.lnc
+*.bak
