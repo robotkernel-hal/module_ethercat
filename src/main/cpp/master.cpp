@@ -763,13 +763,18 @@ void master::dc_set_clock() {
     
     double act_timer = 1. / t_dev->get_rate();
     
-    log(verbose, "old timer %8.3f, kp %7.3f, ki %7.3f, p part %1.12f, i_part %1.12f, i_antiwindup %1.12f\n", 
-            1. / act_timer, kp, ki, (kp * diff_per_cycle), dc_sync.diffsum, diffsum_limit);
+    if (dc_sync.log) {
+        log(verbose, "old timer %8.3f, kp %7.3f, ki %7.3f, p part %1.12f, i_part %1.12f, i_antiwindup %1.12f\n", 
+                1. / act_timer, kp, ki, (kp * diff_per_cycle), dc_sync.diffsum, diffsum_limit);
+    }
 
     // calculate new rate in [s]
     double v_part = (kp * diff_per_cycle) + dc_sync.diffsum;
     
-    log(verbose, "v_part %.10f, v_part_old %.10f, correction %.10f\n", v_part, dc_sync.v_part_old, v_part - dc_sync.v_part_old);
+    if (dc_sync.log) {
+        log(verbose, "v_part %.10f, v_part_old %.10f, correction %.10f\n", v_part, dc_sync.v_part_old, v_part - dc_sync.v_part_old);
+    }
+
     act_timer += (v_part - dc_sync.v_part_old);
     dc_sync.v_part_old = v_part;
 
