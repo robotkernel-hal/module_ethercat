@@ -226,6 +226,7 @@ slave::slave(int index, master *master_dev) :
 {
     master_dev->log(verbose, "default slave index %d created\n", index);
     provider_hash = consumer_hash = 0;
+    disable_mbx_sm_map = false;
 };
 
 //! construction
