@@ -94,6 +94,8 @@ class ethercat_canopen_subview(helpers.builder_base):
     #CALLBACKS
     def on_treeview_devices_cursor_changed(self, widget):
         model, iter = widget.get_selection().get_selected()
+        if iter is None:
+            return False
         dev = model[iter][2] #device_id, device_name, pyobject
         self.canopen_view.show(dev.modname, dev.devname)
 
