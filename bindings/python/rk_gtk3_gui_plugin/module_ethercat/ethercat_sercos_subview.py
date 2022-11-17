@@ -97,5 +97,6 @@ class ethercat_sercos_subview(helpers.builder_base):
         dev = self.get_selected_device(widget)
         self.treestore_dictionary.clear()
         ids = dev.list_dictionary()
+        # FIXME: Replace this with a loop
         list(map(lambda x: self.treestore_dictionary.insert(None, -1, [x, "", dev]), ids))
 
