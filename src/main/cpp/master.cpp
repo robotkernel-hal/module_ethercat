@@ -208,7 +208,9 @@ void master::open() {
 
     ec_opened = true;
         
-    ec_set_state(&ec, EC_STATE_INIT);
+    if (ec_set_state(&ec, EC_STATE_INIT) != EC_STATE_INIT) {
+        throw str_exception("fatal: state switch to init failed!\n");
+    }
 
     ec.threaded_startup = threaded_startup;
 
@@ -492,7 +494,9 @@ int master::set_state(module_state_t state) {
         case boot_2_op:
             // ====> re-/open ethercat device
             STATE_TRANSITION(pre, module_state_init);
-            ec_set_state(&ec, EC_STATE_INIT);
+            if (ec_set_state(&ec, EC_STATE_INIT) != EC_OK) {
+                throw str_exception("setting state to INIT failed!\n");
+            }
             STATE_TRANSITION(post, module_state_init);
 
             ec_close(&ec);
