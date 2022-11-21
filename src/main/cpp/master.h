@@ -113,8 +113,8 @@ class master :
             int offset_compensation_cycles;
             int timer_override;
             
-            int diff_converge_cycles;
-            int diff_converge_cnt;
+            uint64_t diff_converge_cycles;
+            uint64_t diff_converge_cnt;
             bool diff_converged;
 
             double v_part_old;
@@ -188,6 +188,9 @@ class master :
 
         /*! Correct Master clock according to distributed clock. */
         void dc_set_clock();
+
+        void recv_group(int group_index);
+        void recv_dc();
 };
 
 //! module_ethercat::

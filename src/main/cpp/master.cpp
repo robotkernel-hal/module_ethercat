@@ -184,7 +184,8 @@ void master::init() {
     dc_sync.kp                         = get_as<double>(config, "dc_sync_kp", 0.5);
     dc_sync.ki                         = get_as<double>(config, "dc_sync_ki", 1.0);
     dc_sync.timer_override             = get_as<int>(config, "dc_sync_timer_override", -1);
-    dc_sync.diff_converge_cycles       = 10;
+    dc_sync.offset_compensation_cycles = get_as<int>(config, "dc_sync_offset_compensation_cycles", 100);
+    dc_sync.diff_converge_cycles       = get_as<uint64_t>(config, "dc_sync_converge_cycles", 10);
     dc_sync.diff_converge_cnt          = 0;
     dc_sync.diff_converged             = false;
     dc_sync.v_part_old                 = 0.;
@@ -197,6 +198,64 @@ void master::init() {
                 "and \"dc_sync_ki\" in your config file. (Using kp=%7.3f, ki=%7.3f)\n", dc_sync.ki, dc_sync.kp);
 
     pd_cookie = 0;
+}
+
+static void cb_dc(void *arg) {
+    master *m = (master *)arg;
+    m->recv_dc();
+}
+
+void master::recv_dc() {
+//    ec_receive_distributed_clocks_sync(&ec);
+
+    //log(verbose, "received distributed clock sync\n");
+
+    static int dc_set_cnt = 0;
+    if (ec.dc.mode == ec_dc_info::dc_mode_ref_clock) {
+        if ((++dc_set_cnt % dc_sync.offset_compensation_cycles) == 0) {
+            dc_set_clock();
+        }
+    }        
+
+    if (pdin_dc) {
+        pdin_dc->write(dc_provider_hash, 0, (uint8_t *)&ec.dc.dc_time, 
+                (size_t)((uint8_t *)&ec.dc.p_de_dc - (uint8_t *)&ec.dc.dc_time));
+        pdin_dc_trigger->trigger_modules();
+    }
+}
+
+static void cb_group(void *arg, int group) {
+    master *m = (master *)arg;
+
+    m->recv_group(group);
+}
+
+void master::recv_group(int group_index) {
+    int i;
+
+    for (i = 0; i < ec.pd_group_cnt; ++i) {
+        if (ec_group_was_sent(&ec, i) != 0) {
+            auto& g = groups[i];
+
+            if (ec.pd_groups[i].had_timeout == 1) {
+                recv_error_trigger->trigger_modules();
+
+                if (errno == ETIMEDOUT) {
+                    log(warning, "receiving group %d returned timeout!\n");
+                    continue;
+                }
+            }
+        
+            //log(verbose, "received group %d\n", i);
+
+            for (auto it = g->_slaves.begin(); it != g->_slaves.end(); ++it) {
+                int slave = *it;
+                _slave_info[slave]->pdin_handler();
+            }
+
+            g->trigger_modules();
+        }
+    }
 }
 
 void master::open() {
@@ -268,7 +327,14 @@ void master::open() {
 
             ec.slaves[s_nr].assigned_pd_group = g_nr;
         }
+        
+        log(info, "adding group receive callback to group %d\n", g_nr);
+        ec.pd_groups[g_nr].user_cb = cb_group;
+        ec.pd_groups[g_nr].user_cb_arg = (void *)this;
     }
+    ec.dc.user_cb = cb_dc;
+    ec.dc.user_cb_arg = (void *)this;
+
     
     // -----------------------------------------------------------
     // set pdo mapping entries
@@ -534,7 +600,6 @@ int master::set_state(module_state_t state) {
             
                 double rate = t_dev->get_rate() / t_divisor;
                 dc_sync.start_timer = (1.f / rate);
-                dc_sync.diff_converge_cycles = 10;//rate;
             }
 
             if (dc_sync.timer_override > 0) {
@@ -614,6 +679,14 @@ int master::set_state(module_state_t state) {
             ec_set_state(&ec, EC_STATE_SAFEOP);
             STATE_TRANSITION(post, module_state_safeop);
 
+            if (ec.dc.mode == ec_dc_info::dc_mode_ref_clock) {
+                while (!dc_sync.diff_converged) {
+                    double act_timer = 1. / t_dev->get_rate();
+                    log(info, "waiting for DC to converge... act_timer %13.9f, last_diff %13.9f, diffsum %13.9f\n", act_timer, dc_sync.last_diff, dc_sync.diffsum);
+                    osal_sleep(1000000);
+                }
+            }
+
             // process data is now available, create names process data
             for (int nr = 0; nr < ec.slave_cnt; ++nr) {
                 log(verbose, "slave %d: propagation delay %d [ns]\n", 
@@ -671,7 +744,6 @@ int master::set_state(module_state_t state) {
 //! module trigger callback
 void master::tick() {
     int i = 0;
-    bool dc_sent = false;
 
     if (!ec_opened || (ec.tx_sync == 1))
         return;
@@ -685,8 +757,8 @@ void master::tick() {
         }
     }
 
+    ec_send_distributed_clocks_sync(&ec);
     ec_send_process_data(&ec);
-    dc_sent = ec_send_distributed_clocks_sync(&ec) == EC_OK;
 
     if (monitor_state) {
         ec_send_brd_ec_state(&ec); 
@@ -697,6 +769,7 @@ void master::tick() {
     pd_cookie++;
     pd_cond.notify_all();
 
+#if 0
     ec_receive_process_data(&ec);
 
     for (i = 0; i < ec.pd_group_cnt; ++i) {
@@ -742,22 +815,23 @@ void master::tick() {
     if (monitor_state) {
         ec_receive_brd_ec_state(&ec); 
     }
+#endif
 }
 
 #include <math.h>
 
 /*! Correct Master clock according to distributed clock. */
 void master::dc_set_clock() {
-    double diff_per_cycle = (ec.dc.act_diff / 1E9);
+    double diff_per_cycle = (ec.dc.act_diff / 1E9) / dc_sync.offset_compensation_cycles;
 
     double kp = dc_sync.kp;
     double ki = dc_sync.ki;
 
-    if (fabs(diff_per_cycle) < (dc_sync.start_timer / 100.)) {
-        // lower factors
-        kp /= 10.;
-        ki /= 10.;
-    }
+//    if (fabs(diff_per_cycle) < (dc_sync.start_timer / 100.)) {
+//        // lower factors
+//        kp /= 10.;
+//        ki /= 10.;
+//    }
 
     // sum it up for integral part
     dc_sync.diffsum += ki * diff_per_cycle; 
@@ -806,12 +880,12 @@ void master::dc_set_clock() {
 
         if ((diff_per_cycle > margin) || (diff_per_cycle < -1 * margin)) {
             if (!dc_sync.diff_converged) {
-                log(info, "DC diff did not converge until now... (start_timer %10.7f, act_timer %10.7f, margin %10.7f, diff %10.7f\n",
-                        dc_sync.start_timer, act_timer, margin, diff_per_cycle);
+//                log(info, "DC diff did not converge until now... (start_timer %10.7f, act_timer %10.7f, margin %10.7f, diff %10.7f\n",
+//                        dc_sync.start_timer, act_timer, margin, diff_per_cycle);
             }
         } else {
             if (!dc_sync.diff_converged) {
-                log(info, "DC diff converged!\n");
+//                log(info, "DC diff converged!\n");
                 dc_sync.diff_converged = true;
             }
         }
