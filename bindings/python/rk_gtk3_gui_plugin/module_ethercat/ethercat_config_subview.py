@@ -67,6 +67,7 @@ class ethercat_config_subview(helpers.builder_base):
         cfg = yaml.load(module.get_config())
         master_ifname = cfg['config']['ifname']
 
+        self.treestore_devices.clear()
         self.master_node = self.treestore_devices.append(None, ( master_ifname, ))
 
         slaves = cfg['config']['slaves']
