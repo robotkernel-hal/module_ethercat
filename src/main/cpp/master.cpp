@@ -200,7 +200,9 @@ void master::init() {
     pd_cookie = 0;
 }
 
-static void cb_dc(void *arg) {
+static void cb_dc(void *arg, int num) {
+    (void)num;
+
     master *m = (master *)arg;
     m->recv_dc();
 }
@@ -219,7 +221,7 @@ void master::recv_dc() {
 
     if (pdin_dc) {
         pdin_dc->write(dc_provider_hash, 0, (uint8_t *)&ec.dc.dc_time, 
-                (size_t)((uint8_t *)&ec.dc.p_de_dc - (uint8_t *)&ec.dc.dc_time));
+                (size_t)((uint8_t *)&ec.dc.cdg - (uint8_t *)&ec.dc.dc_time));
         pdin_dc_trigger->trigger_modules();
     }
 }
@@ -237,7 +239,7 @@ void master::recv_group(int group_index) {
         if (ec_group_was_sent(&ec, i) != 0) {
             auto& g = groups[i];
 
-            if (ec.pd_groups[i].had_timeout == 1) {
+            if (ec.pd_groups[i].cdg.had_timeout == 1) {
                 recv_error_trigger->trigger_modules();
 
                 if (errno == ETIMEDOUT) {
@@ -329,11 +331,11 @@ void master::open() {
         }
         
         log(info, "adding group receive callback to group %d\n", g_nr);
-        ec.pd_groups[g_nr].user_cb = cb_group;
-        ec.pd_groups[g_nr].user_cb_arg = (void *)this;
+        ec.pd_groups[g_nr].cdg.user_cb = cb_group;
+        ec.pd_groups[g_nr].cdg.user_cb_arg = (void *)this;
     }
-    ec.dc.user_cb = cb_dc;
-    ec.dc.user_cb_arg = (void *)this;
+    ec.dc.cdg.user_cb = cb_dc;
+    ec.dc.cdg.user_cb_arg = (void *)this;
 
     
     // -----------------------------------------------------------
@@ -683,7 +685,7 @@ int master::set_state(module_state_t state) {
                 while (!dc_sync.diff_converged) {
                     double act_timer = 1. / t_dev->get_rate();
                     log(info, "waiting for DC to converge... act_timer %13.9f, last_diff %13.9f, diffsum %13.9f\n", act_timer, dc_sync.last_diff, dc_sync.diffsum);
-                    osal_sleep(1000000);
+                    osal_sleep(dc_sync.offset_compensation_cycles * dc_sync.timer_override);
                 }
             }
 
@@ -714,7 +716,7 @@ int master::set_state(module_state_t state) {
                 "- int64_t: timer_override\n";
 
             pdin_dc = make_shared<robotkernel::triple_buffer>(
-                    (uint8_t *)&ec.dc.p_de_dc - (uint8_t *)&ec.dc.dc_time, 
+                    (uint8_t *)&ec.dc.cdg - (uint8_t *)&ec.dc.dc_time, 
                     name, "dc.inputs", pdo_desc, pdin_dc_trigger->id());
             dc_provider_hash = pdin_dc->set_provider(shared_from_this());
             k.add_device(pdin_dc);
