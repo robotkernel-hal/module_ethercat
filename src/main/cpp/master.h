@@ -111,6 +111,7 @@ class master :
             double kd;
         
             int offset_compensation_cycles;
+            int offset_compensation_cnt;
             int timer_override;
             
             uint64_t diff_converge_cycles;
