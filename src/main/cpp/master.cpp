@@ -185,6 +185,7 @@ void master::init() {
     dc_sync.ki                         = get_as<double>(config, "dc_sync_ki", 1.0);
     dc_sync.timer_override             = get_as<int>(config, "dc_sync_timer_override", -1);
     dc_sync.offset_compensation_cycles = get_as<int>(config, "dc_sync_offset_compensation_cycles", 100);
+    dc_sync.offset_compensation_cnt    = 0;
     dc_sync.diff_converge_cycles       = get_as<uint64_t>(config, "dc_sync_converge_cycles", 10);
     dc_sync.diff_converge_cnt          = 0;
     dc_sync.diff_converged             = false;
@@ -200,6 +201,7 @@ void master::init() {
     pd_cookie = 0;
 }
 
+//! Cyclic distributed clock datagram callback
 static void cb_dc(void *arg, int num) {
     (void)num;
 
@@ -208,13 +210,8 @@ static void cb_dc(void *arg, int num) {
 }
 
 void master::recv_dc() {
-//    ec_receive_distributed_clocks_sync(&ec);
-
-    //log(verbose, "received distributed clock sync\n");
-
-    static int dc_set_cnt = 0;
     if (ec.dc.mode == ec_dc_info::dc_mode_ref_clock) {
-        if ((++dc_set_cnt % dc_sync.offset_compensation_cycles) == 0) {
+        if ((++dc_sync.offset_compensation_cnt % dc_sync.offset_compensation_cycles) == 0) {
             dc_set_clock();
         }
     }        
@@ -233,31 +230,14 @@ static void cb_group(void *arg, int group) {
 }
 
 void master::recv_group(int group_index) {
-    int i;
+    auto& g = groups[group_index];
 
-    for (i = 0; i < ec.pd_group_cnt; ++i) {
-        if (ec_group_was_sent(&ec, i) != 0) {
-            auto& g = groups[i];
-
-            if (ec.pd_groups[i].cdg.had_timeout == 1) {
-                recv_error_trigger->trigger_modules();
-
-                if (errno == ETIMEDOUT) {
-                    log(warning, "receiving group %d returned timeout!\n");
-                    continue;
-                }
-            }
-        
-            //log(verbose, "received group %d\n", i);
-
-            for (auto it = g->_slaves.begin(); it != g->_slaves.end(); ++it) {
-                int slave = *it;
-                _slave_info[slave]->pdin_handler();
-            }
-
-            g->trigger_modules();
-        }
+    for (auto it = g->_slaves.begin(); it != g->_slaves.end(); ++it) {
+        int slave = *it;
+        _slave_info[slave]->pdin_handler();
     }
+
+    g->trigger_modules();
 }
 
 void master::open() {
@@ -315,6 +295,8 @@ void master::open() {
         auto g = it->second;
 
         ec.pd_groups[g_nr].divisor = g->divisor;
+        ec.pd_groups[g_nr].cdg.user_cb = cb_group;
+        ec.pd_groups[g_nr].cdg.user_cb_arg = (void *)this;
 
         for (std::list<int>::iterator it2 = it->second->_slaves.begin();
                 it2 != it->second->_slaves.end(); ++it2) {
@@ -329,14 +311,12 @@ void master::open() {
 
             ec.slaves[s_nr].assigned_pd_group = g_nr;
         }
-        
-        log(info, "adding group receive callback to group %d\n", g_nr);
-        ec.pd_groups[g_nr].cdg.user_cb = cb_group;
-        ec.pd_groups[g_nr].cdg.user_cb_arg = (void *)this;
     }
+    
+    // -----------------------------------------------------------
+    // add callback for cyclic dc datagram
     ec.dc.cdg.user_cb = cb_dc;
     ec.dc.cdg.user_cb_arg = (void *)this;
-
     
     // -----------------------------------------------------------
     // set pdo mapping entries
