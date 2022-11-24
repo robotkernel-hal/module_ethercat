@@ -52,12 +52,15 @@ class module_ethercat_view(object):
 
     def show(self, modname, module):
         logger.info('ethercat_view SHOWING {!r} {!r}'.format(modname, module))
+        # note for debugging: *none* of the show commands below
+        # are needed to uoncover the view of the EtherCAT module config file
         self.canopen_view.main.show()
         self.sercos_view.main.show()
         self.config_view.main.show()
         self.canopen_view.fill_device_treeview(module)
         self.config_view.show_mod(module)
         #self.sercos_view.fill_device_treeview(module)
+        # the line above was changed by burger_r in 1eddffb472
 
     def hide(self):
         self.canopen_view.main.hide()
