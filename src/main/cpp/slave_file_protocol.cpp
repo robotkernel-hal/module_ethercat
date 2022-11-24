@@ -46,7 +46,7 @@ void slave::file_protocol::file_read(
 
     // file name truncation
     char file_name[MAX_FILE_NAME_SIZE];
-    strncpy(file_name, info.file_name.c_str(), MAX_FILE_NAME_SIZE);
+    strncpy(file_name, info.file_name.c_str(), MAX_FILE_NAME_SIZE-1);
 
     // others
     uint32_t password = 0;
@@ -85,7 +85,7 @@ void slave::file_protocol::file_write(
 
     // file name truncation
     char file_name[MAX_FILE_NAME_SIZE];
-    strncpy(file_name, info.file_name.c_str(), MAX_FILE_NAME_SIZE);
+    strncpy(file_name, info.file_name.c_str(), MAX_FILE_NAME_SIZE-1);
 
     // others
     uint32_t password = 0;
