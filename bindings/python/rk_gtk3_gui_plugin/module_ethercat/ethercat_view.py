@@ -31,6 +31,10 @@ from .ethercat_sercos_subview import *
 from .ethercat_config_subview import *
 import helpers
 
+import logging
+logger = logging.getLogger()
+
+
 class module_ethercat_view(object):
     def __init__(self, parent):
         self.parent = parent
@@ -47,7 +51,7 @@ class module_ethercat_view(object):
         self.hide()
 
     def show(self, modname, module):
-        print('ethercat_view SHOWING ', repr(modname), repr(module))
+        logger.info('ethercat_view SHOWING {!r} {!r}'.format(modname, module))
         self.canopen_view.main.show()
         self.sercos_view.main.show()
         self.config_view.main.show()

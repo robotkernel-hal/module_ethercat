@@ -20,6 +20,7 @@ from __future__ import print_function
 
 import os
 import helpers
+import warnings
 
 import gi
 gi.require_version('Gtk', '3.0')
@@ -86,7 +87,10 @@ class ethercat_canopen_subview(helpers.builder_base):
 
             number = int(s.split('_')[-1])
 
-            for t in ['mailbox', 'eeprom']:
+            warnings.warn("disabling mailbox endpoint to suppress warnings")
+#            temporarily disabled: mailbox field, not implemented            
+#            for t in ['mailbox', 'eeprom']:
+            for t in ['eeprom']:
                 devname = '.'.join([s, t])
                 sort_key = '%s %d' % (t, number)
                 GObject.timeout_add(10, add, module.robotkernel_name, sort_key, devname)
