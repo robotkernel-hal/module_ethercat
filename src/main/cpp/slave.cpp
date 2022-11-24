@@ -290,6 +290,8 @@ slave::slave(int index, const YAML::Node& node, master *master_dev) :
 
     prefer_obj_names = false;
 
+    skip_pdo_description = get_as<bool>(node, "skip_pdo_description", false);
+
     if (node["mapping"]) {
         const YAML::Node& mapping_node = node["mapping"];
         string type = get_as<string>(mapping_node, "type");
@@ -989,7 +991,7 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
 
                 string pdo_desc = "";
                     
-                if (mbx_coe) {
+                if (mbx_coe && !skip_pdo_description) {
                     try {
                         pdo_desc = mbx_coe->get_pdo_description(0x1C13);
                     } catch (std::exception& e) {
@@ -1017,7 +1019,7 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
 
                 string pdo_desc = "";
                 
-                if (mbx_coe) {
+                if (mbx_coe && !skip_pdo_description) {
                     try {
                         pdo_desc = mbx_coe->get_pdo_description(0x1C12);
                     } catch (std::exception& e) {

@@ -319,6 +319,7 @@ class slave :
         mapping_t output_mapping;   //! process data output mapping values
         bool disable_mbx_sm_map;
         bool prefer_obj_names;
+        bool skip_pdo_description;
 
         //! slave distributed clocks
         struct slave_dc {
