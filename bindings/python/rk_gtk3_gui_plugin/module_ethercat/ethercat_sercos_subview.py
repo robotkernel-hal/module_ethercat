@@ -29,7 +29,7 @@ from gi.repository import GObject
 
 import helpers
 
-from service_provider_sercos_protocol import sercos_view
+from service_provider_sercos_protocol import sercos_id_view
 from service_provider_sercos_protocol import sercos_device
 
 class ethercat_sercos_subview(helpers.builder_base):
@@ -48,7 +48,7 @@ class ethercat_sercos_subview(helpers.builder_base):
         self.treeview_devices.connect("cursor-changed", self.on_treeview_devices_cursor_changed)
 
         hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
-        self.sercos_view = sercos_view(self.parent, hbox)
+        self.sercos_view = sercos_id_view(self.parent, hbox)
         self.values.add_with_viewport(hbox)
         self.values.get_child().set_shadow_type(Gtk.ShadowType.NONE)
 
