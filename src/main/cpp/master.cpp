@@ -462,14 +462,6 @@ int master::set_state(module_state_t state) {
         case op_2_init:
         case op_2_boot:
             // ====> stop sending commands
-            if (
-                    (state == module_state_preop) ||
-                    (state == module_state_init)  ||
-                    (state == module_state_boot)) {
-                // trigger is already deregistered by robotkernel
-                ec.tx_sync = 1;
-            }
-
             STATE_TRANSITION(pre, module_state_safeop);
             ec_set_state(&ec, EC_STATE_SAFEOP);
             STATE_TRANSITION(post, module_state_safeop);
@@ -481,7 +473,6 @@ int master::set_state(module_state_t state) {
         case safeop_2_boot:
             // ====> stop receiving measurements
             dccs->stop();
-            ec.tx_sync = 1;
 
             if (pdin_dc) {
                 k.remove_device(pdin_dc);
@@ -641,7 +632,6 @@ int master::set_state(module_state_t state) {
             k.add_device(recv_error_trigger);
 
             // start cyclic operation via trigger
-            ec.tx_sync = 0;
             dccs->start();
 
             // add group trigger devices
@@ -727,8 +717,7 @@ int master::set_state(module_state_t state) {
 void master::tick() {
     int i = 0;
 
-    if (!ec_opened || (ec.tx_sync == 1))
-        return;
+    if (!ec_opened) { return; }
 
     for (i = 0; i < ec.pd_group_cnt; ++i) {
         auto& g = groups[i];
