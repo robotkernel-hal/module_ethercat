@@ -103,12 +103,15 @@ class master :
             bool first_run;
             double last_diff;
             double diffsum;
+            double p_part;
 
             double start_timer;
 
             double kp;
             double ki;
             double kd;
+            double i_limit;
+            double slew_rate;
         
             int offset_compensation_cycles;
             int offset_compensation_cnt;
@@ -120,6 +123,9 @@ class master :
 
             double v_part_old;
         } dc_sync;
+
+        robotkernel::sp_process_data_t pd_dc_sync;
+        robotkernel::sp_trigger_t      trigger_dc_sync;
 
         struct {
             bool configure_tun;

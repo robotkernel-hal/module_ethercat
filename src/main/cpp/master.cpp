@@ -183,6 +183,8 @@ void master::init() {
     dc_sync.diffsum                    = 0.;
     dc_sync.kp                         = get_as<double>(config, "dc_sync_kp", 0.5);
     dc_sync.ki                         = get_as<double>(config, "dc_sync_ki", 1.0);
+    dc_sync.i_limit                    = get_as<double>(config, "dc_sync_i_limit", 0.00000001);
+    dc_sync.slew_rate                  = get_as<double>(config, "dc_sync_slew_rate", 0.0000001);
     dc_sync.timer_override             = get_as<int>(config, "dc_sync_timer_override", -1);
     dc_sync.offset_compensation_cycles = get_as<int>(config, "dc_sync_offset_compensation_cycles", 100);
     dc_sync.offset_compensation_cnt    = 0;
@@ -212,6 +214,7 @@ static void cb_dc(void *arg, int num) {
 void master::recv_dc() {
     if (ec.dc.mode == ec_dc_info::dc_mode_ref_clock) {
         if ((++dc_sync.offset_compensation_cnt % dc_sync.offset_compensation_cycles) == 0) {
+            dc_sync.offset_compensation_cnt = 0;
             dc_set_clock();
         }
     }        
@@ -317,6 +320,8 @@ void master::open() {
     // add callback for cyclic dc datagram
     ec.dc.cdg.user_cb = cb_dc;
     ec.dc.cdg.user_cb_arg = (void *)this;
+    ec.dc.control.kp = dc_sync.kp;
+    ec.dc.control.ki = dc_sync.ki;
     
     // -----------------------------------------------------------
     // set pdo mapping entries
@@ -482,6 +487,11 @@ int master::set_state(module_state_t state) {
             // ====> stop receiving measurements
             dccs->stop();
             ec.tx_sync = 1;
+            
+            k.remove_device(trigger_dc_sync);
+            trigger_dc_sync = nullptr;
+            k.remove_device(pd_dc_sync);
+            pd_dc_sync = nullptr;
 
             if (pdin_dc) {
                 k.remove_device(pdin_dc);
@@ -701,6 +711,34 @@ int master::set_state(module_state_t state) {
             dc_provider_hash = pdin_dc->set_provider(shared_from_this());
             k.add_device(pdin_dc);
             
+            string pd_dc_sync_desc = 
+                "- uint32_t: first_run\n"
+                "- uint32_t: padding_0\n"
+                "- double: last_diff\n"
+                "- double: i_part\n"
+                "- double: p_part\n"
+                "- double: start_timer\n"
+                "- double: kp\n"
+                "- double: ki\n"
+                "- double: kd\n"
+                "- double: i_limit\n"
+                "- double: slew_rate\n"
+                "- int32_t: offset_compensation_cycles\n"
+                "- int32_t: offset_compensation_cnt\n"
+                "- int32_t: timer_override\n"
+                "- uint32_t: padding_1\n"
+                "- uint64_t: diff_converge_cycles\n"
+                "- uint64_t: diff_converge_cnt\n"
+                "- uint32_t: diff_converged\n"
+                "- uint32_t: padding_2\n"
+                "- double: v_part_old\n";
+
+            trigger_dc_sync = make_shared<robotkernel::trigger>(name, "dc_sync_ctrl.inputs");
+            k.add_device(trigger_dc_sync);
+            pd_dc_sync = make_shared<robotkernel::pointer_buffer>(sizeof(dc_sync) - (size_t)((uint8_t *)&dc_sync.first_run - (uint8_t *)&dc_sync), (uint8_t *)&dc_sync.first_run, 
+                    name, "dc_sync_ctrl.inputs", pd_dc_sync_desc, trigger_dc_sync->id());
+            k.add_device(pd_dc_sync);
+
             if (state == module_state_safeop)
                 break;
         }
@@ -804,10 +842,13 @@ void master::tick() {
 
 /*! Correct Master clock according to distributed clock. */
 void master::dc_set_clock() {
+#if 0
     double diff_per_cycle = (ec.dc.act_diff / 1E9) / dc_sync.offset_compensation_cycles;
 
     double kp = dc_sync.kp;
     double ki = dc_sync.ki;
+    double slew_rate = dc_sync.slew_rate;
+    double i_limit = dc_sync.i_limit;
 
 //    if (fabs(diff_per_cycle) < (dc_sync.start_timer / 100.)) {
 //        // lower factors
@@ -817,29 +858,31 @@ void master::dc_set_clock() {
 
     // sum it up for integral part
     dc_sync.diffsum += ki * diff_per_cycle; 
-
+    
     // limit diffsum
-    double diffsum_limit = dc_sync.start_timer;
-    if (dc_sync.diffsum > diffsum_limit) { dc_sync.diffsum = diffsum_limit; }
-    else if (dc_sync.diffsum < (-1 * diffsum_limit)) { dc_sync.diffsum = -1 * diffsum_limit; }
+    if (dc_sync.diffsum > i_limit) { dc_sync.diffsum = i_limit; }
+    else if (dc_sync.diffsum < (-1 * i_limit)) { dc_sync.diffsum = -1 * i_limit; }
     
     double act_timer = 1. / t_dev->get_rate();
     
     if (dc_sync.log) {
         log(verbose, "old timer %8.3f, kp %7.3f, ki %7.3f, p part %1.12f, i_part %1.12f, i_antiwindup %1.12f\n", 
-                1. / act_timer, kp, ki, (kp * diff_per_cycle), dc_sync.diffsum, diffsum_limit);
+                1. / act_timer, kp, ki, (kp * diff_per_cycle), dc_sync.diffsum, dc_sync.i_limit);
     }
 
+    dc_sync.p_part = kp * diff_per_cycle;
     // calculate new rate in [s]
-    double v_part = (kp * diff_per_cycle) + dc_sync.diffsum;
+    double v_part = dc_sync.p_part + dc_sync.diffsum;
+    double change = (v_part - dc_sync.v_part_old);
+    if (change > slew_rate) { change = slew_rate; v_part = slew_rate + dc_sync.v_part_old; }
+    else if (change < (-1 * slew_rate)) { change = -1 * slew_rate; v_part = -1 * slew_rate + dc_sync.v_part_old; }
+    act_timer += change;
+    dc_sync.v_part_old = v_part;
     
     if (dc_sync.log) {
-        log(verbose, "v_part %.10f, v_part_old %.10f, correction %.10f\n", v_part, dc_sync.v_part_old, v_part - dc_sync.v_part_old);
+        log(verbose, "v_part %.10f, v_part_old %.10f, correction %.10f, change %.10f\n", v_part, dc_sync.v_part_old, v_part - dc_sync.v_part_old, change);
+        log(verbose, "new timer %8.3f\n", 1. / act_timer);
     }
-
-    act_timer += (v_part - dc_sync.v_part_old);
-    dc_sync.v_part_old = v_part;
-
     try {
         rate = 1.f / act_timer;
         t_dev->set_rate(rate);
@@ -858,6 +901,8 @@ void master::dc_set_clock() {
     // check if diff converged
     if (    dc_sync.diff_converge_cycles && 
             ((++dc_sync.diff_converge_cnt % dc_sync.diff_converge_cycles) == 0)) {
+        dc_sync.diff_converge_cnt = 0;
+
         double margin = dc_sync.start_timer / 100.;
 
         if ((diff_per_cycle > margin) || (diff_per_cycle < -1 * margin)) {
@@ -871,6 +916,47 @@ void master::dc_set_clock() {
                 dc_sync.diff_converged = true;
             }
         }
+    }
+#endif
+    try {
+        int64_t rate_in_ns = (1. / t_dev->get_rate()) * 1E9;
+        rate_in_ns += ec.dc.timer_correction / dc_sync.offset_compensation_cycles;
+        rate = 1./((double)rate_in_ns / 1E9);
+        t_dev->set_rate(rate);
+
+        log(info, "setting new clock rate to %8.3f [Hz], correction %+8.3f, rtc %ld, dc %ld, act_diff %ld\n", rate, ec.dc.timer_correction, ec.dc.rtc_time, ec.dc.dc_time, ec.dc.act_diff);
+        if (dc_sync.log) {
+            log(verbose, "setting new clock rate to %8.3f [Hz]\n", rate);
+        }
+    } catch (exception& e) {
+        log(warning, "setting new clock failed: %s\n", e.what());
+    }
+
+    dc_sync.first_run = false;
+    //dc_sync.last_diff = diff_per_cycle;
+    
+    // check if diff converged
+    if (    dc_sync.diff_converge_cycles && 
+            ((++dc_sync.diff_converge_cnt % dc_sync.diff_converge_cycles) == 0)) {
+        dc_sync.diff_converge_cnt = 0;
+
+        double margin = 1. / (dc_sync.start_timer / 100.);
+
+        if ((ec.dc.timer_correction > margin) || (ec.dc.timer_correction < -1 * margin)) {
+            if (!dc_sync.diff_converged) {
+//                log(info, "DC diff did not converge until now... (start_timer %10.7f, act_timer %10.7f, margin %10.7f, diff %10.7f\n",
+//                        dc_sync.start_timer, act_timer, margin, diff_per_cycle);
+            }
+        } else {
+            if (!dc_sync.diff_converged) {
+//                log(info, "DC diff converged!\n");
+                dc_sync.diff_converged = true;
+            }
+        }
+    }
+
+    if (trigger_dc_sync) {
+        trigger_dc_sync->trigger_modules();
     }
 }
 
