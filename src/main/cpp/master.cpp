@@ -22,6 +22,8 @@
  * along with robotkernel.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <math.h>
+
 #include "master.h"
 #include <robotkernel/rt_helper.h>
 
@@ -739,57 +741,7 @@ void master::tick() {
 
     pd_cookie++;
     pd_cond.notify_all();
-
-#if 0
-    ec_receive_process_data(&ec);
-
-    for (i = 0; i < ec.pd_group_cnt; ++i) {
-        if (ec_group_was_sent(&ec, i) != 0) {
-            auto& g = groups[i];
-
-            if (ec.pd_groups[i].had_timeout == 1) {
-                recv_error_trigger->trigger_modules();
-
-                if (errno == ETIMEDOUT) {
-                    log(warning, "receiving group %d returned timeout!\n");
-                    continue;
-                }
-            }
-        
-            //log(verbose, "received group %d\n", i);
-
-            for (auto it = g->_slaves.begin(); it != g->_slaves.end(); ++it) {
-                int slave = *it;
-                _slave_info[slave]->pdin_handler();
-            }
-
-            g->trigger_modules();
-        }
-    }
-
-    if (dc_sent) {
-        ec_receive_distributed_clocks_sync(&ec);
-
-        //log(verbose, "received distributed clock sync\n");
-
-        if (ec.dc.mode == ec_dc_info::dc_mode_ref_clock) {
-            dc_set_clock();
-        }        
-
-        if (pdin_dc) {
-            pdin_dc->write(dc_provider_hash, 0, (uint8_t *)&ec.dc.dc_time, 
-                    (size_t)((uint8_t *)&ec.dc.p_de_dc - (uint8_t *)&ec.dc.dc_time));
-            pdin_dc_trigger->trigger_modules();
-        }
-    }
-    
-    if (monitor_state) {
-        ec_receive_brd_ec_state(&ec); 
-    }
-#endif
 }
-
-#include <math.h>
 
 /*! Correct Master clock according to distributed clock. */
 void master::dc_set_clock() {
