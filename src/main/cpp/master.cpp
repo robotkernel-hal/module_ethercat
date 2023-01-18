@@ -212,7 +212,7 @@ static void cb_dc(void *arg, int num) {
 }
 
 void master::recv_dc() {
-    if (ec.dc.mode == ec_dc_info::dc_mode_ref_clock) {
+    if (ec.dc.mode == dc_mode_ref_clock) {
         if ((++dc_sync.offset_compensation_cnt % dc_sync.offset_compensation_cycles) == 0) {
             dc_set_clock();
         }
@@ -557,8 +557,8 @@ int master::set_state(module_state_t state) {
             }
 
             ec.dc.mode = dc_sync.mode_string == "ref_clock" ? 
-                ec_dc_info::dc_mode_ref_clock : dc_sync.mode_string == "master_as_ref_clock" ?
-                ec_dc_info::dc_mode_master_as_ref_clock : ec_dc_info::dc_mode_master_clock;
+                dc_mode_ref_clock : dc_sync.mode_string == "master_as_ref_clock" ?
+                dc_mode_master_as_ref_clock : dc_mode_master_clock;
             
             STATE_TRANSITION(pre, module_state_preop);
             ec_set_state(&ec, EC_STATE_PREOP);
@@ -653,7 +653,7 @@ int master::set_state(module_state_t state) {
             ec_set_state(&ec, EC_STATE_SAFEOP);
             STATE_TRANSITION(post, module_state_safeop);
 
-            if (ec.dc.mode == ec_dc_info::dc_mode_ref_clock) {
+            if (ec.dc.mode == dc_mode_ref_clock) {
                 while (!dc_sync.diff_converged) {
                     double act_timer = 1. / t_dev->get_rate();
                     log(info, "waiting for DC to converge... act_timer %13.9f, last_diff %13.9f, diffsum %13.9f\n", act_timer, dc_sync.last_diff, dc_sync.diffsum);
