@@ -28,8 +28,6 @@ using namespace robotkernel;
 using namespace string_util;
 using namespace module_ethercat;
 
-#define COE_DATA_MAXLEN     512
-
 slave::canopen::canopen(std::shared_ptr<slave> slv, const request_type& type) :
     service_provider::canopen_protocol::base(slv->master_dev->name, format_string(
                 "slave_%d.%s", slv->index, type == request_type_eeprom ? "eeprom" : "mailbox")), 

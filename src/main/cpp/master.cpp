@@ -96,7 +96,8 @@ void dc_clock_setter::run() {
  * \param node yaml intialization node
  */
 master::master(const std::string& name, const YAML::Node& node) :
-    pd_provider(name), module_base("module_ethercat", name, node)
+    pd_provider(name), module_base("module_ethercat", name, node),
+    service_provider::canopen_protocol::base(name, "master.mailbox")
 {
     config = YAML::Clone(node);
     elp.ll = ll;
@@ -510,6 +511,8 @@ int master::set_state(module_state_t state) {
 
             t_dev = nullptr;
 
+            k.remove_device(static_pointer_cast<service_provider::canopen_protocol::base>(shared_from_this()));
+
             ec_close(&ec);
             ec_opened = false;
         case init_2_init:
@@ -555,6 +558,8 @@ int master::set_state(module_state_t state) {
                 state = module_state_init;
                 return state;
             }
+            
+            k.add_device(static_pointer_cast<service_provider::canopen_protocol::base>(shared_from_this()));
 
             ec.dc.mode = dc_sync.mode_string == "ref_clock" ? 
                 dc_mode_ref_clock : dc_sync.mode_string == "master_as_ref_clock" ?
