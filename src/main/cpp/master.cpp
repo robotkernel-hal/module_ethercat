@@ -221,7 +221,7 @@ void master::recv_dc() {
 
     if (pdin_dc) {
         pdin_dc->write(dc_provider_hash, 0, (uint8_t *)&ec.dc.dc_time, 
-                (size_t)((uint8_t *)&ec.dc.cdg - (uint8_t *)&ec.dc.dc_time));
+                (size_t)((uint8_t *)&ec.dc.sent_time_nsec - (uint8_t *)&ec.dc.dc_time));
         pdin_dc_trigger->trigger_modules();
     }
 }
@@ -690,10 +690,11 @@ int master::set_state(module_state_t state) {
                 "- uint64_t: rtc_time\n"
                 "- int64_t: rtc_sto\n"
                 "- int64_t: act_diff\n"
-                "- int64_t: timer_override\n";
+                "- int64_t: timer_override\n"
+                "- uint64_t: packet_duration\n";
 
             pdin_dc = make_shared<robotkernel::triple_buffer>(
-                    (uint8_t *)&ec.dc.cdg - (uint8_t *)&ec.dc.dc_time, 
+                    (uint8_t *)&ec.dc.sent_time_nsec - (uint8_t *)&ec.dc.dc_time,
                     name, "dc.inputs", pdo_desc, pdin_dc_trigger->id());
             dc_provider_hash = pdin_dc->set_provider(shared_from_this());
             k.add_device(pdin_dc);
