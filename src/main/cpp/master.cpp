@@ -215,11 +215,30 @@ static void cb_dc(void *arg, int num) {
 }
 
 void master::recv_dc() {
+    static double timer_correction = 0;
+
     if (ec.dc.mode == dc_mode_ref_clock) {
+        timer_correction += ec.dc.timer_correction;
+
         if ((++dc_sync.offset_compensation_cnt % dc_sync.offset_compensation_cycles) == 0) {
             dc_sync.offset_compensation_cnt = 0;
-            dc_set_clock();
-        }
+    //        dc_set_clock();
+            try {
+                int64_t rate_in_ns = dc_sync.start_timer * 1E9; //(1. / t_dev->get_rate()) * 1E9;
+                rate_in_ns += timer_correction / dc_sync.offset_compensation_cycles;
+                rate = 1./((double)rate_in_ns / 1E9);
+                t_dev->set_rate(rate);
+
+                log(info, "setting new clock rate to %8.3f [Hz], correction %+8.3f, rtc %ld, dc %ld, act_diff %ld\n", rate, timer_correction, ec.dc.rtc_time, ec.dc.dc_time, ec.dc.act_diff);
+                if (dc_sync.log) {
+                    log(verbose, "setting new clock rate to %8.3f [Hz]\n", rate);
+                }
+            } catch (exception& e) {
+                log(warning, "setting new clock failed: %s\n", e.what());
+            }
+
+            timer_correction = 0;
+        } 
     }        
 
     if (pdin_dc) {
@@ -781,7 +800,9 @@ void master::tick() {
         ec_send_brd_ec_state(&ec); 
     }
 
-    hw_tx(&ec.hw);
+    if (hw_tx(&ec.hw) != EC_OK) {
+        throw str_exception("error sending EtherCAT frames!\n");
+    }
 
     pd_cookie++;
     pd_cond.notify_all();
@@ -866,7 +887,7 @@ void master::dc_set_clock() {
     }
 #endif
     try {
-        int64_t rate_in_ns = (1. / t_dev->get_rate()) * 1E9;
+        int64_t rate_in_ns = dc_sync.start_timer * 1E9; //(1. / t_dev->get_rate()) * 1E9;
         rate_in_ns += ec.dc.timer_correction / dc_sync.offset_compensation_cycles;
         rate = 1./((double)rate_in_ns / 1E9);
         t_dev->set_rate(rate);
