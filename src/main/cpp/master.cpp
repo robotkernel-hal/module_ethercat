@@ -22,6 +22,8 @@
  * along with robotkernel.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <math.h>
+
 #include "master.h"
 #include <robotkernel/rt_helper.h>
 
@@ -94,7 +96,8 @@ void dc_clock_setter::run() {
  * \param node yaml intialization node
  */
 master::master(const std::string& name, const YAML::Node& node) :
-    pd_provider(name), module_base("module_ethercat", name, node)
+    pd_provider(name), module_base("module_ethercat", name, node),
+    service_provider::canopen_protocol::base(name, "master.mailbox")
 {
     config = YAML::Clone(node);
     elp.ll = ll;
@@ -212,7 +215,7 @@ static void cb_dc(void *arg, int num) {
 }
 
 void master::recv_dc() {
-    if (ec.dc.mode == ec_dc_info::dc_mode_ref_clock) {
+    if (ec.dc.mode == dc_mode_ref_clock) {
         if ((++dc_sync.offset_compensation_cnt % dc_sync.offset_compensation_cycles) == 0) {
             dc_sync.offset_compensation_cnt = 0;
             dc_set_clock();
@@ -221,7 +224,7 @@ void master::recv_dc() {
 
     if (pdin_dc) {
         pdin_dc->write(dc_provider_hash, 0, (uint8_t *)&ec.dc.dc_time, 
-                (size_t)((uint8_t *)&ec.dc.cdg - (uint8_t *)&ec.dc.dc_time));
+                (size_t)((uint8_t *)&ec.dc.sent_time_nsec - (uint8_t *)&ec.dc.dc_time));
         pdin_dc_trigger->trigger_modules();
     }
 }
@@ -467,14 +470,6 @@ int master::set_state(module_state_t state) {
         case op_2_init:
         case op_2_boot:
             // ====> stop sending commands
-            if (
-                    (state == module_state_preop) ||
-                    (state == module_state_init)  ||
-                    (state == module_state_boot)) {
-                // trigger is already deregistered by robotkernel
-                ec.tx_sync = 1;
-            }
-
             STATE_TRANSITION(pre, module_state_safeop);
             ec_set_state(&ec, EC_STATE_SAFEOP);
             STATE_TRANSITION(post, module_state_safeop);
@@ -486,7 +481,6 @@ int master::set_state(module_state_t state) {
         case safeop_2_boot:
             // ====> stop receiving measurements
             dccs->stop();
-            ec.tx_sync = 1;
             
             k.remove_device(trigger_dc_sync);
             trigger_dc_sync = nullptr;
@@ -526,6 +520,8 @@ int master::set_state(module_state_t state) {
             STATE_TRANSITION(post, module_state_init);
 
             t_dev = nullptr;
+
+            k.remove_device(static_pointer_cast<service_provider::canopen_protocol::base>(shared_from_this()));
 
             ec_close(&ec);
             ec_opened = false;
@@ -572,10 +568,12 @@ int master::set_state(module_state_t state) {
                 state = module_state_init;
                 return state;
             }
+            
+            k.add_device(static_pointer_cast<service_provider::canopen_protocol::base>(shared_from_this()));
 
             ec.dc.mode = dc_sync.mode_string == "ref_clock" ? 
-                ec_dc_info::dc_mode_ref_clock : dc_sync.mode_string == "master_as_ref_clock" ?
-                ec_dc_info::dc_mode_master_as_ref_clock : ec_dc_info::dc_mode_master_clock;
+                dc_mode_ref_clock : dc_sync.mode_string == "master_as_ref_clock" ?
+                dc_mode_master_as_ref_clock : dc_mode_master_clock;
             
             STATE_TRANSITION(pre, module_state_preop);
             ec_set_state(&ec, EC_STATE_PREOP);
@@ -651,7 +649,6 @@ int master::set_state(module_state_t state) {
             k.add_device(recv_error_trigger);
 
             // start cyclic operation via trigger
-            ec.tx_sync = 0;
             dccs->start();
 
             // add group trigger devices
@@ -671,7 +668,7 @@ int master::set_state(module_state_t state) {
             ec_set_state(&ec, EC_STATE_SAFEOP);
             STATE_TRANSITION(post, module_state_safeop);
 
-            if (ec.dc.mode == ec_dc_info::dc_mode_ref_clock) {
+            if (ec.dc.mode == dc_mode_ref_clock) {
                 while (!dc_sync.diff_converged) {
                     double act_timer = 1. / t_dev->get_rate();
                     log(info, "waiting for DC to converge... act_timer %13.9f, last_diff %13.9f, diffsum %13.9f\n", act_timer, dc_sync.last_diff, dc_sync.diffsum);
@@ -703,10 +700,11 @@ int master::set_state(module_state_t state) {
                 "- uint64_t: rtc_time\n"
                 "- int64_t: rtc_sto\n"
                 "- int64_t: act_diff\n"
-                "- int64_t: timer_override\n";
+                "- int64_t: timer_override\n"
+                "- uint64_t: packet_duration\n";
 
             pdin_dc = make_shared<robotkernel::triple_buffer>(
-                    (uint8_t *)&ec.dc.cdg - (uint8_t *)&ec.dc.dc_time, 
+                    (uint8_t *)&ec.dc.sent_time_nsec - (uint8_t *)&ec.dc.dc_time,
                     name, "dc.inputs", pdo_desc, pdin_dc_trigger->id());
             dc_provider_hash = pdin_dc->set_provider(shared_from_this());
             k.add_device(pdin_dc);
@@ -765,8 +763,7 @@ int master::set_state(module_state_t state) {
 void master::tick() {
     int i = 0;
 
-    if (!ec_opened || (ec.tx_sync == 1))
-        return;
+    if (!ec_opened) { return; }
 
     for (i = 0; i < ec.pd_group_cnt; ++i) {
         auto& g = groups[i];
@@ -788,57 +785,7 @@ void master::tick() {
 
     pd_cookie++;
     pd_cond.notify_all();
-
-#if 0
-    ec_receive_process_data(&ec);
-
-    for (i = 0; i < ec.pd_group_cnt; ++i) {
-        if (ec_group_was_sent(&ec, i) != 0) {
-            auto& g = groups[i];
-
-            if (ec.pd_groups[i].had_timeout == 1) {
-                recv_error_trigger->trigger_modules();
-
-                if (errno == ETIMEDOUT) {
-                    log(warning, "receiving group %d returned timeout!\n");
-                    continue;
-                }
-            }
-        
-            //log(verbose, "received group %d\n", i);
-
-            for (auto it = g->_slaves.begin(); it != g->_slaves.end(); ++it) {
-                int slave = *it;
-                _slave_info[slave]->pdin_handler();
-            }
-
-            g->trigger_modules();
-        }
-    }
-
-    if (dc_sent) {
-        ec_receive_distributed_clocks_sync(&ec);
-
-        //log(verbose, "received distributed clock sync\n");
-
-        if (ec.dc.mode == ec_dc_info::dc_mode_ref_clock) {
-            dc_set_clock();
-        }        
-
-        if (pdin_dc) {
-            pdin_dc->write(dc_provider_hash, 0, (uint8_t *)&ec.dc.dc_time, 
-                    (size_t)((uint8_t *)&ec.dc.p_de_dc - (uint8_t *)&ec.dc.dc_time));
-            pdin_dc_trigger->trigger_modules();
-        }
-    }
-    
-    if (monitor_state) {
-        ec_receive_brd_ec_state(&ec); 
-    }
-#endif
 }
-
-#include <math.h>
 
 /*! Correct Master clock according to distributed clock. */
 void master::dc_set_clock() {
