@@ -239,7 +239,27 @@ void master::recv_dc() {
 
             timer_correction = 0;
         } 
+        
+        // check if diff converged
+        if (    dc_sync.diff_converge_cycles && 
+                ((++dc_sync.diff_converge_cnt % dc_sync.diff_converge_cycles) == 0)) {
+            dc_sync.diff_converge_cnt = 0;
+
+            double margin = 1. / (dc_sync.start_timer / 100.);
+
+            if ((ec.dc.timer_correction > margin) || (ec.dc.timer_correction < -1 * margin)) {
+            } else {
+                if (!dc_sync.diff_converged) {
+                    dc_sync.diff_converged = true;
+                }
+            }
+        }
+
     }        
+    
+    if (trigger_dc_sync) {
+        trigger_dc_sync->trigger_modules();
+    }
 
     if (pdin_dc) {
         pdin_dc->write(dc_provider_hash, 0, (uint8_t *)&ec.dc.dc_time, 
