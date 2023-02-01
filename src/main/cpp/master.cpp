@@ -185,11 +185,11 @@ void master::init() {
     dc_sync.last_diff                  = 0.;
     dc_sync.diffsum                    = 0.;
     dc_sync.kp                         = get_as<double>(config, "dc_sync_kp", 0.5);
-    dc_sync.ki                         = get_as<double>(config, "dc_sync_ki", 1.0);
+    dc_sync.ki                         = get_as<double>(config, "dc_sync_ki", 0.0025);
     dc_sync.i_limit                    = get_as<double>(config, "dc_sync_i_limit", 0.00000001);
     dc_sync.slew_rate                  = get_as<double>(config, "dc_sync_slew_rate", 0.0000001);
     dc_sync.timer_override             = get_as<int>(config, "dc_sync_timer_override", -1);
-    dc_sync.offset_compensation_cycles = get_as<int>(config, "dc_sync_offset_compensation_cycles", 100);
+    dc_sync.offset_compensation_cycles = get_as<int>(config, "dc_sync_offset_compensation_cycles", 10);
     dc_sync.offset_compensation_cnt    = 0;
     dc_sync.diff_converge_cycles       = get_as<uint64_t>(config, "dc_sync_converge_cycles", 10);
     dc_sync.diff_converge_cnt          = 0;
@@ -229,9 +229,12 @@ void master::recv_dc() {
                 rate = 1./((double)rate_in_ns / 1E9);
                 t_dev->set_rate(rate);
 
-                log(info, "setting new clock rate to %8.3f [Hz], correction %+8.3f, rtc %ld, dc %ld, act_diff %ld\n", rate, timer_correction, ec.dc.rtc_time, ec.dc.dc_time, ec.dc.act_diff);
                 if (dc_sync.log) {
-                    log(verbose, "setting new clock rate to %8.3f [Hz]\n", rate);
+                    log(info, "setting new clock rate to %8.3f [Hz], correction %+8.3f, p_part %+8.3f, i_part %+8.3f, rtc %ld, dc %ld, act_diff %ld\n", 
+                            rate, timer_correction, 
+                            ec.dc.control.v_part_old,        
+                            ec.dc.control.diffsum,
+                            ec.dc.rtc_time, ec.dc.dc_time, ec.dc.act_diff);
                 }
             } catch (exception& e) {
                 log(warning, "setting new clock failed: %s\n", e.what());
@@ -362,8 +365,8 @@ void master::open() {
     // add callback for cyclic dc datagram
     ec.dc.cdg.user_cb = cb_dc;
     ec.dc.cdg.user_cb_arg = (void *)this;
-    ec.dc.control.kp = dc_sync.kp;
-    ec.dc.control.ki = dc_sync.ki;
+    ec.dc.control.kp = dc_sync.kp / dc_sync.offset_compensation_cycles;
+    ec.dc.control.ki = dc_sync.ki / dc_sync.offset_compensation_cycles;
     
     // -----------------------------------------------------------
     // set pdo mapping entries
