@@ -69,25 +69,13 @@ void slave::canopen::get_object_dictionary_list(
 
 	    if (ret == EC_ERROR_MAILBOX_BUFFER_TOO_SMALL) {
                 // got bigger length from libethercat
-                uint8_t *buf2 = new uint8_t[len];
-
-                //list.resize(len/2);
-                int ret = ec_coe_odlist_read(&slv->master_dev->ec, slv->index, buf2, &len);
+                list.resize(len/2);
+                int ret = ec_coe_odlist_read(&slv->master_dev->ec, slv->index, (osal_uint8_t *)&list[0], &len);
 
                 if (ret != 0) {
                     throw str_exception("slave %2d: reading CoE object dictionary list "
                         "returned errorcode 0x%X!\n", slv->index, ret);
                 }
-                
-                uint16_t *idxs = (uint16_t *)&buf2[0];
-                for (int i = 0; i < len/2; ++i) {
-                    list.push_back(idxs[i]);
-                }
-
-                //list.resize(len/2);
-                //memcpy(&list[0], buf2, len);
-
-                delete[] buf2;
             } else if (ret == 0) {
                 list.resize(len/2);
                 memcpy(&list[0], buf, len);
