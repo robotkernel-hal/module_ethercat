@@ -67,18 +67,18 @@ void slave::canopen::get_object_dictionary_list(
             size_t len = COE_DATA_MAXLEN;
             int ret = ec_coe_odlist_read(&slv->master_dev->ec, slv->index, buf, &len);
 
-	    if (ret == EC_ERROR_MAILBOX_BUFFER_TOO_SMALL) {
+            if (ret == EC_ERROR_MAILBOX_BUFFER_TOO_SMALL) {
                 // got bigger length from libethercat
                 list.resize(len/2);
                 int ret = ec_coe_odlist_read(&slv->master_dev->ec, slv->index, (osal_uint8_t *)&list[0], &len);
 
                 if (ret != 0) {
                     throw str_exception("slave %2d: reading CoE object dictionary list "
-                        "returned errorcode 0x%X!\n", slv->index, ret);
+                            "returned errorcode 0x%X!\n", slv->index, ret);
                 }
 
-		// reduce size to eliminite padding bytes at the end
-		list.resize(len/2);
+                // reduce size to eliminite padding bytes at the end
+                list.resize(len/2);
             } else if (ret == 0) {
                 list.resize(len/2);
                 memcpy(&list[0], buf, len);
