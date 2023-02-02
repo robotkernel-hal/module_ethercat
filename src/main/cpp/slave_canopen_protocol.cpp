@@ -76,6 +76,9 @@ void slave::canopen::get_object_dictionary_list(
                     throw str_exception("slave %2d: reading CoE object dictionary list "
                         "returned errorcode 0x%X!\n", slv->index, ret);
                 }
+
+		// reduce size to eliminite padding bytes at the end
+		list.resize(len/2);
             } else if (ret == 0) {
                 list.resize(len/2);
                 memcpy(&list[0], buf, len);
