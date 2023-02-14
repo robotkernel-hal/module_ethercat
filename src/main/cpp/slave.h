@@ -318,6 +318,7 @@ class slave :
         mapping_t input_mapping;    //! process data input mapping values
         mapping_t output_mapping;   //! process data output mapping values
         bool prefer_obj_names;
+        bool skip_pdo_description;
 
         //! slave distributed clocks
         struct slave_dc {

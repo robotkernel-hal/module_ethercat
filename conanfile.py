@@ -2,8 +2,8 @@ from conans import ConanFile, tools
 import os
 
 class MainProject(ConanFile):
-    python_requires = "conan_template_ln_generator/[~=5 >=5.0.7]@robotkernel/stable"
-    python_requires_extend = "conan_template_ln_generator.RobotkernelLNGeneratorConanFile"
+    python_requires = "conan_template/[~=5]@robotkernel/stable"
+    python_requires_extend = "conan_template.RobotkernelConanFile"
 
     name = "module_ethercat"
     description = "robotkernel EtherCAT master module based on libethercat."
@@ -20,7 +20,7 @@ class MainProject(ConanFile):
             "libethercat/[~=0.3]@common/stable" ]
 
     def package_info(self):
-        base = self.python_requires["conan_template_ln_generator"].module.RobotkernelLNGeneratorConanFile
+        base = self.python_requires["conan_template"].module.RobotkernelConanFile
         base.package_info(self)
 
         self.env_info.PYTHONPATH.append(os.path.join(self.package_folder, "bindings/python"))
