@@ -999,7 +999,11 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                     }
                 }
 
-                pdin = make_shared<robotkernel::triple_buffer>(
+                if (pdo_desc == "") {
+                    pdo_desc = format_string("- uint8_t[%d]: buf\n", slv->pdin.len);
+                }
+
+                pdin = make_shared<robotkernel::triple_buffer_with_injection>(
                         slv->pdin.len, 
                         master_dev->name, 
                         format_string("slave_%d.inputs", index), 
@@ -1026,8 +1030,12 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                         master_dev->log(error, e.what());
                     }
                 }
+                
+                if (pdo_desc == "") {
+                    pdo_desc = format_string("- uint8_t[%d]: buf\n", slv->pdout.len);
+                }
 
-                pdout = make_shared<robotkernel::triple_buffer>(slv->pdout.len, master_dev->name, 
+                pdout = make_shared<robotkernel::triple_buffer_with_injection>(slv->pdout.len, master_dev->name, 
                         format_string("slave_%d.outputs", index), pdo_desc, pdout_trigger->id());
                 consumer_hash = pdout->set_consumer(shared_from_this());
                 k.add_device(pdout);
