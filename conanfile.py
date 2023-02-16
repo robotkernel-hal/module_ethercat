@@ -11,12 +11,12 @@ class MainProject(ConanFile):
     exports_sources = ["*", "!.gitignore"] + ["!%s" % x for x in tools.Git().excluded_files()]
     requires = [
             "robotkernel/[~=5]@robotkernel/stable",
-            "service_provider_memory_inspection/[>=5.1]@robotkernel/unstable",
-            "service_provider_canopen_protocol/[>=5.1]@robotkernel/unstable",
-            "service_provider_key_value/[>=5.1]@robotkernel/unstable",
-            "service_provider_sercos_protocol/[>=5.1]@robotkernel/unstable",
-            "service_provider_file_protocol/[>=5.1]@robotkernel/unstable",
-            "service_provider_process_data_inspection/[>=5.1]@robotkernel/unstable",
+            "service_provider_memory_inspection/[~=5 >=5.1]@robotkernel/unstable",
+            "service_provider_canopen_protocol/[~=5 >=5.1]@robotkernel/unstable",
+            "service_provider_key_value/[~=5 >=5.1]@robotkernel/unstable",
+            "service_provider_sercos_protocol/[~=5 >=5.1]@robotkernel/unstable",
+            "service_provider_file_protocol/[~=5 >=5.1]@robotkernel/unstable",
+            "service_provider_process_data_inspection/[~=5 >=5.1]@robotkernel/unstable",
             "libethercat/0.4.0@common/unstable" ]
 
     options = {
