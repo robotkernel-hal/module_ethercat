@@ -22,6 +22,8 @@
  * along with robotkernel.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <math.h>
+
 #include "master.h"
 #include <robotkernel/rt_helper.h>
 
@@ -94,9 +96,12 @@ void dc_clock_setter::run() {
  * \param node yaml intialization node
  */
 master::master(const std::string& name, const YAML::Node& node) :
-    pd_provider(name), module_base("module_ethercat", name, node), pec(NULL) 
+    pd_provider(name), module_base("module_ethercat", name, node),
+    service_provider::canopen_protocol::base(name, "master.mailbox")
 {
     config = YAML::Clone(node);
+    elp.ll = ll;
+    ec_opened = false;
 } 
 
 //! second stage init routine
@@ -179,13 +184,17 @@ void master::init() {
     dc_sync.first_run                  = true;
     dc_sync.last_diff                  = 0.;
     dc_sync.diffsum                    = 0.;
-    dc_sync.kp                         = get_as<double>(config, "dc_sync_kp", 0.0025);
+    dc_sync.kp                         = get_as<double>(config, "dc_sync_kp", 0.5);
     dc_sync.ki                         = get_as<double>(config, "dc_sync_ki", 0.0025);
+    dc_sync.i_limit                    = get_as<double>(config, "dc_sync_i_limit", 0.00000001);
+    dc_sync.slew_rate                  = get_as<double>(config, "dc_sync_slew_rate", 0.0000001);
     dc_sync.timer_override             = get_as<int>(config, "dc_sync_timer_override", -1);
-    dc_sync.offset_compensation_cycles = get_as<int>(config, "dc_sync_offset_compensation_cycles", 100);
-    dc_sync.diff_converge_cycles       = 0;
+    dc_sync.offset_compensation_cycles = get_as<int>(config, "dc_sync_offset_compensation_cycles", 10);
+    dc_sync.offset_compensation_cnt    = 0;
+    dc_sync.diff_converge_cycles       = get_as<uint64_t>(config, "dc_sync_converge_cycles", 10);
     dc_sync.diff_converge_cnt          = 0;
     dc_sync.diff_converged             = false;
+    dc_sync.v_part_old                 = 0.;
 
     if (config["dc_sync.kp"] || config["dc_sync.ki"] || config["dc_sync.kd"])
         log(warning, 
@@ -197,16 +206,102 @@ void master::init() {
     pd_cookie = 0;
 }
 
+//! Cyclic distributed clock datagram callback
+static void cb_dc(void *arg, int num) {
+    (void)num;
+
+    master *m = (master *)arg;
+    m->recv_dc();
+}
+
+void master::recv_dc() {
+    static double timer_correction = 0;
+
+    if (ec.dc.mode == dc_mode_ref_clock) {
+        timer_correction += ec.dc.timer_correction;
+
+        if ((++dc_sync.offset_compensation_cnt % dc_sync.offset_compensation_cycles) == 0) {
+            dc_sync.offset_compensation_cnt = 0;
+    //        dc_set_clock();
+            try {
+                int64_t rate_in_ns = dc_sync.start_timer * 1E9; //(1. / t_dev->get_rate()) * 1E9;
+                rate_in_ns += timer_correction / dc_sync.offset_compensation_cycles;
+                rate = 1./((double)rate_in_ns / 1E9);
+                t_dev->set_rate(rate);
+
+                if (dc_sync.log) {
+                    log(info, "setting new clock rate to %8.3f [Hz], correction %+8.3f, p_part %+8.3f, i_part %+8.3f, rtc %ld, dc %ld, act_diff %ld\n", 
+                            rate, timer_correction, 
+                            ec.dc.control.v_part_old,        
+                            ec.dc.control.diffsum,
+                            ec.dc.rtc_time, ec.dc.dc_time, ec.dc.act_diff);
+                }
+            } catch (exception& e) {
+                log(warning, "setting new clock failed: %s\n", e.what());
+            }
+
+            timer_correction = 0;
+        } 
+        
+        // check if diff converged
+        if (    dc_sync.diff_converge_cycles && 
+                ((++dc_sync.diff_converge_cnt % dc_sync.diff_converge_cycles) == 0)) {
+            dc_sync.diff_converge_cnt = 0;
+
+            double margin = 1. / (dc_sync.start_timer / 100.);
+
+            if ((ec.dc.timer_correction > margin) || (ec.dc.timer_correction < -1 * margin)) {
+            } else {
+                if (!dc_sync.diff_converged) {
+                    dc_sync.diff_converged = true;
+                }
+            }
+        }
+
+    }        
+    
+    if (trigger_dc_sync) {
+        trigger_dc_sync->trigger_modules();
+    }
+
+    if (pdin_dc) {
+        pdin_dc->write(dc_provider_hash, 0, (uint8_t *)&ec.dc.dc_time, 
+                (size_t)((uint8_t *)&ec.dc.sent_time_nsec - (uint8_t *)&ec.dc.dc_time));
+        pdin_dc_trigger->trigger_modules();
+    }
+}
+
+static void cb_group(void *arg, int group) {
+    master *m = (master *)arg;
+
+    m->recv_group(group);
+}
+
+void master::recv_group(int group_index) {
+    auto& g = groups[group_index];
+
+    for (auto it = g->_slaves.begin(); it != g->_slaves.end(); ++it) {
+        int slave = *it;
+        _slave_info[slave]->pdin_handler();
+    }
+
+    g->trigger_modules();
+}
+
 void master::open() {
     // -----------------------------------------------------------
     // open ethercat interface
-    int ret = ec_open(&pec, ifname.c_str(), recv_prio, recv_mask, log_eeprom_data);
+    int ret = ec_open(&ec, ifname.c_str(), recv_prio, recv_mask, log_eeprom_data);
     if (ret != 0) 
         throw str_exception("ec_open failed: %s!\n", strerror(ret));
-        
-    ec_set_state(pec, EC_STATE_INIT);
 
-    pec->threaded_startup = threaded_startup;
+    ec_opened = true;
+        
+    if (ec_set_state(&ec, EC_STATE_INIT) != EC_STATE_INIT) {
+        throw str_exception("fatal: state switch to init failed!\n");
+    }
+
+    ec.threaded_startup = threaded_startup;
 
     // -----------------------------------------------------------
     // setting init commands, distributed clocks and eoe
@@ -215,7 +310,7 @@ void master::open() {
         int slave_nr = it->first;
         sp_slave_t slv = it->second;
                 
-        if (pec->slave_cnt <= slave_nr)  {
+        if (ec.slave_cnt <= slave_nr)  {
             log(warning, "slave %d not connected to ethercat bus, "
                         "settings dc config failed!\n", slave_nr);
 
@@ -223,10 +318,10 @@ void master::open() {
         }
             
         if (slv->dc.has_dc)
-            ec_slave_set_dc_config(pec, slave_nr, 1, slv->dc.type, slv->dc.cycle_time_0,
+            ec_slave_set_dc_config(&ec, slave_nr, 1, slv->dc.type, slv->dc.cycle_time_0,
                     slv->dc.cycle_time_1, slv->dc.cycle_shift);
         else 
-            ec_slave_set_dc_config(pec, slave_nr, 0, 0, 0, 0, 0);
+            ec_slave_set_dc_config(&ec, slave_nr, 0, 0, 0, 0, 0);
 
         if (slv->eoe.has_eoe) {
             uint8_t *mac = slv->eoe.mac.size() > 0 ? &slv->eoe.mac[0] : NULL;
@@ -235,31 +330,43 @@ void master::open() {
             uint8_t *gateway = slv->eoe.gateway.size() > 0 ? &slv->eoe.gateway[0] : NULL;
             uint8_t *dns = slv->eoe.dns.size() > 0 ? &slv->eoe.dns[0] : NULL;
             char *dns_name = slv->eoe.dns_name.size() > 0 ? (char *)slv->eoe.dns_name.c_str() : NULL; 
-            ec_slave_set_eoe_settings(pec, slave_nr, mac, ip_address, subnet, gateway, dns, dns_name);
+            ec_slave_set_eoe_settings(&ec, slave_nr, mac, ip_address, subnet, gateway, dns, dns_name);
         }
     }
 
     // -----------------------------------------------------------
     // creating and assigning process data groups
-    ec_create_pd_groups(pec, groups.size());
+    ec_create_pd_groups(&ec, groups.size());
             
     for (group_map_t::iterator it = groups.begin(); it != groups.end(); ++it) {
         int g_nr = it->first;
+        auto g = it->second;
+
+        ec.pd_groups[g_nr].divisor = g->divisor;
+        ec.pd_groups[g_nr].cdg.user_cb = cb_group;
+        ec.pd_groups[g_nr].cdg.user_cb_arg = (void *)this;
 
         for (std::list<int>::iterator it2 = it->second->_slaves.begin();
                 it2 != it->second->_slaves.end(); ++it2) {
 
             int s_nr = *it2;
-            if (pec->slave_cnt <= s_nr) {
+            if (ec.slave_cnt <= s_nr) {
                 log(warning, "slave %d not connected to ethercat bus, "
                         "not adding to group %d!\n", s_nr, g_nr);
 
                 continue;
             }
 
-            pec->slaves[s_nr].assigned_pd_group = g_nr;
+            ec.slaves[s_nr].assigned_pd_group = g_nr;
         }
     }
+    
+    // -----------------------------------------------------------
+    // add callback for cyclic dc datagram
+    ec.dc.cdg.user_cb = cb_dc;
+    ec.dc.cdg.user_cb_arg = (void *)this;
+    ec.dc.control.kp = dc_sync.kp / dc_sync.offset_compensation_cycles;
+    ec.dc.control.ki = dc_sync.ki / dc_sync.offset_compensation_cycles;
     
     // -----------------------------------------------------------
     // set pdo mapping entries
@@ -270,7 +377,7 @@ void master::open() {
 
         log(verbose, "trying to create mapping for slave %d\n", slave_nr);
 
-        if (pec->slave_cnt <= slave_nr) {
+        if (ec.slave_cnt <= slave_nr) {
             log(warning, "slave %d not connected to ethercat bus, "
                     "setting mapping failed!\n", slave_nr);
 
@@ -291,8 +398,9 @@ void master::open() {
                         slave_nr, *mit);
             }
 
-            ec_slave_add_coe_init_cmd(pec, slave_nr, 0x24, 0x1C13, 
-                    0, 1, (char *)mapping, 2 * (mapping_entries + 1));
+            ec_init_cmd_t& cmd = *init_cmds.insert(init_cmds.end(), ec_init_cmd_t());
+            ec_slave_mailbox_coe_init_cmd_init(&cmd, 0x24, 0x1C13, 0, 1, (char *)mapping, 2 * (mapping_entries + 1));
+            ec_slave_add_init_cmd(&ec, slave_nr, &cmd);
         }
 
         // generate output mapping for coe
@@ -309,12 +417,13 @@ void master::open() {
                         slave_nr, *mit);
             }
 
-            ec_slave_add_coe_init_cmd(pec, slave_nr, 0x24, 0x1C12, 
-                    0, 1, (char *)mapping, 2 * (mapping_entries + 1));
+            ec_init_cmd_t& cmd = *init_cmds.insert(init_cmds.end(), ec_init_cmd_t());
+            ec_slave_mailbox_coe_init_cmd_init(&cmd, 0x24, 0x1C12, 0, 1, (char *)mapping, 2 * (mapping_entries + 1));
+            ec_slave_add_init_cmd(&ec, slave_nr, &cmd);
         }
     }
             
-    for (int nr = 0; nr < pec->slave_cnt; ++nr) {
+    for (int nr = 0; nr < ec.slave_cnt; ++nr) {
         if (_slave_info.find(nr) == _slave_info.end()) {
             log(verbose, "slave %d creating empty one\n", nr);
 
@@ -324,12 +433,12 @@ void master::open() {
 
         sp_slave_t slv = _slave_info[nr];
 
-        for (int sm_nr = 0; sm_nr < pec->slaves[nr].sm_ch; ++sm_nr) {
+        for (int sm_nr = 0; sm_nr < ec.slaves[nr].sm_ch; ++sm_nr) {
             if (slv->_sm_map.find(sm_nr) == slv->_sm_map.end()) {
                 auto sm = make_shared<slave::sync_manager_settings_t>();
-                sm->_address = pec->slaves[nr].sm[sm_nr].adr;
-                sm->_length  = pec->slaves[nr].sm[sm_nr].len;
-                sm->_flags   = pec->slaves[nr].sm[sm_nr].flags;
+                sm->_address = ec.slaves[nr].sm[sm_nr].adr;
+                sm->_length  = ec.slaves[nr].sm[sm_nr].len;
+                sm->_flags   = ec.slaves[nr].sm[sm_nr].flags;
 
                 if (sm->is_set())
                     slv->_sm_map[sm_nr] = sm;
@@ -337,9 +446,9 @@ void master::open() {
         }
 
         if (slv->dc.has_dc)
-            pec->slaves[nr].dc.use_dc = 1;
+            ec.slaves[nr].dc.use_dc = 1;
         else 
-            pec->slaves[nr].dc.use_dc = 0;
+            ec.slaves[nr].dc.use_dc = 0;
 
         slv->post_state_transition(module_state_init, module_state_init);
 
@@ -347,7 +456,7 @@ void master::open() {
     }
 
     if (tun_settings.configure_tun) {
-        ec_configure_tun(pec, tun_settings.ip_address);
+        ec_configure_tun(&ec, tun_settings.ip_address);
     }
 
 //    auto mdl = kernel::get_instance()->get_module(name);
@@ -361,10 +470,9 @@ void master::open() {
 
 //! destruction 
 master::~master() {
-    if (pec)
-        ec_close(pec);
+    ec_close(&ec);
+    ec_opened = false;
 
-    pec = NULL;
     for (auto& kv : _slave_info) {
         kv.second->clean_up();
         kv.second = nullptr;
@@ -389,7 +497,7 @@ int master::set_state(module_state_t state) {
     uint32_t transition = GEN_STATE(this->state, state);
 
 #define STATE_TRANSITION(slave_func, to) { \
-    for (int nr = 0; nr < pec->slave_cnt; ++nr) { \
+    for (int nr = 0; nr < ec.slave_cnt; ++nr) { \
         if (_slave_info.find(nr) == _slave_info.end()) continue; \
         sp_slave_t slv = _slave_info[nr]; \
         try { \
@@ -404,16 +512,8 @@ int master::set_state(module_state_t state) {
         case op_2_init:
         case op_2_boot:
             // ====> stop sending commands
-            if (
-                    (state == module_state_preop) ||
-                    (state == module_state_init)  ||
-                    (state == module_state_boot)) {
-                // trigger is already deregistered by robotkernel
-                pec->tx_sync = 1;
-            }
-
             STATE_TRANSITION(pre, module_state_safeop);
-            ec_set_state(pec, EC_STATE_SAFEOP);
+            ec_set_state(&ec, EC_STATE_SAFEOP);
             STATE_TRANSITION(post, module_state_safeop);
 
             if (state == module_state_safeop)
@@ -423,7 +523,11 @@ int master::set_state(module_state_t state) {
         case safeop_2_boot:
             // ====> stop receiving measurements
             dccs->stop();
-            pec->tx_sync = 1;
+            
+            k.remove_device(trigger_dc_sync);
+            trigger_dc_sync = nullptr;
+            k.remove_device(pd_dc_sync);
+            pd_dc_sync = nullptr;
 
             if (pdin_dc) {
                 k.remove_device(pdin_dc);
@@ -445,7 +549,7 @@ int master::set_state(module_state_t state) {
                 k.remove_device(kv.second);
 
             STATE_TRANSITION(pre, module_state_preop);
-            ec_set_state(pec, EC_STATE_PREOP);
+            ec_set_state(&ec, EC_STATE_PREOP);
             STATE_TRANSITION(post, module_state_preop);
 
             if (state == module_state_preop)
@@ -454,13 +558,15 @@ int master::set_state(module_state_t state) {
         case preop_2_boot:
             // ====> deinit devices
             STATE_TRANSITION(pre, module_state_init);
-            ec_set_state(pec, EC_STATE_INIT);
+            ec_set_state(&ec, EC_STATE_INIT);
             STATE_TRANSITION(post, module_state_init);
 
             t_dev = nullptr;
 
-            ec_close(pec);
-            pec = nullptr;
+            k.remove_device(static_pointer_cast<service_provider::canopen_protocol::base>(shared_from_this()));
+
+            ec_close(&ec);
+            ec_opened = false;
         case init_2_init:
             // ====> re-/open ethercat device
             if (state == module_state_init)
@@ -475,7 +581,7 @@ int master::set_state(module_state_t state) {
             }
             
             STATE_TRANSITION(pre, module_state_boot);
-            ec_set_state(pec, EC_STATE_BOOT);
+            ec_set_state(&ec, EC_STATE_BOOT);
             STATE_TRANSITION(post, module_state_boot);
             break;
         case boot_2_init:
@@ -484,12 +590,14 @@ int master::set_state(module_state_t state) {
         case boot_2_op:
             // ====> re-/open ethercat device
             STATE_TRANSITION(pre, module_state_init);
-            ec_set_state(pec, EC_STATE_INIT);
+            if (ec_set_state(&ec, EC_STATE_INIT) != EC_OK) {
+                throw str_exception("setting state to INIT failed!\n");
+            }
             STATE_TRANSITION(post, module_state_init);
 
-            ec_close(pec);
-            pec = nullptr;
-
+            ec_close(&ec);
+            ec_opened = false;
+            
             if (state == module_state_init)
                 break;
         case init_2_op:
@@ -502,17 +610,16 @@ int master::set_state(module_state_t state) {
                 state = module_state_init;
                 return state;
             }
+            
+            k.add_device(static_pointer_cast<service_provider::canopen_protocol::base>(shared_from_this()));
 
-            pec->dc.mode = dc_sync.mode_string == "ref_clock" ? 
-                ec_dc_info::dc_mode_ref_clock : dc_sync.mode_string == "master_as_ref_clock" ?
-                ec_dc_info::dc_mode_master_as_ref_clock : ec_dc_info::dc_mode_master_clock;
+            ec.dc.mode = dc_sync.mode_string == "ref_clock" ? 
+                dc_mode_ref_clock : dc_sync.mode_string == "master_as_ref_clock" ?
+                dc_mode_master_as_ref_clock : dc_mode_master_clock;
             
             STATE_TRANSITION(pre, module_state_preop);
-            ec_set_state(pec, EC_STATE_PREOP);
+            ec_set_state(&ec, EC_STATE_PREOP);
             STATE_TRANSITION(post, module_state_preop);
-
-            if (dc_sync.offset_compensation_cycles > 0)
-                pec->dc.offset_compensation_cycles = dc_sync.offset_compensation_cycles;
 
             auto mdl = get_module();
             if (mdl->triggers.size() != 1) {
@@ -525,11 +632,10 @@ int master::set_state(module_state_t state) {
             
                 double rate = t_dev->get_rate() / t_divisor;
                 dc_sync.start_timer = (1.f / rate);
-                dc_sync.diff_converge_cycles = rate;
             }
 
             if (dc_sync.timer_override > 0) {
-                pec->dc.timer_override = dc_sync.timer_override;
+                ec.dc.timer_override = dc_sync.timer_override;
 
                 rate = 1. / (dc_sync.timer_override / 1E9);
             } else {
@@ -538,14 +644,14 @@ int master::set_state(module_state_t state) {
 
                 // ethercat master need timer interval in [ns]
                 dc_sync.timer_override = 
-                    pec->dc.timer_override = (1.f / rate) * 1E9;
+                    ec.dc.timer_override = (1.f / rate) * 1E9;
 
                 log(info, "got trigger rate %f Hz\n", rate);
             }
 
-            for (int nr = 0; nr < pec->slave_cnt; ++nr) {
+            for (int nr = 0; nr < ec.slave_cnt; ++nr) {
                 log(verbose, "slave %d: propagation delay %d [ns]\n", 
-                        nr, pec->slaves[nr].pdelay);
+                        nr, ec.slaves[nr].pdelay);
 
                 sp_slave_t slv = _slave_info[nr];
 
@@ -554,18 +660,18 @@ int master::set_state(module_state_t state) {
                         it != slv->_sm_map.end(); ++it) {
                     int sm_nr = it->first;
 
-                    if (sm_nr < pec->slaves[nr].sm_ch) {
+                    if (sm_nr < ec.slaves[nr].sm_ch) {
                         log(verbose, "slave %d: applying sm%d: adr 0x%X, len %d, flags 0x%X\n",
                                 nr, sm_nr, it->second->_address,
                                 it->second->_length,
                                 it->second->_flags);
 
-                        pec->slaves[nr].sm[sm_nr].adr   = it->second->_address;
-                        pec->slaves[nr].sm[sm_nr].len   = it->second->_length;
-                        pec->slaves[nr].sm[sm_nr].flags = it->second->_flags;
+                        ec.slaves[nr].sm[sm_nr].adr   = it->second->_address;
+                        ec.slaves[nr].sm[sm_nr].len   = it->second->_length;
+                        ec.slaves[nr].sm[sm_nr].flags = it->second->_flags;
                     }
                         
-                    pec->slaves[nr].sm_set_by_user  = slv->sm_set_by_user;
+                    ec.slaves[nr].sm_set_by_user  = slv->sm_set_by_user;
                 }
             }
 
@@ -585,7 +691,6 @@ int master::set_state(module_state_t state) {
             k.add_device(recv_error_trigger);
 
             // start cyclic operation via trigger
-            pec->tx_sync = 0;
             dccs->start();
 
             // add group trigger devices
@@ -602,16 +707,21 @@ int master::set_state(module_state_t state) {
             }
                 
             STATE_TRANSITION(pre, module_state_safeop);
-            ec_set_state(pec, EC_STATE_SAFEOP);
+            ec_set_state(&ec, EC_STATE_SAFEOP);
             STATE_TRANSITION(post, module_state_safeop);
 
-            if (dc_sync.offset_compensation_cycles > 0)
-                pec->dc.offset_compensation_cycles = dc_sync.offset_compensation_cycles;
+            if (ec.dc.mode == dc_mode_ref_clock) {
+                while (!dc_sync.diff_converged) {
+                    double act_timer = 1. / t_dev->get_rate();
+                    log(info, "waiting for DC to converge... act_timer %13.9f, last_diff %13.9f, diffsum %13.9f\n", act_timer, dc_sync.last_diff, dc_sync.diffsum);
+                    osal_sleep(dc_sync.offset_compensation_cycles * dc_sync.timer_override);
+                }
+            }
 
             // process data is now available, create names process data
-            for (int nr = 0; nr < pec->slave_cnt; ++nr) {
+            for (int nr = 0; nr < ec.slave_cnt; ++nr) {
                 log(verbose, "slave %d: propagation delay %d [ns]\n", 
-                        nr, pec->slaves[nr].pdelay);
+                        nr, ec.slaves[nr].pdelay);
 
                 sp_slave_t slv = _slave_info[nr];
             }
@@ -628,37 +738,54 @@ int master::set_state(module_state_t state) {
 
             string pdo_desc = 
                 "- uint64_t: dc_time\n"
-                "- uint64_t: dc_cycle_sum\n"
-                "- uint64_t: dc_cycle\n"
-                "- int32_t: dc_cycle_cnt\n"
                 "- int64_t: dc_sto\n"
-                "- uint64_t: rtc_sto\n"
                 "- uint64_t: rtc_time\n"
-                "- uint64_t: rtc_cycle_sum\n"
-                "- uint64_t: rtc_cycle\n"
-                "- int32_t: rtc_count\n"
-                "- int32_t: act_diff\n"
-                "- int64_t: prev_rtc\n"
-                "- int64_t: prev_dc\n"
-                "- int32_t: offset_compensation_cycles\n"
-                "- int32_t: offset_compensation_cnt\n"
-                "- int32_t: offset_compensation_max\n"
-                "- int32_t: timer_override\n"
-                "- int64_t: timer_prev\n";
+                "- int64_t: rtc_sto\n"
+                "- int64_t: act_diff\n"
+                "- int64_t: timer_override\n"
+                "- uint64_t: packet_duration\n";
 
             pdin_dc = make_shared<robotkernel::triple_buffer>(
-                    (uint8_t *)&pec->dc.p_de_dc - (uint8_t *)&pec->dc.dc_time, 
+                    (uint8_t *)&ec.dc.sent_time_nsec - (uint8_t *)&ec.dc.dc_time,
                     name, "dc.inputs", pdo_desc, pdin_dc_trigger->id());
             dc_provider_hash = pdin_dc->set_provider(shared_from_this());
             k.add_device(pdin_dc);
             
+            string pd_dc_sync_desc = 
+                "- uint32_t: first_run\n"
+                "- uint32_t: padding_0\n"
+                "- double: last_diff\n"
+                "- double: i_part\n"
+                "- double: p_part\n"
+                "- double: start_timer\n"
+                "- double: kp\n"
+                "- double: ki\n"
+                "- double: kd\n"
+                "- double: i_limit\n"
+                "- double: slew_rate\n"
+                "- int32_t: offset_compensation_cycles\n"
+                "- int32_t: offset_compensation_cnt\n"
+                "- int32_t: timer_override\n"
+                "- uint32_t: padding_1\n"
+                "- uint64_t: diff_converge_cycles\n"
+                "- uint64_t: diff_converge_cnt\n"
+                "- uint32_t: diff_converged\n"
+                "- uint32_t: padding_2\n"
+                "- double: v_part_old\n";
+
+            trigger_dc_sync = make_shared<robotkernel::trigger>(name, "dc_sync_ctrl.inputs");
+            k.add_device(trigger_dc_sync);
+            pd_dc_sync = make_shared<robotkernel::pointer_buffer>(sizeof(dc_sync) - (size_t)((uint8_t *)&dc_sync.first_run - (uint8_t *)&dc_sync), (uint8_t *)&dc_sync.first_run, 
+                    name, "dc_sync_ctrl.inputs", pd_dc_sync_desc, trigger_dc_sync->id());
+            k.add_device(pd_dc_sync);
+
             if (state == module_state_safeop)
                 break;
         }
         case safeop_2_op:
             // ====> start sending commands
             STATE_TRANSITION(pre, module_state_op);
-            ec_set_state(pec, EC_STATE_OP);
+            ec_set_state(&ec, EC_STATE_OP);
             STATE_TRANSITION(post, module_state_op);
             break;
         case op_2_op:
@@ -677,142 +804,150 @@ int master::set_state(module_state_t state) {
 //! module trigger callback
 void master::tick() {
     int i = 0;
-    bool dc_sent = false;
-    int64_t max_timeout = 0;
-    ec_timer_t dc_timeout, ec_state_timeout;
 
-    if (!pec || (pec->tx_sync == 1))
-        return;
+    if (!ec_opened) { return; }
 
-    for (i = 0; i < pec->pd_group_cnt; ++i) {
+    for (i = 0; i < ec.pd_group_cnt; ++i) {
         auto& g = groups[i];
-        if ((++g->_divisor_cnt % g->divisor) != 0)
-            continue; 
-
-        //log(verbose, "sending group %d\n", i);
-
-        for (const auto& slave : g->_slaves)
-            _slave_info[slave]->pdout_handler();
-
-        // reset divisor cnt and queue datagram
-        g->_divisor_cnt = 0;
-        ec_send_process_data_group(pec, i);
-        ec_timer_init(&g->timeout, g->recv_timeout);
-
-        if (max_timeout < g->recv_timeout)
-            max_timeout = g->recv_timeout;
+        if (ec_group_will_be_sent(&ec, i) != 0) {
+            for (const auto& slave : g->_slaves) {
+                _slave_info[slave]->pdout_handler();
+            }
+        }
     }
 
-    if ((pec->dc.rtc_time != 0) && pec->dc.have_dc) {
-        //log(verbose, "sending distributed clock sync\n");
-
-        dc_sent = ec_send_distributed_clocks_sync(pec) == 0;
-        ec_timer_init(&dc_timeout, max_timeout);
-    }
+    ec_send_distributed_clocks_sync(&ec);
+    ec_send_process_data(&ec);
 
     if (monitor_state) {
-        ec_send_brd_ec_state(pec); 
-        ec_timer_init(&ec_state_timeout, 1000000000);
+        ec_send_brd_ec_state(&ec); 
     }
 
-    hw_tx(pec->phw);
+    if (hw_tx(&ec.hw) != EC_OK) {
+        throw str_exception("error sending EtherCAT frames!\n");
+    }
 
     pd_cookie++;
     pd_cond.notify_all();
-
-    for (i = 0; i < pec->pd_group_cnt; ++i) {
-        auto& g = groups[i];
-
-        if (g->_divisor_cnt != 0)
-            continue; 
-
-        int ret = ec_receive_process_data_group(pec, i, &g->timeout);
-
-        if (ret == -1) {
-            recv_error_trigger->trigger_modules();
-            
-            if (errno == ETIMEDOUT) {
-                log(warning, "receiving group %d returned timeout!\n");
-                continue;
-            }
-        }
-
-        //log(verbose, "received group %d\n", i);
-
-        for (auto it = g->_slaves.begin(); it != g->_slaves.end(); ++it) {
-            int slave = *it;
-            _slave_info[slave]->pdin_handler();
-        }
-
-        g->trigger_modules();
-    }
-
-    if (dc_sent && pec->dc.have_dc) {
-        ec_receive_distributed_clocks_sync(pec, &dc_timeout);
-
-        //log(verbose, "received distributed clock sync\n");
-
-        if (    (pec->dc.mode == ec_dc_info::dc_mode_ref_clock) && 
-                (pec->dc.offset_compensation_cnt == 0)) {
-            dccs->signal();
-        }        
-
-        if (pdin_dc) {
-            pdin_dc->write(dc_provider_hash, 0, (uint8_t *)&pec->dc.dc_time, 
-                    (size_t)((uint8_t *)&pec->dc.p_de_dc - (uint8_t *)&pec->dc.dc_time));
-            pdin_dc_trigger->trigger_modules();
-        }
-    }
-    
-    if (monitor_state)
-        ec_receive_brd_ec_state(pec, &ec_state_timeout); 
 }
 
 /*! Correct Master clock according to distributed clock. */
 void master::dc_set_clock() {
-    double diff = (pec->dc.act_diff / 1E9);
+#if 0
+    double diff_per_cycle = (ec.dc.act_diff / 1E9) / dc_sync.offset_compensation_cycles;
+
+    double kp = dc_sync.kp;
+    double ki = dc_sync.ki;
+    double slew_rate = dc_sync.slew_rate;
+    double i_limit = dc_sync.i_limit;
+
+//    if (fabs(diff_per_cycle) < (dc_sync.start_timer / 100.)) {
+//        // lower factors
+//        kp /= 10.;
+//        ki /= 10.;
+//    }
 
     // sum it up for integral part
-    dc_sync.diffsum += dc_sync.ki * diff * pec->dc.offset_compensation_cycles * dc_sync.start_timer;
-
+    dc_sync.diffsum += ki * diff_per_cycle; 
+    
     // limit diffsum
-    double diffsum_limit = dc_sync.start_timer / 2.;
+    if (dc_sync.diffsum > i_limit) { dc_sync.diffsum = i_limit; }
+    else if (dc_sync.diffsum < (-1 * i_limit)) { dc_sync.diffsum = -1 * i_limit; }
+    
+    double act_timer = 1. / t_dev->get_rate();
+    
+    if (dc_sync.log) {
+        log(verbose, "old timer %8.3f, kp %7.3f, ki %7.3f, p part %1.12f, i_part %1.12f, i_antiwindup %1.12f\n", 
+                1. / act_timer, kp, ki, (kp * diff_per_cycle), dc_sync.diffsum, dc_sync.i_limit);
+    }
 
-    if (dc_sync.diffsum > diffsum_limit)
-        dc_sync.diffsum = diffsum_limit;
-    else if (dc_sync.diffsum < (-1 * diffsum_limit))
-        dc_sync.diffsum = -1 * diffsum_limit;
-
+    dc_sync.p_part = kp * diff_per_cycle;
     // calculate new rate in [s]
-    double act_timer = dc_sync.start_timer + 
-        (dc_sync.kp * diff) + dc_sync.diffsum;
-
+    double v_part = dc_sync.p_part + dc_sync.diffsum;
+    double change = (v_part - dc_sync.v_part_old);
+    if (change > slew_rate) { change = slew_rate; v_part = slew_rate + dc_sync.v_part_old; }
+    else if (change < (-1 * slew_rate)) { change = -1 * slew_rate; v_part = -1 * slew_rate + dc_sync.v_part_old; }
+    act_timer += change;
+    dc_sync.v_part_old = v_part;
+    
+    if (dc_sync.log) {
+        log(verbose, "v_part %.10f, v_part_old %.10f, correction %.10f, change %.10f\n", v_part, dc_sync.v_part_old, v_part - dc_sync.v_part_old, change);
+        log(verbose, "new timer %8.3f\n", 1. / act_timer);
+    }
     try {
         rate = 1.f / act_timer;
         t_dev->set_rate(rate);
 
-        if (dc_sync.log) 
-            log(verbose, "setting new clock rate to %7.3f [Hz], clock diff %7.3f [us]\n",
-                    rate, diff * 1E6);
+        if (dc_sync.log) {
+            log(verbose, "setting new clock rate to %8.3f [Hz], clock diff %8.3f [us]\n",
+                    rate, diff_per_cycle * 1E6);
+        }
     } catch (exception& e) {
         log(warning, "setting new clock failed: %s\n", e.what());
     }
 
     dc_sync.first_run = false;
-    dc_sync.last_diff = diff;
+    dc_sync.last_diff = diff_per_cycle;
 
     // check if diff converged
-    if (    dc_sync.diff_converge_cycles && !dc_sync.diff_converged &&
+    if (    dc_sync.diff_converge_cycles && 
             ((++dc_sync.diff_converge_cnt % dc_sync.diff_converge_cycles) == 0)) {
-        double margin = dc_sync.start_timer * 0.01;
+        dc_sync.diff_converge_cnt = 0;
 
-        if ((diff > margin) || (diff < -1 * margin))
-            log(info, "DC diff did not converge until now... (start_timer %10.7f, act_timer %10.7f, margin %10.7f, diff %10.7f\n",
-                    dc_sync.start_timer, act_timer, margin, diff);
-        else {
-            log(info, "DC diff converged!\n");
-            dc_sync.diff_converged = true;
+        double margin = dc_sync.start_timer / 100.;
+
+        if ((diff_per_cycle > margin) || (diff_per_cycle < -1 * margin)) {
+            if (!dc_sync.diff_converged) {
+//                log(info, "DC diff did not converge until now... (start_timer %10.7f, act_timer %10.7f, margin %10.7f, diff %10.7f\n",
+//                        dc_sync.start_timer, act_timer, margin, diff_per_cycle);
+            }
+        } else {
+            if (!dc_sync.diff_converged) {
+//                log(info, "DC diff converged!\n");
+                dc_sync.diff_converged = true;
+            }
         }
+    }
+#endif
+    try {
+        int64_t rate_in_ns = dc_sync.start_timer * 1E9; //(1. / t_dev->get_rate()) * 1E9;
+        rate_in_ns += ec.dc.timer_correction / dc_sync.offset_compensation_cycles;
+        rate = 1./((double)rate_in_ns / 1E9);
+        t_dev->set_rate(rate);
+
+        log(info, "setting new clock rate to %8.3f [Hz], correction %+8.3f, rtc %ld, dc %ld, act_diff %ld\n", rate, ec.dc.timer_correction, ec.dc.rtc_time, ec.dc.dc_time, ec.dc.act_diff);
+        if (dc_sync.log) {
+            log(verbose, "setting new clock rate to %8.3f [Hz]\n", rate);
+        }
+    } catch (exception& e) {
+        log(warning, "setting new clock failed: %s\n", e.what());
+    }
+
+    dc_sync.first_run = false;
+    //dc_sync.last_diff = diff_per_cycle;
+    
+    // check if diff converged
+    if (    dc_sync.diff_converge_cycles && 
+            ((++dc_sync.diff_converge_cnt % dc_sync.diff_converge_cycles) == 0)) {
+        dc_sync.diff_converge_cnt = 0;
+
+        double margin = 1. / (dc_sync.start_timer / 100.);
+
+        if ((ec.dc.timer_correction > margin) || (ec.dc.timer_correction < -1 * margin)) {
+            if (!dc_sync.diff_converged) {
+//                log(info, "DC diff did not converge until now... (start_timer %10.7f, act_timer %10.7f, margin %10.7f, diff %10.7f\n",
+//                        dc_sync.start_timer, act_timer, margin, diff_per_cycle);
+            }
+        } else {
+            if (!dc_sync.diff_converged) {
+//                log(info, "DC diff converged!\n");
+                dc_sync.diff_converged = true;
+            }
+        }
+    }
+
+    if (trigger_dc_sync) {
+        trigger_dc_sync->trigger_modules();
     }
 }
 

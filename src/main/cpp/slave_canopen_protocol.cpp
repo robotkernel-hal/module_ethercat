@@ -49,7 +49,7 @@ void slave::canopen::get_object_dictionary_list(
         case request_type_eeprom: {
             list.push_back(0x1008);     // device name index
 
-            ec_slave_t *ec_slv = &slv->master_dev->pec->slaves[slv->index];
+            ec_slave_t *ec_slv = &slv->master_dev->ec.slaves[slv->index];
             ec_eeprom_cat_pdo_t *pdo;
 
             // inputs and outputs
@@ -63,22 +63,30 @@ void slave::canopen::get_object_dictionary_list(
             break;
         }
         case request_type_mailbox: {
-            uint8_t *buf = NULL;
-            size_t len = 0;
-            int ret = ec_coe_odlist_read(slv->master_dev->pec, slv->index, &buf, &len);
+            uint8_t buf[COE_DATA_MAXLEN];
+            size_t len = COE_DATA_MAXLEN;
+            int ret = ec_coe_odlist_read(&slv->master_dev->ec, slv->index, buf, &len);
 
-            if (ret != 0) {
-                throw str_exception("slave %2d: reading CoE object dictionary list "
-                        "returned errorcode 0x%X!\n", slv->index, ret);
-            }
+            if (ret == EC_ERROR_MAILBOX_BUFFER_TOO_SMALL) {
+                // got bigger length from libethercat
+                list.resize(len/2);
+                int ret = ec_coe_odlist_read(&slv->master_dev->ec, slv->index, (osal_uint8_t *)&list[0], &len);
 
-            // buf is allocated by ec_coe_odlist_read
-            if (buf) {
+                if (ret != 0) {
+                    throw str_exception("slave %2d: reading CoE object dictionary list "
+                            "returned errorcode 0x%X!\n", slv->index, ret);
+                }
+
+                // reduce size to eliminite padding bytes at the end
+                list.resize(len/2);
+            } else if (ret == 0) {
                 list.resize(len/2);
                 memcpy(&list[0], buf, len);
+            } else {
+                throw str_exception("slave %2d: reading CoE object dictionary list "
+                        "returned errorcode 0x%X!\n", slv->index, ret);
+            } 
 
-                free(buf);
-            }
             break;
         }
     }
@@ -97,7 +105,7 @@ void slave::canopen::get_object_description(const uint16_t& index,
         default:
             break;
         case request_type_eeprom: {
-            ec_slave_t *ec_slv = &slv->master_dev->pec->slaves[slv->index];
+            ec_slave_t *ec_slv = &slv->master_dev->ec.slaves[slv->index];
             ec_eeprom_cat_pdo_t *pdo;
 
             if (index == 0x1008) {
@@ -135,7 +143,7 @@ void slave::canopen::get_object_description(const uint16_t& index,
             uint32_t error_code = 0;
             ec_coe_sdo_desc_t obj_desc;
             memset(&obj_desc, 0, sizeof(obj_desc));
-            int ret = ec_coe_sdo_desc_read(slv->master_dev->pec, slv->index, index, &obj_desc, &error_code);
+            int ret = ec_coe_sdo_desc_read(&slv->master_dev->ec, slv->index, index, &obj_desc, &error_code);
 
             if (ret != 0) {
                 // decode ret
@@ -149,7 +157,6 @@ void slave::canopen::get_object_description(const uint16_t& index,
 
             if (obj_desc.name) {
                 desc.name = std::string(obj_desc.name, obj_desc.name_len);
-                free(obj_desc.name);  // allocated by ec_coe_sdo_desc_read
             }
             break;
         }
@@ -170,7 +177,7 @@ void slave::canopen::get_element_description(const uint16_t& index, const uint8_
         default:
             break;
         case request_type_eeprom: {
-            ec_slave_t *ec_slv = &slv->master_dev->pec->slaves[slv->index];
+            ec_slave_t *ec_slv = &slv->master_dev->ec.slaves[slv->index];
             ec_eeprom_cat_pdo_t *pdo;
 
             // device name
@@ -232,7 +239,7 @@ void slave::canopen::get_element_description(const uint16_t& index, const uint8_
             uint32_t error_code = 0;
             ec_coe_sdo_entry_desc_t entry_desc;
             memset(&entry_desc, 0, sizeof(entry_desc));
-            int ret = ec_coe_sdo_entry_desc_read(slv->master_dev->pec, slv->index, index, 
+            int ret = ec_coe_sdo_entry_desc_read(&slv->master_dev->ec, slv->index, index, 
                     sub_index, 0x7F, &entry_desc, &error_code);
 
             if (ret != 0) {
@@ -247,7 +254,7 @@ void slave::canopen::get_element_description(const uint16_t& index, const uint8_
             desc.obj_access    = entry_desc.obj_access;
             desc.unit          = 0;
 
-            if (entry_desc.data) {
+            if (entry_desc.data_len > 0) {
                 // decode data
                 uint8_t *tmp = entry_desc.data;
                 if (entry_desc.value_info & EC_COE_SDO_VALUE_INFO_UNIT) {
@@ -295,8 +302,6 @@ void slave::canopen::get_element_description(const uint16_t& index, const uint8_
                                 [](unsigned char c){ return std::isprint(c); } ))
                         desc.name = format_string("subindex_%d", sub_index); // name is not printable
                 }
-
-                free(entry_desc.data);
             }
             break;
         }
@@ -316,7 +321,7 @@ void slave::canopen::read_element(const uint16_t& index, const uint8_t& sub_inde
         default:
             break;
         case request_type_eeprom: {
-            ec_slave_t *ec_slv = &slv->master_dev->pec->slaves[slv->index];
+            ec_slave_t *ec_slv = &slv->master_dev->ec.slaves[slv->index];
 
             if (index == 0x1008) {
                 if ((ec_slv->eeprom.strings_cnt > 0) &&
@@ -353,12 +358,12 @@ void slave::canopen::read_element(const uint16_t& index, const uint8_t& sub_inde
             break;
         }
         case request_type_mailbox: {
-            uint8_t *buf = NULL; 
-            size_t buf_len = 0;
+            uint8_t buf[64]; 
+            size_t buf_len = 64;
             uint32_t abort_code = 0;
 
-            int ret = ec_coe_sdo_read(slv->master_dev->pec, slv->index, index, sub_index, 
-                    0, &buf, &buf_len, &abort_code);
+            int ret = ec_coe_sdo_read(&slv->master_dev->ec, slv->index, index, sub_index, 
+                    0, &buf[0], &buf_len, &abort_code);
 
             if (ret != 0) {
                 if (ret == EC_ERROR_MAILBOX_ABORT) {
@@ -371,12 +376,9 @@ void slave::canopen::read_element(const uint16_t& index, const uint8_t& sub_inde
                         index, sub_index, ret);
             }
 
-            if (buf && buf_len) {
-                // ec_coe_sdo_read call did allocate buffer
+            if (buf_len) {
                 value.resize(buf_len);    
                 memcpy(&value[0], buf, buf_len);
-
-                free(buf);
             }
             break;
         }
@@ -401,7 +403,7 @@ void slave::canopen::write_element(const uint16_t& index, const uint8_t& sub_ind
         case request_type_mailbox: {
             uint32_t abort_code = 0;
 
-            int ret = ec_coe_sdo_write(slv->master_dev->pec, slv->index, index, sub_index, 
+            int ret = ec_coe_sdo_write(&slv->master_dev->ec, slv->index, index, sub_index, 
                     0, (uint8_t *)&value[0], value.size(), &abort_code);
 
             if (ret != 0) {
@@ -415,28 +417,23 @@ void slave::canopen::write_element(const uint16_t& index, const uint8_t& sub_ind
     }
 }
 
-//! pop next emergency message, throw exception if non present
+//! pop next emer   gency message, throw exception if non present
 /*!
- * \param msg return emergency message
+ * \param msg ret   urn emergency message
  */
 void slave::canopen::pop_emergency_message(
         service_provider::canopen_protocol::emergency_message_t& msg) {
-    ec_coe_emergency_message_entry_t *entry;
-    entry = TAILQ_FIRST(&slv->master_dev->pec->slaves[slv->index].mbx.coe.emergencies);
-    if (!entry)
-        throw str_exception("slave %2d: there are no more emergency messages\n", slv->index);
-
-    msg.ts.tv_sec = entry->timestamp.sec;
-    msg.ts.tv_nsec = entry->timestamp.nsec;
-    msg.error_code = (uint16_t)entry->msg[0] | ((uint16_t)entry->msg[1] << 8);
-    msg.error_register = entry->msg[2]; 
-
-    for (unsigned i = 3; i < entry->msg_len; ++i)
-        msg.data.push_back(entry->msg[i]);
-
-    TAILQ_REMOVE(&slv->master_dev->pec->slaves[slv->index].mbx.coe.emergencies, entry, qh);
-
-    free(entry);
+    ec_coe_emergency_message_t msg_tmp;
+    if (ec_coe_emergency_get_next(&slv->master_dev->ec, slv->index, &msg_tmp) == EC_OK) {
+        msg.ts.tv_sec = msg_tmp.timestamp.sec;
+        msg.ts.tv_nsec = msg_tmp.timestamp.nsec;
+        msg.error_code = (uint16_t)msg_tmp.msg[0] | ((uint16_t)msg_tmp.msg[1] << 8);
+        msg.error_register = msg_tmp.msg[2]; 
+    
+        for (unsigned i = 3; i < msg_tmp.msg_len; ++i) {
+            msg.data.push_back(msg_tmp.msg[i]);
+        }
+    }
 }
 
 typedef struct data_type_desc {
