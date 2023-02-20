@@ -18,7 +18,7 @@ class MainProject(ConanFile):
             "service_provider_sercos_protocol/[~=5 >=5.1]@robotkernel/unstable",
             "service_provider_file_protocol/[~=5 >=5.1]@robotkernel/unstable",
             "service_provider_process_data_inspection/[~=5 >=5.1]@robotkernel/unstable",
-            "libethercat/0.4.0@common/unstable" ]
+            "libethercat/0.4.0@common/stable" ]
 
     options = {
             "max_slaves"                 : "ANY",
