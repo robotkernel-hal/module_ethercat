@@ -16,7 +16,7 @@ class lnrk_interface_python(ConanFile):
         self.requires("service_provider_memory_inspection_rkgui/[>=5.1]@robotkernel/stable")
         self.requires("service_provider_canopen_protocol_rkgui/[>=5.1]@robotkernel/stable")
         self.requires("service_provider_key_value_rkgui/[>=5.1]@robotkernel/stable")
-        self.requires("service_provider_sercos_protocol/[>=5.1]@robotkernel/stable")
+        self.requires("service_provider_sercos_protocol_rkgui/[>=5.1]@robotkernel/stable")
         self.requires("service_provider_file_protocol_rkgui/[>=5.1]@robotkernel/stable")
         self.requires("service_provider_process_data_inspection_rkgui/[>=5.1]@robotkernel/stable")
 
