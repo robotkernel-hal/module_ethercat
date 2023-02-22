@@ -8,17 +8,17 @@ class MainProject(ConanFile):
     name = "module_ethercat"
     description = "robotkernel EtherCAT master module based on libethercat."
     url = "https://rmc-github.robotic.dlr.de/robotkernel/module_ethercat"
-    exports_sources = ["*", "!.gitignore"] + ["!%s" % x for x in tools.Git().excluded_files()]
+    exports_sources = ["*", "!.gitignore", "!bindings"] + ["!%s" % x for x in tools.Git().excluded_files()]
     requires = [
-
-            "robotkernel/[~=5]@robotkernel/stable",
-            "service_provider_memory_inspection/[~=5 >=5.1]@robotkernel/unstable",
-            "service_provider_canopen_protocol/[~=5 >=5.1]@robotkernel/unstable",
-            "service_provider_key_value/[~=5 >=5.1]@robotkernel/unstable",
-            "service_provider_sercos_protocol/[~=5 >=5.1]@robotkernel/unstable",
-            "service_provider_file_protocol/[~=5 >=5.1]@robotkernel/unstable",
-            "service_provider_process_data_inspection/[~=5 >=5.1]@robotkernel/unstable",
             "libethercat/0.4.0@common/stable" ]
+    build_requires = [
+            "robotkernel/[~=5]@robotkernel/stable",
+            "service_provider_memory_inspection/[~=5]@robotkernel/stable",
+            "service_provider_canopen_protocol/[~=5]@robotkernel/stable",
+            "service_provider_key_value/[~=5]@robotkernel/stable",
+            "service_provider_sercos_protocol/[~=5]@robotkernel/stable",
+            "service_provider_file_protocol/[~=5]@robotkernel/stable",
+            "service_provider_process_data_inspection/[~=5]@robotkernel/stable", ]
 
     options = {
             "max_slaves"                 : "ANY",
@@ -89,10 +89,4 @@ class MainProject(ConanFile):
 
         base = self.python_requires["conan_template"].module.RobotkernelConanFile
         base.configure(self)
-
-    def package_info(self):
-        base = self.python_requires["conan_template"].module.RobotkernelConanFile
-        base.package_info(self)
-
-        self.env_info.PYTHONPATH.append(os.path.join(self.package_folder, "bindings/python"))
 
