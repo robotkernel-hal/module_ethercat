@@ -1,6 +1,13 @@
-context: conan
-configurations:
-- any:
-    ecat_device: { sock_raw, sock_raw_mmaped, file }
-- imports:
-  - linux_defaults
+_: &build_configs
+  - imports: [linux_defaults]
+
+builds:
+  - context: conan
+    build_file: conanfile.py
+    configurations:
+    - any:
+      ecat_device: { sock_raw, sock_raw_mmaped, file }
+    configurations: *build_configs
+  - context: conan
+    build_file: conanfile.rkgui.py
+    configurations: *build_configs
