@@ -13,12 +13,12 @@ class lnrk_interface_python(ConanFile):
     exports_sources = os.path.join(pure_python_folder, "*")
     
     def requirements(self):
-        self.requires("service_provider_memory_inspection/[>=5.1]@robotkernel/stable")
-        self.requires("service_provider_canopen_protocol_python_rkgui/[>=5.1]@robotkernel/stable")
-        self.requires("service_provider_key_value/[>=5.1]@robotkernel/stable")
+        self.requires("service_provider_memory_inspection_rkgui/[>=5.1]@robotkernel/stable")
+        self.requires("service_provider_canopen_protocol_rkgui/[>=5.1]@robotkernel/stable")
+        self.requires("service_provider_key_value_rkgui/[>=5.1]@robotkernel/stable")
         self.requires("service_provider_sercos_protocol/[>=5.1]@robotkernel/stable")
-        self.requires("service_provider_file_protocol_python_rkgui/[>=5.1]@robotkernel/stable")
-        self.requires("service_provider_process_data_inspection/[>=5.1]@robotkernel/stable")
+        self.requires("service_provider_file_protocol_rkgui/[>=5.1]@robotkernel/stable")
+        self.requires("service_provider_process_data_inspection_rkgui/[>=5.1]@robotkernel/stable")
 
     def package(self):
         self.copy(os.path.join(self.pure_python_folder, "*"))
