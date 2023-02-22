@@ -5,7 +5,7 @@ builds:
   - context: conan
     build_file: conanfile.py
     configurations:
-      - import: [linux_defaults]
+      - imports: [linux_defaults]
       - any:
         ecat_device: { sock_raw, sock_raw_mmaped, file }
   - context: conan
