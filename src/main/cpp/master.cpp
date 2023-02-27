@@ -746,7 +746,7 @@ int master::set_state(module_state_t state) {
                 "- uint64_t: packet_duration\n";
 
             pdin_dc = make_shared<robotkernel::triple_buffer>(
-                    (uint8_t *)&ec.dc.sent_time_nsec - (uint8_t *)&ec.dc.dc_time,
+                    (uint8_t *)&ec.dc.timer_correction - (uint8_t *)&ec.dc.dc_time,
                     name, "dc.inputs", pdo_desc, pdin_dc_trigger->id());
             dc_provider_hash = pdin_dc->set_provider(shared_from_this());
             k.add_device(pdin_dc);
