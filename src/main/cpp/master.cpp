@@ -266,7 +266,7 @@ void master::recv_dc() {
 
     if (pdin_dc) {
         pdin_dc->write(dc_provider_hash, 0, (uint8_t *)&ec.dc.dc_time, 
-                (size_t)((uint8_t *)&ec.dc.sent_time_nsec - (uint8_t *)&ec.dc.dc_time));
+                (size_t)((uint8_t *)&ec.dc.timer_correction - (uint8_t *)&ec.dc.dc_time));
         pdin_dc_trigger->trigger_modules();
     }
 }
