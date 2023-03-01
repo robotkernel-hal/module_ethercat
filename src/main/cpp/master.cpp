@@ -96,8 +96,8 @@ void dc_clock_setter::run() {
  * \param node yaml intialization node
  */
 master::master(const std::string& name, const YAML::Node& node) :
-    pd_provider(name), module_base("module_ethercat", name, node),
-    service_provider::canopen_protocol::base(name, "master.mailbox")
+    service_provider::canopen_protocol::base(name, "master.mailbox"),
+    pd_provider(name), module_base("module_ethercat", name, node)
 {
     config = YAML::Clone(node);
     elp.ll = ll;
