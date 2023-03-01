@@ -303,6 +303,13 @@ void master::open() {
 
     ec.threaded_startup = threaded_startup;
 
+    for (slave_map_t::iterator it = _slave_info.begin(); it != _slave_info.end(); ++it) {
+        int slave_nr = it->first;
+        if (ec.slave_cnt <= slave_nr) {
+            throw str_exception("fatal: found %d slaves but need %d!\n", ec.slave_cnt, slave_nr);
+        }
+    }
+
     // -----------------------------------------------------------
     // setting init commands, distributed clocks and eoe
     for (slave_map_t::iterator it = _slave_info.begin(); 
@@ -345,6 +352,15 @@ void master::open() {
         ec.pd_groups[g_nr].divisor = g->divisor;
         ec.pd_groups[g_nr].cdg.user_cb = cb_group;
         ec.pd_groups[g_nr].cdg.user_cb_arg = (void *)this;
+
+        g->_slaves.remove_if([&](int s_nr) { 
+                bool rem = (ec.slave_cnt <= s_nr);
+                if (rem) {
+                    log(warning, "slave %d not connected to ethercat bus removing from group %d!\n", s_nr, g_nr);
+                }
+
+                return rem;
+            });
 
         for (std::list<int>::iterator it2 = it->second->_slaves.begin();
                 it2 != it->second->_slaves.end(); ++it2) {
@@ -824,7 +840,7 @@ void master::tick() {
     }
 
     if (hw_tx(&ec.hw) != EC_OK) {
-        throw str_exception("error sending EtherCAT frames!\n");
+        log(error, "error sending EtherCAT frames!\n");
     }
 
     pd_cookie++;
