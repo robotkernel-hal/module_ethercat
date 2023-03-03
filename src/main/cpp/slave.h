@@ -321,6 +321,9 @@ class slave :
         bool prefer_obj_names;
         bool skip_pdo_description;
 
+        uint32_t expected_vendor;
+        uint32_t expected_product;
+
         //! slave distributed clocks
         struct slave_dc {
             bool has_dc;

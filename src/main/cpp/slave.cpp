@@ -292,6 +292,9 @@ slave::slave(int index, const YAML::Node& node, master *master_dev) :
 
     skip_pdo_description = get_as<bool>(node, "skip_pdo_description", false);
 
+    expected_vendor = get_as<uint32_t>(node, "vendor_id", 0u);
+    expected_product = get_as<uint32_t>(node, "product_code", 0u);
+
     if (node["mapping"]) {
         const YAML::Node& mapping_node = node["mapping"];
         string type = get_as<string>(mapping_node, "type");

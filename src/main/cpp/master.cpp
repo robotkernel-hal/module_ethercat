@@ -289,6 +289,8 @@ void master::recv_group(int group_index) {
 }
 
 void master::open() {
+    bool abort = false;
+
     // -----------------------------------------------------------
     // open ethercat interface
     int ret = ec_open(&ec, ifname.c_str(), recv_prio, recv_mask, log_eeprom_data);
@@ -318,10 +320,28 @@ void master::open() {
         sp_slave_t slv = it->second;
                 
         if (ec.slave_cnt <= slave_nr)  {
-            log(warning, "slave %d not connected to ethercat bus, "
+            log(warning, "slave %2d not connected to ethercat bus, "
                         "settings dc config failed!\n", slave_nr);
 
             continue;
+        }
+
+        if (slv->expected_vendor != 0) {
+            if (ec.slaves[slave_nr].eeprom.vendor_id != slv->expected_vendor) {
+                log(warning, "slave %2d: got vendor_id 0x%X but expected 0x%X!\n", slave_nr, 
+                    ec.slaves[slave_nr].eeprom.vendor_id, slv->expected_vendor);
+
+                abort = true;
+            }
+        }
+        
+        if (slv->expected_product != 0) {
+            if (ec.slaves[slave_nr].eeprom.product_code != slv->expected_product) {
+                log(warning, "slave %2d: got product_code 0x%X but expected 0x%X!\n", slave_nr, 
+                    ec.slaves[slave_nr].eeprom.product_code, slv->expected_product);
+
+                abort = true;
+            }
         }
             
         if (slv->dc.has_dc)
@@ -339,6 +359,10 @@ void master::open() {
             char *dns_name = slv->eoe.dns_name.size() > 0 ? (char *)slv->eoe.dns_name.c_str() : NULL; 
             ec_slave_set_eoe_settings(&ec, slave_nr, mac, ip_address, subnet, gateway, dns, dns_name);
         }
+    }
+
+    if (abort) {
+        throw str_exception("fatal: config mismatch!\n");
     }
 
     // -----------------------------------------------------------
