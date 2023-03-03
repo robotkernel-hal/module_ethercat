@@ -305,13 +305,6 @@ void master::open() {
 
     ec.threaded_startup = threaded_startup;
 
-    for (slave_map_t::iterator it = _slave_info.begin(); it != _slave_info.end(); ++it) {
-        int slave_nr = it->first;
-        if (ec.slave_cnt <= slave_nr) {
-            throw str_exception("fatal: found %d slaves but need %d!\n", ec.slave_cnt, slave_nr);
-        }
-    }
-
     // -----------------------------------------------------------
     // setting init commands, distributed clocks and eoe
     for (slave_map_t::iterator it = _slave_info.begin(); 
@@ -320,9 +313,8 @@ void master::open() {
         sp_slave_t slv = it->second;
                 
         if (ec.slave_cnt <= slave_nr)  {
-            log(warning, "slave %2d not connected to ethercat bus, "
-                        "settings dc config failed!\n", slave_nr);
-
+            log(warning, "slave %2d: expected but not connected to ethercat bus!\n", slave_nr);
+            abort = true; 
             continue;
         }
 
