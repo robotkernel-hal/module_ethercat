@@ -96,8 +96,8 @@ void dc_clock_setter::run() {
  * \param node yaml intialization node
  */
 master::master(const std::string& name, const YAML::Node& node) :
-    pd_provider(name), module_base("module_ethercat", name, node),
-    service_provider::canopen_protocol::base(name, "master.mailbox")
+    service_provider::canopen_protocol::base(name, "master.mailbox"),
+    pd_provider(name), module_base("module_ethercat", name, node)
 {
     config = YAML::Clone(node);
     elp.ll = ll;
@@ -303,6 +303,13 @@ void master::open() {
 
     ec.threaded_startup = threaded_startup;
 
+    for (slave_map_t::iterator it = _slave_info.begin(); it != _slave_info.end(); ++it) {
+        int slave_nr = it->first;
+        if (ec.slave_cnt <= slave_nr) {
+            throw str_exception("fatal: found %d slaves but need %d!\n", ec.slave_cnt, slave_nr);
+        }
+    }
+
     // -----------------------------------------------------------
     // setting init commands, distributed clocks and eoe
     for (slave_map_t::iterator it = _slave_info.begin(); 
@@ -345,6 +352,15 @@ void master::open() {
         ec.pd_groups[g_nr].divisor = g->divisor;
         ec.pd_groups[g_nr].cdg.user_cb = cb_group;
         ec.pd_groups[g_nr].cdg.user_cb_arg = (void *)this;
+
+        g->_slaves.remove_if([&](int s_nr) { 
+                bool rem = (ec.slave_cnt <= s_nr);
+                if (rem) {
+                    log(warning, "slave %d not connected to ethercat bus removing from group %d!\n", s_nr, g_nr);
+                }
+
+                return rem;
+            });
 
         for (std::list<int>::iterator it2 = it->second->_slaves.begin();
                 it2 != it->second->_slaves.end(); ++it2) {
@@ -824,7 +840,7 @@ void master::tick() {
     }
 
     if (hw_tx(&ec.hw) != EC_OK) {
-        throw str_exception("error sending EtherCAT frames!\n");
+        log(error, "error sending EtherCAT frames!\n");
     }
 
     pd_cookie++;
@@ -833,82 +849,6 @@ void master::tick() {
 
 /*! Correct Master clock according to distributed clock. */
 void master::dc_set_clock() {
-#if 0
-    double diff_per_cycle = (ec.dc.act_diff / 1E9) / dc_sync.offset_compensation_cycles;
-
-    double kp = dc_sync.kp;
-    double ki = dc_sync.ki;
-    double slew_rate = dc_sync.slew_rate;
-    double i_limit = dc_sync.i_limit;
-
-//    if (fabs(diff_per_cycle) < (dc_sync.start_timer / 100.)) {
-//        // lower factors
-//        kp /= 10.;
-//        ki /= 10.;
-//    }
-
-    // sum it up for integral part
-    dc_sync.diffsum += ki * diff_per_cycle; 
-    
-    // limit diffsum
-    if (dc_sync.diffsum > i_limit) { dc_sync.diffsum = i_limit; }
-    else if (dc_sync.diffsum < (-1 * i_limit)) { dc_sync.diffsum = -1 * i_limit; }
-    
-    double act_timer = 1. / t_dev->get_rate();
-    
-    if (dc_sync.log) {
-        log(verbose, "old timer %8.3f, kp %7.3f, ki %7.3f, p part %1.12f, i_part %1.12f, i_antiwindup %1.12f\n", 
-                1. / act_timer, kp, ki, (kp * diff_per_cycle), dc_sync.diffsum, dc_sync.i_limit);
-    }
-
-    dc_sync.p_part = kp * diff_per_cycle;
-    // calculate new rate in [s]
-    double v_part = dc_sync.p_part + dc_sync.diffsum;
-    double change = (v_part - dc_sync.v_part_old);
-    if (change > slew_rate) { change = slew_rate; v_part = slew_rate + dc_sync.v_part_old; }
-    else if (change < (-1 * slew_rate)) { change = -1 * slew_rate; v_part = -1 * slew_rate + dc_sync.v_part_old; }
-    act_timer += change;
-    dc_sync.v_part_old = v_part;
-    
-    if (dc_sync.log) {
-        log(verbose, "v_part %.10f, v_part_old %.10f, correction %.10f, change %.10f\n", v_part, dc_sync.v_part_old, v_part - dc_sync.v_part_old, change);
-        log(verbose, "new timer %8.3f\n", 1. / act_timer);
-    }
-    try {
-        rate = 1.f / act_timer;
-        t_dev->set_rate(rate);
-
-        if (dc_sync.log) {
-            log(verbose, "setting new clock rate to %8.3f [Hz], clock diff %8.3f [us]\n",
-                    rate, diff_per_cycle * 1E6);
-        }
-    } catch (exception& e) {
-        log(warning, "setting new clock failed: %s\n", e.what());
-    }
-
-    dc_sync.first_run = false;
-    dc_sync.last_diff = diff_per_cycle;
-
-    // check if diff converged
-    if (    dc_sync.diff_converge_cycles && 
-            ((++dc_sync.diff_converge_cnt % dc_sync.diff_converge_cycles) == 0)) {
-        dc_sync.diff_converge_cnt = 0;
-
-        double margin = dc_sync.start_timer / 100.;
-
-        if ((diff_per_cycle > margin) || (diff_per_cycle < -1 * margin)) {
-            if (!dc_sync.diff_converged) {
-//                log(info, "DC diff did not converge until now... (start_timer %10.7f, act_timer %10.7f, margin %10.7f, diff %10.7f\n",
-//                        dc_sync.start_timer, act_timer, margin, diff_per_cycle);
-            }
-        } else {
-            if (!dc_sync.diff_converged) {
-//                log(info, "DC diff converged!\n");
-                dc_sync.diff_converged = true;
-            }
-        }
-    }
-#endif
     try {
         int64_t rate_in_ns = dc_sync.start_timer * 1E9; //(1. / t_dev->get_rate()) * 1E9;
         rate_in_ns += ec.dc.timer_correction / dc_sync.offset_compensation_cycles;
@@ -924,25 +864,17 @@ void master::dc_set_clock() {
     }
 
     dc_sync.first_run = false;
-    //dc_sync.last_diff = diff_per_cycle;
     
     // check if diff converged
-    if (    dc_sync.diff_converge_cycles && 
+    if (    !dc_sync.diff_converged         &&
+            dc_sync.diff_converge_cycles    && 
             ((++dc_sync.diff_converge_cnt % dc_sync.diff_converge_cycles) == 0)) {
         dc_sync.diff_converge_cnt = 0;
 
         double margin = 1. / (dc_sync.start_timer / 100.);
 
-        if ((ec.dc.timer_correction > margin) || (ec.dc.timer_correction < -1 * margin)) {
-            if (!dc_sync.diff_converged) {
-//                log(info, "DC diff did not converge until now... (start_timer %10.7f, act_timer %10.7f, margin %10.7f, diff %10.7f\n",
-//                        dc_sync.start_timer, act_timer, margin, diff_per_cycle);
-            }
-        } else {
-            if (!dc_sync.diff_converged) {
-//                log(info, "DC diff converged!\n");
-                dc_sync.diff_converged = true;
-            }
+        if (fabs(ec.dc.timer_correction) < margin) {
+            dc_sync.diff_converged = true;
         }
     }
 
