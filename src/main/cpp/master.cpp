@@ -742,7 +742,7 @@ int master::set_state(module_state_t state) {
             ec_set_state(&ec, EC_STATE_SAFEOP);
             STATE_TRANSITION(post, module_state_safeop);
 
-            if (ec.dc.mode == dc_mode_ref_clock) {
+            if ((ec.dc.have_dc != 0) && (ec.dc.mode == dc_mode_ref_clock)) {
                 while (!dc_sync.diff_converged) {
                     double act_timer = 1. / t_dev->get_rate();
                     log(info, "waiting for DC to converge... act_timer %13.9f, last_diff %13.9f, diffsum %13.9f\n", act_timer, dc_sync.last_diff, dc_sync.diffsum);
