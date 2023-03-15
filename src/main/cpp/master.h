@@ -374,7 +374,20 @@ class master :
          * \param value value to write
          */
         void write_element(const uint16_t& index, const uint8_t& sub_index,
-                const service_provider::canopen_protocol::element_t& value) {}
+                const service_provider::canopen_protocol::element_t& value) 
+        {
+            uint32_t abort_code = 0;
+
+            int ret = ec_coe_master_sdo_write(&ec, index, sub_index, 
+                    0, (uint8_t *)&value[0], value.size(), &abort_code);
+
+            if (ret != 0) {
+                // decode ret
+                throw string_util::str_exception("master: writing CoE element value index 0x%X "
+                        "sub index %d returned errorcode 0x%X!\n", 
+                        index, sub_index, ret);
+            }
+        }
 
         //! pop next emergency message, throw exception if non present
         /*!
