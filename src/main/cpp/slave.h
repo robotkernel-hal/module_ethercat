@@ -142,7 +142,7 @@ class slave :
                  * \param data data to write
                  */
                 void write_memory(const uint64_t& address, 
-                        service_provider::memory_inspection::data_t& data);
+                        const service_provider::memory_inspection::data_t& data);
         };
         
         class canopen : public service_provider::canopen_protocol::base {
