@@ -96,7 +96,7 @@ void slave::memory_inspection::read_memory(const uint64_t& address,
  * \param data data to write
  */
 void slave::memory_inspection::write_memory(const uint64_t& address, 
-        service_provider::memory_inspection::data_t& data) {
+        const service_provider::memory_inspection::data_t& data) {
 
     switch (type) {
         default:

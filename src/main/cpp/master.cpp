@@ -667,7 +667,7 @@ int master::set_state(module_state_t state) {
             }
 
             if (dc_sync.timer_override > 0) {
-                ec.dc.timer_override = dc_sync.timer_override;
+                ec.main_cycle_interval = dc_sync.timer_override;
 
                 rate = 1. / (dc_sync.timer_override / 1E9);
             } else {
@@ -676,7 +676,7 @@ int master::set_state(module_state_t state) {
 
                 // ethercat master need timer interval in [ns]
                 dc_sync.timer_override = 
-                    ec.dc.timer_override = (1.f / rate) * 1E9;
+                    ec.main_cycle_interval = (1.f / rate) * 1E9;
 
                 log(info, "got trigger rate %f Hz\n", rate);
             }

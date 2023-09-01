@@ -808,11 +808,11 @@ void slave::pre_state_transition(module_state_t from, module_state_t to) {
             // ====> configure distributed clocks if needed 
             if (true == dc.has_dc) {
                 if (dc.cycle_time_0 == 0)
-                    dc.cycle_time_0 = master_dev->ec.dc.timer_override; 
+                    dc.cycle_time_0 = master_dev->ec.main_cycle_interval; 
 
                 if (dc.type == 1) {
                     if (dc.cycle_time_1 == 0)
-                        dc.cycle_time_1 = master_dev->ec.dc.timer_override; 
+                        dc.cycle_time_1 = master_dev->ec.main_cycle_interval; 
 
                     master_dev->log(verbose, "slave %2d configuring dc sync 01, "
                             "cycle_times %d/%d, cycle_shift %d\n",
