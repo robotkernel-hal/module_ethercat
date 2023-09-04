@@ -43,6 +43,8 @@ group::group(master *parent, int index, const YAML::Node& node) :
     divisor        = get_as<int>(node, "divisor");
     _divisor_cnt   = 0;
     recv_timeout   = get_as<int>(node, "recv_timeout", 1000000);
+    overlapping    = get_as<bool>(node, "overlapping", true);
+    lrw            = get_as<bool>(node, "lrw", true);
 
     for (YAML::const_iterator it = node["slaves"].begin(); 
             it != node["slaves"].end(); ++it)

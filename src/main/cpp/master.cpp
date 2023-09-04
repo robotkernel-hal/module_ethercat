@@ -368,6 +368,8 @@ void master::open() {
         ec.pd_groups[g_nr].divisor = g->divisor;
         ec.pd_groups[g_nr].cdg.user_cb = cb_group;
         ec.pd_groups[g_nr].cdg.user_cb_arg = (void *)this;
+        ec.pd_groups[g_nr].overlapping = g->overlapping ? 1 : 0;
+        ec.pd_groups[g_nr].use_lrw = g->lrw ? 1 : 0;
 
         g->_slaves.remove_if([&](int s_nr) { 
                 bool rem = (ec.slave_cnt <= s_nr);
@@ -774,7 +776,6 @@ int master::set_state(module_state_t state) {
                 "- uint64_t: rtc_time\n"
                 "- int64_t: rtc_sto\n"
                 "- int64_t: act_diff\n"
-                "- int64_t: timer_override\n"
                 "- uint64_t: packet_duration\n";
 
             pdin_dc = make_shared<robotkernel::triple_buffer>(
