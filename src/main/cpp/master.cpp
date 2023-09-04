@@ -313,14 +313,14 @@ void master::open() {
         sp_slave_t slv = it->second;
                 
         if (ec.slave_cnt <= slave_nr)  {
-            log(warning, "slave %2d: expected but not connected to ethercat bus!\n", slave_nr);
+            log(error, "slave %2d: expected but not connected to ethercat bus!\n", slave_nr);
             abort = true; 
             continue;
         }
 
         if (slv->expected_vendor != 0) {
             if (ec.slaves[slave_nr].eeprom.vendor_id != slv->expected_vendor) {
-                log(warning, "slave %2d: got vendor_id 0x%X but expected 0x%X!\n", slave_nr, 
+                log(error, "slave %2d: got vendor_id 0x%X but expected 0x%X!\n", slave_nr, 
                     ec.slaves[slave_nr].eeprom.vendor_id, slv->expected_vendor);
 
                 abort = true;
@@ -329,7 +329,7 @@ void master::open() {
         
         if (slv->expected_product != 0) {
             if (ec.slaves[slave_nr].eeprom.product_code != slv->expected_product) {
-                log(warning, "slave %2d: got product_code 0x%X but expected 0x%X!\n", slave_nr, 
+                log(error, "slave %2d: got product_code 0x%X but expected 0x%X!\n", slave_nr, 
                     ec.slaves[slave_nr].eeprom.product_code, slv->expected_product);
 
                 abort = true;
