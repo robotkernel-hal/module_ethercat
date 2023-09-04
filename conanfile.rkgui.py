@@ -24,5 +24,6 @@ class lnrk_interface_python(ConanFile):
         self.copy(os.path.join(self.pure_python_folder, "*"))
 
     def package_info(self):
+        self.env_info.PYTHONPATH.append(os.path.join(self.package_folder, self.pure_python_folder))
         self.env_info.PYTHONPATH.append(os.path.join(self.package_folder, os.path.dirname(self.pure_python_folder)))
     

@@ -73,11 +73,14 @@ class ethercat_canopen_subview(helpers.builder_base):
         for s in module.childs:
             def add(prefix, sort_key, devname):
                 try:
-                    ethercat_device = canopen_device(prefix, self.app, self.canopen_view, module.name, devname)
+                    ethercat_device = canopen_device.canopen_device(prefix, self.app, self.canopen_view, module.name, devname)
                     indices = ethercat_device.list_dictionary()
                     name = 'N/A'
                     if 0x1008 in indices:
-                        name = ethercat_device.read_element(index=0x1008, sub_index=0).value
+                        ethercat_device.svc_read_element.req.index = 0x1008
+                        ethercat_device.svc_read_element.req.sub_index = 0
+                        ethercat_device.svc_read_element.call()
+                        name = ethercat_device.svc_read_element.resp.value
 
                     self.liststore_devices.append( (sort_key, name, ethercat_device) )
                 except:
@@ -85,15 +88,17 @@ class ethercat_canopen_subview(helpers.builder_base):
                     print(traceback.format_exc())
                     pass
 
-            number = int(s.split('_')[-1])
+            if s == 'master':
+                devname = '.'.join([s, 'mailbox'])
+                GObject.timeout_add(10, add, module.robotkernel_name, s, devname)
+            else:
+                number = int(s.split('_')[-1])
 
-            warnings.warn("disabling mailbox endpoint to suppress warnings")
-#            temporarily disabled: mailbox field, not implemented            
-#            for t in ['mailbox', 'eeprom']:
-            for t in ['eeprom']:
-                devname = '.'.join([s, t])
-                sort_key = '%s %d' % (t, number)
-                GObject.timeout_add(10, add, module.robotkernel_name, sort_key, devname)
+                warnings.warn("disabling mailbox endpoint to suppress warnings")
+                for t in ['mailbox', 'eeprom']:
+                    devname = '.'.join([s, t])
+                    sort_key = '%s %d' % (t, number)
+                    GObject.timeout_add(10, add, module.robotkernel_name, sort_key, devname)
 
     #CALLBACKS
     def on_treeview_devices_cursor_changed(self, widget):
