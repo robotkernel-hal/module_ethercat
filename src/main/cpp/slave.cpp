@@ -226,7 +226,6 @@ slave::slave(int index, master *master_dev) :
 {
     master_dev->log(verbose, "default slave index %d created\n", index);
     provider_hash = consumer_hash = 0;
-    disable_mbx_sm_map = false;
     prefer_obj_names = false;
 };
 
@@ -285,8 +284,6 @@ slave::slave(int index, const YAML::Node& node, master *master_dev) :
                 soe_init_cmds.push_back(new soe_init_cmd_t(*it));
         }
     }
-
-    disable_mbx_sm_map = get_as<bool>(node, "disable_mbx_sm_map", false);
 
     prefer_obj_names = false;
 
@@ -798,10 +795,6 @@ void slave::pre_state_transition(module_state_t from, module_state_t to) {
                 break;
         case preop_2_op:
         case preop_2_safeop:
-            if (disable_mbx_sm_map) {
-                master_dev->ec.slaves[index].mbx.map_mbx_state = OSAL_FALSE;
-            }
-
             // ====> sending init commands for safeop
             add_init_cmds();
 
