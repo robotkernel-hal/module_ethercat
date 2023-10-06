@@ -6,8 +6,6 @@ builds:
     build_file: conanfile.py
     configurations:
       - imports: [linux_defaults]
-      - any:
-          ecat_device: { sock_raw, sock_raw_mmaped, file }
   - context: conan
     build_file: conanfile.rkgui.py
     configurations: *build_configs
