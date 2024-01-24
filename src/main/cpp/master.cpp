@@ -146,7 +146,7 @@ void master::init() {
         }
     }
 
-    if (config["slaves"] != NULL) {
+    if (config["slaves"]) {
         // parsing slave configurations
         const YAML::Node& slaves = config["slaves"];
 
