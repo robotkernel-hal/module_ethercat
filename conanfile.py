@@ -1,17 +1,15 @@
-from conans import ConanFile, tools
-import os
+from conan import ConanFile
 
 class MainProject(ConanFile):
-    python_requires = "conan_template/[~=5]@robotkernel/stable"
+    python_requires = "conan_template/[^5.0.6]@robotkernel/stable"
     python_requires_extend = "conan_template.RobotkernelConanFile"
 
     name = "module_ethercat"
     description = "robotkernel EtherCAT master module based on libethercat."
     url = "https://rmc-github.robotic.dlr.de/robotkernel/module_ethercat"
-    exports_sources = ["*", "!.gitignore", "!bindings"] + ["!%s" % x for x in tools.Git().excluded_files()]
+    exports_sources = ["*", "!.gitignore"]
     requires = [
-            "libethercat/[>=0.5.1]@common/unstable" ]
-    build_requires = [
+            "libethercat/[>=0.5.1]@common/unstable",
             "robotkernel/[~=5]@robotkernel/stable",
             "service_provider_memory_inspection/[~=5]@robotkernel/stable",
             "service_provider_canopen_protocol/[~=5]@robotkernel/stable",
