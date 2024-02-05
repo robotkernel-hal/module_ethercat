@@ -1,5 +1,7 @@
 import os
-from conans import ConanFile, AutoToolsBuildEnvironment
+from conan import ConanFile, conan_version
+from conan.tools.scm import Version
+from conan.tools.files import copy
 
 class lnrk_interface_python(ConanFile):
     name = "module_ethercat_rkgui"
@@ -21,8 +23,10 @@ class lnrk_interface_python(ConanFile):
         self.requires("service_provider_process_data_inspection_rkgui/[>=5.1]@robotkernel/stable")
 
     def package(self):
-        self.copy(os.path.join(self.pure_python_folder, "*"))
+        copy(self, os.path.join(self.pure_python_folder, "*"), self.source_folder, self.package_folder)
 
     def package_info(self):
-        self.env_info.PYTHONPATH.append(os.path.join(self.package_folder, os.path.dirname(self.pure_python_folder)))
+        if Version(conan_version) < "2.0.0":
+            self.env_info.PYTHONPATH.append(os.path.join(self.package_folder, os.path.dirname(self.pure_python_folder)))
+        self.runenv_info.append_path("PYTHONPATH", os.path.join(self.package_folder, os.path.dirname(self.pure_python_folder)))
     
