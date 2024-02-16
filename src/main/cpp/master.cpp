@@ -115,6 +115,7 @@ void master::init() {
     get_yaml(bool,     log_eeprom_data, false);
     get_yaml(bool,     threaded_startup, true);
     get_yaml(bool,     monitor_state, false);
+    get_yaml(bool,     use_real_names, false);
 
     /* creating dccs */
     dccs = make_shared<dc_clock_setter>(shared_from_this());

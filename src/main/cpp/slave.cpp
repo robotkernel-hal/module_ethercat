@@ -981,8 +981,11 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                 if (pdin)
                     k.remove_device(pdin);
                 
-                pdin_trigger = make_shared<robotkernel::trigger>(
-                        master_dev->name, format_string("slave_%d.inputs", index), rate);
+                string base_name = master_dev->use_real_names ?
+                    format_string("%s.inputs", name.c_str()) :
+                    format_string("slave_%d.inputs", index);
+
+                pdin_trigger = make_shared<robotkernel::trigger>(master_dev->name, base_name, rate);
                 k.add_device(pdin_trigger);
 
                 string pdo_desc = "";
@@ -999,11 +1002,8 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                     pdo_desc = format_string("- uint8_t[%d]: buf\n", slv->pdin.len);
                 }
 
-                pdin = make_shared<robotkernel::triple_buffer_with_injection>(
-                        slv->pdin.len, 
-                        master_dev->name, 
-                        format_string("slave_%d.inputs", index), 
-                        pdo_desc,
+                pdin = make_shared<robotkernel::triple_buffer_with_injection>(slv->pdin.len, 
+                        master_dev->name, base_name, pdo_desc,
                         format_string("%s.group_%d.trigger", master_dev->name.c_str(), slv->assigned_pd_group));
                 provider_hash = pdin->set_provider(shared_from_this());
                 k.add_device(pdin);
@@ -1013,8 +1013,11 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                 if (pdout)
                     k.remove_device(pdout);
                 
-                pdout_trigger = make_shared<robotkernel::trigger>(
-                        master_dev->name, format_string("slave_%d.outputs", index));
+                string base_name = master_dev->use_real_names ?
+                    format_string("%s.outputs", name.c_str()) :
+                    format_string("slave_%d.outputs", index);
+
+                pdout_trigger = make_shared<robotkernel::trigger>(master_dev->name, base_name, index);
                 k.add_device(pdout_trigger);
 
                 string pdo_desc = "";
@@ -1032,7 +1035,7 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                 }
 
                 pdout = make_shared<robotkernel::triple_buffer_with_injection>(slv->pdout.len, master_dev->name, 
-                        format_string("slave_%d.outputs", index), pdo_desc, pdout_trigger->id());
+                        base_name, pdo_desc, pdout_trigger->id());
                 consumer_hash = pdout->set_consumer(shared_from_this());
                 k.add_device(pdout);
             }

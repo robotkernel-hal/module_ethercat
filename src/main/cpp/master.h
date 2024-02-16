@@ -148,6 +148,7 @@ class master :
 
         bool threaded_startup;
         bool monitor_state;
+        bool use_real_names;
 
         double rate;
 
