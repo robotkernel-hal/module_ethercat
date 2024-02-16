@@ -39,17 +39,23 @@ using namespace module_ethercat;
 extern const string module_ethercat::state_strings[];
 
 void convert_string_to_hex(string input, char **output, size_t *outlen) {
-    size_t len = input.length();
-    *output = new char[len/2];
+    size_t len = (input.length() + 1) / 2;
+
+    if (len == 0) {
+        *outlen = 0;
+        return;
+    }
+
+    *output = new char[len];
     unsigned int tmp;
 
-    for (size_t i = 0; i < len/2; ++i) {
+    for (size_t i = 0; i < len; ++i) {
         string sub = input.substr(i*2, 2);
         sscanf(sub.c_str(), "%x", &tmp);
         (*output)[i] = tmp; 
     }
 
-    *outlen = len/2;
+    *outlen = len;
 }
 
 //! construction
