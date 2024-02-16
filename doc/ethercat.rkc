@@ -55,6 +55,9 @@
 # to decrease startup time.
 #threaded_startup: true
 
+# Use real slave names for robotkernel device names
+#use_real_names: false
+
 #########################################################
 # Process data group settings. 
 # Specify ethercat process data groups. Each group must have
