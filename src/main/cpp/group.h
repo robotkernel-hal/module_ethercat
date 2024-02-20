@@ -60,6 +60,8 @@ class group :
         int _index;
         int divisor;
         int _divisor_cnt;
+        bool overlapping;
+        bool lrw;
         std::list<int> _slaves;
 
         osal_timer_t timeout;

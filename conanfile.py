@@ -9,7 +9,7 @@ class MainProject(ConanFile):
     url = "https://rmc-github.robotic.dlr.de/robotkernel/module_ethercat"
     exports_sources = ["*", "!.gitignore"]
     requires = [
-            "libethercat/[>=0.5]@common/stable",
+            "libethercat/[>=0.5.1]@common/unstable",
             "robotkernel/[~=5]@robotkernel/stable",
             "service_provider_memory_inspection/[~=5]@robotkernel/stable",
             "service_provider_canopen_protocol/[~=5]@robotkernel/stable",
@@ -19,26 +19,30 @@ class MainProject(ConanFile):
             "service_provider_process_data_inspection/[~=5]@robotkernel/stable", ]
 
     options = {
-            "max_slaves"                 : ["ANY"],
-            "max_groups"                 : ["ANY"],
-            "max_pdlen"                  : ["ANY"],
-            "max_mbx_entries"            : ["ANY"],
-            "max_init_cmd_data"          : ["ANY"],
-            "max_slave_fmmu"             : ["ANY"],
-            "max_slave_sm"               : ["ANY"],
-            "max_datagrams"              : ["ANY"],
-            "max_eeprom_cat_sm"          : ["ANY"],
-            "max_eeprom_cat_fmmu"        : ["ANY"],
-            "max_eeprom_cat_pdo"         : ["ANY"],
-            "max_eeprom_cat_pdo_entries" : ["ANY"],
-            "max_eeprom_cat_strings"     : ["ANY"],
-            "max_eeprom_cat_dc"          : ["ANY"],
-            "max_string_len"             : ["ANY"],
-            "max_data"                   : ["ANY"],
-            "max_ds402_subdevs"          : ["ANY"],
-            "max_coe_emergencies"        : ["ANY"],
-            "max_coe_emergency_msg_len"  : ["ANY"],
-            "ecat_device"                : ["ANY"],
+            "max_slaves"                 : "ANY",
+            "max_groups"                 : "ANY",
+            "max_pdlen"                  : "ANY",
+            "max_mbx_entries"            : "ANY",
+            "max_init_cmd_data"          : "ANY",
+            "max_slave_fmmu"             : "ANY",
+            "max_slave_sm"               : "ANY",
+            "max_datagrams"              : "ANY",
+            "max_eeprom_cat_sm"          : "ANY",
+            "max_eeprom_cat_fmmu"        : "ANY",
+            "max_eeprom_cat_pdo"         : "ANY",
+            "max_eeprom_cat_pdo_entries" : "ANY",
+            "max_eeprom_cat_strings"     : "ANY",
+            "max_eeprom_cat_dc"          : "ANY",
+            "max_string_len"             : "ANY",
+            "max_data"                   : "ANY",
+            "max_ds402_subdevs"          : "ANY",
+            "max_coe_emergencies"        : "ANY",
+            "max_coe_emergency_msg_len"  : "ANY",
+            "hw_device_file"             : [ True, False ],
+            "hw_device_sock_raw"         : [ True, False ],
+            "hw_device_sock_raw_mmaped"  : [ True, False ],
+            "hw_device_bpf"              : [ True, False ],
+            "hw_device_pikeos"           : [ True, False ],
             }
     default_options = {
             "max_slaves"                 : 256,
@@ -60,7 +64,11 @@ class MainProject(ConanFile):
             "max_ds402_subdevs"          : 4,
             "max_coe_emergencies"        : 10,
             "max_coe_emergency_msg_len"  : 32,
-            "ecat_device"                : "sock_raw",
+            "hw_device_file"             : True,
+            "hw_device_sock_raw"         : True,
+            "hw_device_sock_raw_mmaped"  : True,
+            "hw_device_bpf"              : False,
+            "hw_device_pikeos"           : False,
             }
 
     def configure(self):
@@ -83,7 +91,11 @@ class MainProject(ConanFile):
         self.options["libethercat"].max_ds402_subdevs           = self.options.max_ds402_subdevs
         self.options["libethercat"].max_coe_emergencies         = self.options.max_coe_emergencies
         self.options["libethercat"].max_coe_emergency_msg_len   = self.options.max_coe_emergency_msg_len
-        self.options["libethercat"].ecat_device                 = self.options.ecat_device
+        self.options["libethercat"].hw_device_file              = self.options.hw_device_file
+        self.options["libethercat"].hw_device_sock_raw          = self.options.hw_device_sock_raw
+        self.options["libethercat"].hw_device_sock_raw_mmaped   = self.options.hw_device_sock_raw_mmaped
+        self.options["libethercat"].hw_device_bpf               = self.options.hw_device_bpf
+        self.options["libethercat"].hw_device_pikeos            = self.options.hw_device_pikeos
 
         base = self.python_requires["conan_template"].module.RobotkernelConanFile
         base.configure(self)

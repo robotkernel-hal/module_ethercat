@@ -64,7 +64,7 @@ class ethercat_config_subview(helpers.builder_base):
 
     def show_mod(self, module):
         import yaml
-        cfg = yaml.load(module.get_config())
+        cfg = yaml.load(module.get_config(), Loader=yaml.FullLoader)
         master_ifname = cfg['config']['ifname']
 
         self.treestore_devices.clear()

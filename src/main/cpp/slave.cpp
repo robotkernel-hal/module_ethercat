@@ -39,17 +39,23 @@ using namespace module_ethercat;
 extern const string module_ethercat::state_strings[];
 
 void convert_string_to_hex(string input, char **output, size_t *outlen) {
-    size_t len = input.length();
-    *output = new char[len/2];
+    size_t len = (input.length() + 1) / 2;
+
+    if (len == 0) {
+        *outlen = 0;
+        return;
+    }
+
+    *output = new char[len];
     unsigned int tmp;
 
-    for (size_t i = 0; i < len/2; ++i) {
+    for (size_t i = 0; i < len; ++i) {
         string sub = input.substr(i*2, 2);
         sscanf(sub.c_str(), "%x", &tmp);
         (*output)[i] = tmp; 
     }
 
-    *outlen = len/2;
+    *outlen = len;
 }
 
 //! construction
@@ -226,7 +232,6 @@ slave::slave(int index, master *master_dev) :
 {
     master_dev->log(verbose, "default slave index %d created\n", index);
     provider_hash = consumer_hash = 0;
-    disable_mbx_sm_map = false;
     prefer_obj_names = false;
 };
 
@@ -285,8 +290,6 @@ slave::slave(int index, const YAML::Node& node, master *master_dev) :
                 soe_init_cmds.push_back(new soe_init_cmd_t(*it));
         }
     }
-
-    disable_mbx_sm_map = get_as<bool>(node, "disable_mbx_sm_map", false);
 
     prefer_obj_names = false;
 
@@ -798,10 +801,6 @@ void slave::pre_state_transition(module_state_t from, module_state_t to) {
                 break;
         case preop_2_op:
         case preop_2_safeop:
-            if (disable_mbx_sm_map) {
-                master_dev->ec.slaves[index].mbx.map_mbx_state = OSAL_FALSE;
-            }
-
             // ====> sending init commands for safeop
             add_init_cmds();
 
@@ -988,8 +987,11 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                 if (pdin)
                     k.remove_device(pdin);
                 
-                pdin_trigger = make_shared<robotkernel::trigger>(
-                        master_dev->name, format_string("slave_%d.inputs", index), rate);
+                string base_name = master_dev->use_real_names ?
+                    format_string("%s.inputs", name.c_str()) :
+                    format_string("slave_%d.inputs", index);
+
+                pdin_trigger = make_shared<robotkernel::trigger>(master_dev->name, base_name, rate);
                 k.add_device(pdin_trigger);
 
                 string pdo_desc = "";
@@ -1006,11 +1008,8 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                     pdo_desc = format_string("- uint8_t[%d]: buf\n", slv->pdin.len);
                 }
 
-                pdin = make_shared<robotkernel::triple_buffer_with_injection>(
-                        slv->pdin.len, 
-                        master_dev->name, 
-                        format_string("slave_%d.inputs", index), 
-                        pdo_desc,
+                pdin = make_shared<robotkernel::triple_buffer_with_injection>(slv->pdin.len, 
+                        master_dev->name, base_name, pdo_desc,
                         format_string("%s.group_%d.trigger", master_dev->name.c_str(), slv->assigned_pd_group));
                 provider_hash = pdin->set_provider(shared_from_this());
                 k.add_device(pdin);
@@ -1020,8 +1019,11 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                 if (pdout)
                     k.remove_device(pdout);
                 
-                pdout_trigger = make_shared<robotkernel::trigger>(
-                        master_dev->name, format_string("slave_%d.outputs", index));
+                string base_name = master_dev->use_real_names ?
+                    format_string("%s.outputs", name.c_str()) :
+                    format_string("slave_%d.outputs", index);
+
+                pdout_trigger = make_shared<robotkernel::trigger>(master_dev->name, base_name, index);
                 k.add_device(pdout_trigger);
 
                 string pdo_desc = "";
@@ -1039,7 +1041,7 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                 }
 
                 pdout = make_shared<robotkernel::triple_buffer_with_injection>(slv->pdout.len, master_dev->name, 
-                        format_string("slave_%d.outputs", index), pdo_desc, pdout_trigger->id());
+                        base_name, pdo_desc, pdout_trigger->id());
                 consumer_hash = pdout->set_consumer(shared_from_this());
                 k.add_device(pdout);
             }

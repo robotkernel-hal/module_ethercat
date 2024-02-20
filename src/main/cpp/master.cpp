@@ -115,6 +115,7 @@ void master::init() {
     get_yaml(bool,     log_eeprom_data, false);
     get_yaml(bool,     threaded_startup, true);
     get_yaml(bool,     monitor_state, false);
+    get_yaml(bool,     use_real_names, false);
 
     /* creating dccs */
     dccs = make_shared<dc_clock_setter>(shared_from_this());
@@ -313,14 +314,14 @@ void master::open() {
         sp_slave_t slv = it->second;
                 
         if (ec.slave_cnt <= slave_nr)  {
-            log(warning, "slave %2d: expected but not connected to ethercat bus!\n", slave_nr);
+            log(error, "slave %2d: expected but not connected to ethercat bus!\n", slave_nr);
             abort = true; 
             continue;
         }
 
         if (slv->expected_vendor != 0) {
             if (ec.slaves[slave_nr].eeprom.vendor_id != slv->expected_vendor) {
-                log(warning, "slave %2d: got vendor_id 0x%X but expected 0x%X!\n", slave_nr, 
+                log(error, "slave %2d: got vendor_id 0x%X but expected 0x%X!\n", slave_nr, 
                     ec.slaves[slave_nr].eeprom.vendor_id, slv->expected_vendor);
 
                 abort = true;
@@ -329,7 +330,7 @@ void master::open() {
         
         if (slv->expected_product != 0) {
             if (ec.slaves[slave_nr].eeprom.product_code != slv->expected_product) {
-                log(warning, "slave %2d: got product_code 0x%X but expected 0x%X!\n", slave_nr, 
+                log(error, "slave %2d: got product_code 0x%X but expected 0x%X!\n", slave_nr, 
                     ec.slaves[slave_nr].eeprom.product_code, slv->expected_product);
 
                 abort = true;
@@ -368,6 +369,8 @@ void master::open() {
         ec.pd_groups[g_nr].divisor = g->divisor;
         ec.pd_groups[g_nr].cdg.user_cb = cb_group;
         ec.pd_groups[g_nr].cdg.user_cb_arg = (void *)this;
+        ec.pd_groups[g_nr].overlapping = g->overlapping ? 1 : 0;
+        ec.pd_groups[g_nr].use_lrw = g->lrw ? 1 : 0;
 
         g->_slaves.remove_if([&](int s_nr) { 
                 bool rem = (ec.slave_cnt <= s_nr);
@@ -774,7 +777,6 @@ int master::set_state(module_state_t state) {
                 "- uint64_t: rtc_time\n"
                 "- int64_t: rtc_sto\n"
                 "- int64_t: act_diff\n"
-                "- int64_t: timer_override\n"
                 "- uint64_t: packet_duration\n";
 
             pdin_dc = make_shared<robotkernel::triple_buffer>(

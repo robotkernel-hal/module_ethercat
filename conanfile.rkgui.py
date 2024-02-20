@@ -26,7 +26,6 @@ class lnrk_interface_python(ConanFile):
         copy(self, os.path.join(self.pure_python_folder, "*"), self.source_folder, self.package_folder)
 
     def package_info(self):
-        if Version(conan_version) < "2.0.0":
-            self.env_info.PYTHONPATH.append(os.path.join(self.package_folder, os.path.dirname(self.pure_python_folder)))
-        self.runenv_info.append_path("PYTHONPATH", os.path.join(self.package_folder, os.path.dirname(self.pure_python_folder)))
+        self.env_info.PYTHONPATH.append(os.path.join(self.package_folder, self.pure_python_folder))
+        self.env_info.PYTHONPATH.append(os.path.join(self.package_folder, os.path.dirname(self.pure_python_folder)))
     
