@@ -127,7 +127,7 @@ slave::slave_dc::slave_dc(const YAML::Node& node) {
     type            = get_as<int     >(node, "type");
     cycle_time_0    = get_as<uint32_t>(node, "cycle_time_0", 0);
     cycle_time_1    = get_as<uint32_t>(node, "cycle_time_1", 0);
-    cycle_shift     = get_as<uint32_t>(node, "cycle_shift", 0);
+    cycle_shift     = get_as<int32_t>(node, "cycle_shift", 0);
 }
             
 //! emit yaml node
@@ -400,7 +400,7 @@ void slave::init_key_value() {
     _add_key(create_key<int>     (this, "dc.type", &dc.type, "Distributed Clock type"));
     _add_key(create_key<uint32_t>(this, "dc.cycle_time_0", &dc.cycle_time_0, "Cycle Time Sync0", "ns")); 
     _add_key(create_key<uint32_t>(this, "dc.cycle_time_1", &dc.cycle_time_1, "Cycle Time Sync1", "ns")); 
-    _add_key(create_key<uint32_t>(this, "dc.cycle_shift", &dc.cycle_shift, "Cyclce Shift"));
+    _add_key(create_key<int32_t> (this, "dc.cycle_shift", &dc.cycle_shift, "Cyclce Shift"));
             
     for (int i = 0; i < master_dev->ec.slaves[index].sm_ch; ++i) {
         auto prefix = format_string("sync_manager.%d.", i);

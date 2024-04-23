@@ -330,7 +330,7 @@ class slave :
             int type;              //! dc type, 0 = sync0, 1 = sync01
             uint32_t cycle_time_0; //! cycle time of sync 0 [ns]
             uint32_t cycle_time_1; //! cycle time of sync 1 [ns]
-            uint32_t cycle_shift;  //! cycle shift time [ns]
+            int32_t cycle_shift;   //! cycle shift time [ns]
 
             //! default construction
             slave_dc();
