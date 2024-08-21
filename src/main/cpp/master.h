@@ -38,6 +38,7 @@
 #include "group.h"
 #include "slave.h"
 
+#include "libethercat/config.h"
 #include "libethercat/ec.h"
 #include "libethercat/slave.h"
 #include "libethercat/coe.h"
@@ -46,6 +47,26 @@
 #include "libethercat/soe.h"
 #include "libethercat/foe.h"
 #include "libethercat/error_codes.h"
+
+#if LIBETHERCAT_BUILD_DEVICE_FILE == 1
+#include <libethercat/hw_file.h>
+#endif
+
+#if LIBETHERCAT_BUILD_DEVICE_BPF == 1
+#include <libethercat/hw_bpf.h>
+#endif
+
+#if LIBETHERCAT_BUILD_DEVICE_PIKEOS == 1
+#include <libethercat/hw_pikeos.h>
+#endif
+
+#if LIBETHERCAT_BUILD_DEVICE_SOCK_RAW_LEGACY == 1
+#include <libethercat/hw_sock_raw.h>
+#endif
+
+#if LIBETHERCAT_BUILD_DEVICE_SOCK_RAW_MMAPED == 1
+#include <libethercat/hw_sock_raw_mmaped.h>
+#endif
 
 #include "service_provider/canopen_protocol/base.h"
 
@@ -139,6 +160,23 @@ class master :
 
         bool ec_opened;
         ec_t ec;
+
+#if LIBETHERCAT_BUILD_DEVICE_FILE == 1
+        struct hw_file hw_file;
+#endif
+#if LIBETHERCAT_BUILD_DEVICE_BPF == 1
+        struct hw_bpf hw_bpf;
+#endif
+#if LIBETHERCAT_BUILD_DEVICE_PIKEOS == 1
+        struct hw_pikeos hw_pikeos;
+#endif
+#if LIBETHERCAT_BUILD_DEVICE_SOCK_RAW_LEGACY == 1
+        struct hw_sock_raw hw_sock_raw;
+#endif
+#if LIBETHERCAT_BUILD_DEVICE_SOCK_RAW_MMAPED == 1
+        struct hw_sock_raw_mmaped hw_sock_raw_mmaped; 
+#endif
+
         std::list<ec_init_cmd_t> init_cmds;
 
         int recv_prio;

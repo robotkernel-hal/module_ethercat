@@ -291,10 +291,81 @@ void master::recv_group(int group_index) {
 
 void master::open() {
     bool abort = false;
+    struct hw_common *phw = NULL;
+    int ret = -1;
+            
+#if LIBETHERCAT_BUILD_DEVICE_FILE == 1
+    if ((ifname[0] == '/') || (ifname.compare(0, 5, "file:") == 0)) {
+        string tmp = ifname; 
+
+        // assume char device -> hw_file
+        if (ifname.compare(0, 5, "file:") == 0) {
+            tmp = ifname.substr(5);
+        }
+
+        log(info, "Opening interface as device file: %s\n", tmp.c_str());
+        ret = hw_device_file_open(&hw_file, &ec, tmp.c_str(), recv_prio - 1, recv_mask);
+
+        if (ret == 0) {
+            phw = &hw_file.common;
+        }
+    }
+#endif
+#if LIBETHERCAT_BUILD_DEVICE_BPF == 1
+    if (ifname.compare(0, 4, "bpf:") == 0) {
+        string tmp = ifname.substr(4); 
+
+        log(info, "Opening interface as BPF: %s\n", tmp.c_str());
+        ret = hw_device_bpf_open(&hw_bpf, ifname.c_str());
+
+        if (ret == 0) {
+            phw = &hw_bpf.common;
+        }
+    }
+#endif
+#if LIBETHERCAT_BUILD_DEVICE_PIKEOS == 1
+    if (ifname.compare(0, 7, "pikeos:") == 0) {
+        string tmp = ifname.substr(7);
+
+        log(info, "HW_OPEN", "Opening interface as pikeos: %s\n", tmp.c_str());
+        ret = hw_device_pikeos_open(&hw_pikeos, tmp.c_str(), recv_prio - 1, recv_mask);
+
+        if (ret == 0) {
+            phw = &hw_pikeos.common;
+        }
+    }
+#endif
+#if LIBETHERCAT_BUILD_DEVICE_SOCK_RAW_LEGACY == 1
+    if (ifname.compare(0, 9, "sock-raw:") == 0) {
+        string tmp = ifname.substr(9);
+        
+        log(info, "Opening interface as SOCK_RAW: %s\n", tmp.c_str());
+        ret = hw_device_sock_raw_open(&hw_sock_raw, &ec, tmp.c_str(), recv_prio - 1, recv_mask);
+
+        if (ret == 0) {
+            phw = &hw_sock_raw.common;
+        }
+    }
+#endif
+#if LIBETHERCAT_BUILD_DEVICE_SOCK_RAW_MMAPED == 1
+    if (ifname.compare(0, 16, "sock-raw-mmaped:") == 0) {
+        string tmp = ifname.substr(16);
+
+        log(info, "Opening interface as mmaped SOCK_RAW: %s\n", tmp.c_str());
+        ret = hw_device_sock_raw_mmaped_open(&hw_sock_raw_mmaped, tmp.c_str());
+
+        if (ret == 0) {
+            phw = &hw_sock_raw_mmaped.common;
+        }
+    }
+#endif
+
+    if (ret != 0) 
+        throw str_exception("opening hardware layer failed!\n");
 
     // -----------------------------------------------------------
     // open ethercat interface
-    int ret = ec_open(&ec, ifname.c_str(), recv_prio, recv_mask, log_eeprom_data);
+    ret = ec_open(&ec, phw, log_eeprom_data);
     if (ret != 0) 
         throw str_exception("ec_open failed: %s!\n", strerror(ret));
 
@@ -857,7 +928,7 @@ void master::tick() {
         ec_send_brd_ec_state(&ec); 
     }
 
-    if (hw_tx(&ec.hw) != EC_OK) {
+    if (hw_tx(ec.phw) != EC_OK) {
         log(error, "error sending EtherCAT frames!\n");
     }
 
