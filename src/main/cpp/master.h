@@ -37,6 +37,7 @@
 
 #include "group.h"
 #include "slave.h"
+#include "hw_stream.h"
 
 #include "libethercat/config.h"
 #include "libethercat/ec.h"
@@ -176,6 +177,10 @@ class master :
 #if LIBETHERCAT_BUILD_DEVICE_SOCK_RAW_MMAPED == 1
         struct hw_sock_raw_mmaped hw_sock_raw_mmaped; 
 #endif
+        struct hw_stream hw_stream;
+        robotkernel::sp_stream_t rk_stream;
+        std::function<size_t (void *, size_t)> stream_write;
+        std::function<size_t (void *, size_t)> stream_read;
 
         std::list<ec_init_cmd_t> init_cmds;
 

@@ -30,6 +30,7 @@
 MODULE_DEF(module_ethercat, module_ethercat::master)
 
 using namespace std;
+using namespace std::placeholders;
 using namespace robotkernel;
 using namespace string_util;
 using namespace module_ethercat;
@@ -294,6 +295,22 @@ void master::open() {
     struct hw_common *phw = NULL;
     int ret = -1;
             
+    if ((ifname.compare(0, 7, "stream:") == 0)) {
+        string tmp = ifname.substr(7);
+        rk_stream = kernel::get_instance()->get_stream(tmp);
+
+        stream_write = bind(&robotkernel::stream::write, rk_stream, _1, _2);
+        stream_read = bind(&robotkernel::stream::read, rk_stream, _1, _2);
+
+        ret = hw_device_stream_open(&hw_stream, 
+                *stream_read.target<size_t (*)(void *, size_t)>(),
+                *stream_write.target<size_t (*)(void *, size_t)>());
+
+        if (ret == 0) {
+            phw = &hw_stream.common;
+        }
+    }
+
 #if LIBETHERCAT_BUILD_DEVICE_FILE == 1
     if ((ifname[0] == '/') || (ifname.compare(0, 5, "file:") == 0)) {
         string tmp = ifname; 
