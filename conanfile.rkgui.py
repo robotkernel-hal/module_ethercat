@@ -38,10 +38,10 @@ class lnrk_interface_python(ConanFile):
         )
 
     def package_info(self):
-        self.cissy_conantools.autoset_package_info(self,
+        self.cissy_conantools.autoset_package_info(
+            self,
             pythondirs=[
                 os.path.join(self.package_folder, self.pure_python_folder),
-                os.path.join(self.package_folder, os.path.dirname(self.pure_python_folder))
+                os.path.join(self.package_folder, os.path.dirname(self.pure_python_folder)),
             ],
         )
-

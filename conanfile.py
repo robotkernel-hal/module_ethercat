@@ -83,31 +83,19 @@ class MainProject(ConanFile):
         self.options["libethercat"].max_slave_sm = self.options.max_slave_sm
         self.options["libethercat"].max_datagrams = self.options.max_datagrams
         self.options["libethercat"].max_eeprom_cat_sm = self.options.max_eeprom_cat_sm
-        self.options[
-            "libethercat"
-        ].max_eeprom_cat_fmmu = self.options.max_eeprom_cat_fmmu
+        self.options["libethercat"].max_eeprom_cat_fmmu = self.options.max_eeprom_cat_fmmu
         self.options["libethercat"].max_eeprom_cat_pdo = self.options.max_eeprom_cat_pdo
-        self.options[
-            "libethercat"
-        ].max_eeprom_cat_pdo_entries = self.options.max_eeprom_cat_pdo_entries
-        self.options[
-            "libethercat"
-        ].max_eeprom_cat_strings = self.options.max_eeprom_cat_strings
+        self.options["libethercat"].max_eeprom_cat_pdo_entries = self.options.max_eeprom_cat_pdo_entries
+        self.options["libethercat"].max_eeprom_cat_strings = self.options.max_eeprom_cat_strings
         self.options["libethercat"].max_eeprom_cat_dc = self.options.max_eeprom_cat_dc
         self.options["libethercat"].max_string_len = self.options.max_string_len
         self.options["libethercat"].max_data = self.options.max_data
         self.options["libethercat"].max_ds402_subdevs = self.options.max_ds402_subdevs
-        self.options[
-            "libethercat"
-        ].max_coe_emergencies = self.options.max_coe_emergencies
-        self.options[
-            "libethercat"
-        ].max_coe_emergency_msg_len = self.options.max_coe_emergency_msg_len
+        self.options["libethercat"].max_coe_emergencies = self.options.max_coe_emergencies
+        self.options["libethercat"].max_coe_emergency_msg_len = self.options.max_coe_emergency_msg_len
         self.options["libethercat"].hw_device_file = self.options.hw_device_file
         self.options["libethercat"].hw_device_sock_raw = self.options.hw_device_sock_raw
-        self.options[
-            "libethercat"
-        ].hw_device_sock_raw_mmaped = self.options.hw_device_sock_raw_mmaped
+        self.options["libethercat"].hw_device_sock_raw_mmaped = self.options.hw_device_sock_raw_mmaped
         self.options["libethercat"].hw_device_bpf = self.options.hw_device_bpf
         self.options["libethercat"].hw_device_pikeos = self.options.hw_device_pikeos
 
