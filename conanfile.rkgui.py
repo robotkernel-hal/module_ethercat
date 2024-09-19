@@ -1,16 +1,11 @@
 import os
-
-from conan import ConanFile
+from conan import ConanFile, conan_version
 from conan.tools.files import copy
+from conan.tools.scm import Version
 
+IS_CONAN1 = Version(conan_version) < "2.0.0"
 
 class lnrk_interface_python(ConanFile):
-    python_requires = "cissy_conantools/[~1]@tools/stable"
-
-    @property
-    def cissy_conantools(self):
-        return self.python_requires["cissy_conantools"].module
-
     name = "module_ethercat_rkgui"
     description = "python binding to module_ethercat."
     author = "Robert Burger <robert.burgert@dlr.de>"
@@ -30,18 +25,11 @@ class lnrk_interface_python(ConanFile):
         self.requires("service_provider_process_data_inspection_rkgui/[>=5.1]@robotkernel/stable")
 
     def package(self):
-        copy(
-            self,
-            os.path.join(self.pure_python_folder, "*"),
-            self.source_folder,
-            self.package_folder,
-        )
+        copy(self, os.path.join(self.pure_python_folder, "*"), self.source_folder, self.package_folder)
 
     def package_info(self):
-        self.cissy_conantools.autoset_package_info(
-            self,
-            pythondirs=[
-                os.path.join(self.package_folder, self.pure_python_folder),
-                os.path.join(self.package_folder, os.path.dirname(self.pure_python_folder)),
-            ],
-        )
+        if IS_CONAN1:
+            self.env_info.PYTHONPATH.append(os.path.join(self.package_folder, self.pure_python_folder))
+            self.env_info.PYTHONPATH.append(os.path.join(self.package_folder, os.path.dirname(self.pure_python_folder)))
+        self.runenv_info.append_path("PYTHONPATH", os.path.join(self.package_folder, self.pure_python_folder))
+        self.runenv_info.append_path("PYTHONPATH", os.path.join(self.package_folder, os.path.dirname(self.pure_python_folder)))
