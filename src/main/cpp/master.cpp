@@ -290,6 +290,15 @@ void master::recv_group(int group_index) {
     g->trigger_modules();
 }
 
+
+robotkernel::sp_stream_t _rk_stream;
+extern "C" size_t hw_stream_read(void *buf, size_t len) {
+    return _rk_stream->read(buf, len);
+}
+extern "C" size_t hw_stream_write(void *buf, size_t len) {
+    return _rk_stream->write(buf, len);
+}
+
 void master::open() {
     bool abort = false;
     struct hw_common *phw = NULL;
@@ -297,14 +306,16 @@ void master::open() {
             
     if ((ifname.compare(0, 7, "stream:") == 0)) {
         string tmp = ifname.substr(7);
-        rk_stream = kernel::get_instance()->get_stream(tmp);
+        _rk_stream = kernel::get_instance()->get_stream(tmp);
+        //hw_stream_helper.rk_stream = kernel::get_instance()->get_stream(tmp);
 
-        stream_write = bind(&robotkernel::stream::write, rk_stream, _1, _2);
-        stream_read = bind(&robotkernel::stream::read, rk_stream, _1, _2);
+        //stream_write = bind(&stream_helper::write, hw_stream_helper, _1, _2);
+        //stream_read = bind(&stream_helper::read, hw_stream_helper, _1, _2);
+        //ptr_read = stream_read.target<long unsigned int (*)(void *, long unsigned int)>();
+        //ptr_write = stream_write.target<size_t (*)(void *, size_t)>();
 
-        ret = hw_device_stream_open(&hw_stream, 
-                *stream_read.target<size_t (*)(void *, size_t)>(),
-                *stream_write.target<size_t (*)(void *, size_t)>());
+        //ret = hw_device_stream_open(&hw_stream, *ptr_read, *ptr_write);
+        ret = hw_device_stream_open(&hw_stream, &ec, hw_stream_read, hw_stream_write);
 
         if (ret == 0) {
             phw = &hw_stream.common;
@@ -336,7 +347,7 @@ void master::open() {
         ret = hw_device_bpf_open(&hw_bpf, ifname.c_str());
 
         if (ret == 0) {
-            phw = &hw_bpf.common;
+            tphw = &hw_bpf.common;
         }
     }
 #endif

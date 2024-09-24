@@ -77,6 +77,9 @@ int hw_device_stream_close(struct hw_common *phw);
 
 static void hw_device_stream_recv_internal(struct hw_stream *phw_stream);
 
+    static const osal_uint8_t mac_dest[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+    static const osal_uint8_t mac_src[] = {0x00, 0x30, 0x64, 0x0f, 0x83, 0x35};
+
 //! Opens EtherCAT hw device.
 /*!
  * \param[in]   phw             Pointer to hw handle. 
@@ -85,10 +88,12 @@ static void hw_device_stream_recv_internal(struct hw_stream *phw_stream);
  *
  * \return 0 or negative error code
  */
-int hw_device_stream_open(struct hw_stream *phw, stream_read_t stream_read, stream_write_t stream_write) {
+int hw_device_stream_open(struct hw_stream *phw, struct ec *pec, stream_read_t stream_read, stream_write_t stream_write) {
     assert(phw != NULL);
 
     int ret = EC_OK;
+
+    hw_open(&phw->common, pec);
 
     phw->stream_read = stream_read;
     phw->stream_write = stream_write;
@@ -101,6 +106,9 @@ int hw_device_stream_open(struct hw_stream *phw, stream_read_t stream_read, stre
     phw->common.mtu_size = 1480;
 
     return ret;
+}
+
+int hw_device_stream_close(struct hw_common *phw) {
 }
 
 int hw_device_stream_recv(struct hw_common *phw) {
@@ -152,6 +160,8 @@ int hw_device_stream_get_tx_buffer(struct hw_common *phw, ec_frame_t **ppframe) 
     pframe = (ec_frame_t *)phw_stream->send_frame;
 
     // reset length to send new frame
+    (void)memcpy(pframe->mac_dest, mac_dest, 6);
+    (void)memcpy(pframe->mac_src, mac_src, 6);
     pframe->ethertype = htons(ETH_P_ECAT);
     pframe->type = 0x01;
     pframe->len = sizeof(ec_frame_t);

@@ -74,7 +74,7 @@ extern "C" {
  *
  * \return 0 or negative error code
  */
-int hw_device_stream_open(struct hw_stream *phw, stream_read_t stream_read, stream_write_t stream_write);
+int hw_device_stream_open(struct hw_stream *phw, struct ec *pec, stream_read_t stream_read, stream_write_t stream_write);
 
 #ifdef __cplusplus
 }
