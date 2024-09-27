@@ -5,7 +5,7 @@ lib_LTLIBRARIES = libmodule_ethercat.la
 libmodule_ethercat_la_SOURCES  = master.cpp group.cpp slave.cpp slave_file_protocol.cpp slave_memory_inspection.cpp \
 								 slave_canopen_protocol.cpp hw_stream.c
 
-libmodule_ethercat_la_CXXFLAGS = -Wall -Wno-deprecated-declarations -I$(srcdir) -I$(builddir) \
+libmodule_ethercat_la_CXXFLAGS = -Wall -Wno-address-of-packed-member -Wno-deprecated-declarations -I$(srcdir) -I$(builddir) \
                                  @ROBOTKERNEL_CFLAGS@ @LIBETHERCAT_CFLAGS@  \
                                  @SERVICE_PROVIDER_MEMORY_INSPECTION_CFLAGS@ \
                                  @SERVICE_PROVIDER_CANOPEN_PROTOCOL_CFLAGS@ \
@@ -14,7 +14,7 @@ libmodule_ethercat_la_CXXFLAGS = -Wall -Wno-deprecated-declarations -I$(srcdir) 
                                  @SERVICE_PROVIDER_FILE_PROTOCOL_CFLAGS@ \
                                  @SERVICE_PROVIDER_PROCESS_DATA_INSPECTION_CFLAGS@
 
-libmodule_ethercat_la_CFLAGS = -Wall -Wno-deprecated-declarations -I$(srcdir) -I$(builddir) \
+libmodule_ethercat_la_CFLAGS = -Wall -Wno-address-of-packed-member -Wno-deprecated-declarations -I$(srcdir) -I$(builddir) \
                                  @LIBETHERCAT_CFLAGS@ 
 
 libmodule_ethercat_la_LDFLAGS  = -Wall -release $(PACKAGE_VERSION) @LIBETHERCAT_LIBS@

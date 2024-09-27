@@ -42,8 +42,8 @@
 
 #include <libethercat/hw.h>
 
-typedef size_t (*stream_read_t)(void *buf, size_t nbyte);
-typedef size_t (*stream_write_t)(void *buf, size_t nbyte);
+typedef size_t (*stream_read_t)(void *user, void *buf, size_t nbyte);
+typedef size_t (*stream_write_t)(void *user, void *buf, size_t nbyte);
 
 typedef struct hw_stream {
     struct hw_common common;
@@ -58,6 +58,7 @@ typedef struct hw_stream {
     osal_task_t rxthread;                   //!< receiver thread handle
     int rxthreadrunning;                    //!< receiver thread running flag
                                             
+    void *user;
     stream_write_t stream_write;
     stream_read_t  stream_read;
 } hw_stream_t;
@@ -69,15 +70,20 @@ extern "C" {
 //! Opens EtherCAT hw device.
 /*!
  * \param[in]   phw             Pointer to hw handle. 
+ * \param[in]   user            Pointer to user data for callbacks.
  * \param[in]   stream_read     Function pointer to read data.
  * \param[in]   stream_write    Function pointer to write data.
+ * \param[in]   prio            Priority of receive thread.
+ * \param[in]   affinity        CPU affinity of receive thread.
  *
  * \return 0 or negative error code
  */
-int hw_device_stream_open(struct hw_stream *phw, struct ec *pec, stream_read_t stream_read, stream_write_t stream_write);
+int hw_device_stream_open(struct hw_stream *phw, struct ec *pec, void *user, 
+        stream_read_t stream_read, stream_write_t stream_write, int prio, int affinity);
 
 #ifdef __cplusplus
 }
 #endif
 
 #endif // LIBETHERCAT_HW_STREAM_H
+

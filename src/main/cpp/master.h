@@ -50,33 +50,23 @@
 #include "libethercat/error_codes.h"
 
 #if LIBETHERCAT_BUILD_DEVICE_FILE == 1
-extern "C" {
 #include <libethercat/hw_file.h>
-}
 #endif
 
 #if LIBETHERCAT_BUILD_DEVICE_BPF == 1
-extern "C" {
 #include <libethercat/hw_bpf.h>
-}
 #endif
 
 #if LIBETHERCAT_BUILD_DEVICE_PIKEOS == 1
-extern "C" {
 #include <libethercat/hw_pikeos.h>
-}
 #endif
 
 #if LIBETHERCAT_BUILD_DEVICE_SOCK_RAW_LEGACY == 1
-extern "C" {
 #include <libethercat/hw_sock_raw.h>
-}
 #endif
 
 #if LIBETHERCAT_BUILD_DEVICE_SOCK_RAW_MMAPED == 1
-extern "C" {
 #include <libethercat/hw_sock_raw_mmaped.h>
-}
 #endif
 
 #include "service_provider/canopen_protocol/base.h"
@@ -115,14 +105,6 @@ class dc_clock_setter :
         void run();
 };
 
-class stream_helper {
-    public:
-        stream_helper() {};
-        robotkernel::sp_stream_t rk_stream;
-        size_t read(void *buf, size_t len) { return rk_stream->read(buf, len); }
-        size_t write(void *buf, size_t len) { return rk_stream->write(buf, len); }
-};
-
 class master :
     public std::enable_shared_from_this<master>,
     public service_provider::canopen_protocol::base,
@@ -131,7 +113,6 @@ class master :
 {
     public:
         friend class slave;
-
 
         typedef std::map<int, std::shared_ptr<group>> group_map_t;
         group_map_t groups;
@@ -196,7 +177,7 @@ class master :
         struct hw_sock_raw_mmaped hw_sock_raw_mmaped; 
 #endif
         struct hw_stream hw_stream;
-        stream_helper hw_stream_helper;
+        robotkernel::sp_stream_t rk_stream;
         std::function<size_t (void *, size_t)> stream_write;
         std::function<size_t (void *, size_t)> stream_read;
         size_t (*const* ptr_read)(void *, size_t);

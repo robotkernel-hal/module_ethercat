@@ -74,27 +74,34 @@ int hw_device_stream_get_tx_buffer(struct hw_common *phw, ec_frame_t **ppframe);
 int hw_device_stream_send(struct hw_common *phw, ec_frame_t *pframe, pooltype_t pool_type);
 void hw_device_stream_send_finished(struct hw_common *phw);
 int hw_device_stream_close(struct hw_common *phw);
+void *hw_device_stream_rx_thread(void *arg);
 
 static void hw_device_stream_recv_internal(struct hw_stream *phw_stream);
 
-    static const osal_uint8_t mac_dest[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
-    static const osal_uint8_t mac_src[] = {0x00, 0x30, 0x64, 0x0f, 0x83, 0x35};
+static const osal_uint8_t mac_dest[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+static const osal_uint8_t mac_src[] = {0x00, 0x30, 0x64, 0x0f, 0x83, 0x35};
 
 //! Opens EtherCAT hw device.
 /*!
  * \param[in]   phw             Pointer to hw handle. 
+ * \param[in]   user            Pointer to user data for callbacks.
  * \param[in]   stream_read     Function pointer to read data.
  * \param[in]   stream_write    Function pointer to write data.
+ * \param[in]   prio            Priority of receive thread.
+ * \param[in]   affinity        CPU affinity of receive thread.
  *
  * \return 0 or negative error code
  */
-int hw_device_stream_open(struct hw_stream *phw, struct ec *pec, stream_read_t stream_read, stream_write_t stream_write) {
+int hw_device_stream_open(struct hw_stream *phw, struct ec *pec, void *user, 
+        stream_read_t stream_read, stream_write_t stream_write, int prio, int affinity)
+{
     assert(phw != NULL);
 
     int ret = EC_OK;
 
     hw_open(&phw->common, pec);
 
+    phw->user = user;
     phw->stream_read = stream_read;
     phw->stream_write = stream_write;
 
@@ -105,10 +112,51 @@ int hw_device_stream_open(struct hw_stream *phw, struct ec *pec, stream_read_t s
     phw->common.close = hw_device_stream_close;
     phw->common.mtu_size = 1480;
 
+    if (ret == EC_OK) {
+        phw->rxthreadrunning = 1;
+        osal_task_attr_t attr;
+        attr.policy = OSAL_SCHED_POLICY_FIFO;
+        attr.priority = prio;
+        attr.affinity = affinity;
+        (void)strcpy(&attr.task_name[0], "ecat.rx");
+        osal_task_create(&phw->rxthread, &attr, hw_device_stream_rx_thread, phw);
+    }
+
     return ret;
 }
 
+//! receiver thread
+void *hw_device_stream_rx_thread(void *arg) {
+    // cppcheck-suppress misra-c2012-11.5
+    struct hw_stream *phw_stream = (struct hw_stream *) arg;
+    ec_t *pec = phw_stream->common.pec;
+
+    assert(phw_stream != NULL);
+    
+    osal_task_sched_priority_t rx_prio;
+    if (osal_task_get_priority(&phw_stream->rxthread, &rx_prio) != OSAL_OK) {
+        rx_prio = 0;
+    }
+
+    ec_log(10, __func__, "receive thread running (prio %d)\n", rx_prio);
+
+    while (phw_stream->rxthreadrunning != 0) {
+        (void)hw_device_stream_recv(&phw_stream->common);
+    }
+    
+    ec_log(10, __func__, "receive thread stopped\n");
+    
+    return NULL;
+}
+
 int hw_device_stream_close(struct hw_common *phw) {
+    assert(phw != NULL);
+    struct hw_stream *phw_stream = container_of(phw, struct hw_stream, common);
+
+    phw_stream->rxthreadrunning = 0;
+    osal_task_join(&phw_stream->rxthread, NULL);
+
+    return EC_OK;
 }
 
 int hw_device_stream_recv(struct hw_common *phw) {
@@ -134,7 +182,7 @@ void hw_device_stream_recv_internal(struct hw_stream *phw_stream) {
     ec_frame_t *pframe = (ec_frame_t *) &phw_stream->recv_frame;
 
     // using tradional recv function
-    osal_ssize_t bytesrx = phw_stream->stream_read(pframe, ETH_FRAME_LEN);
+    osal_ssize_t bytesrx = phw_stream->stream_read(phw_stream->user, pframe, ETH_FRAME_LEN);
 
     if (bytesrx > 0) {
         hw_process_rx_frame(&phw_stream->common, pframe);
@@ -186,17 +234,18 @@ int hw_device_stream_send(struct hw_common *phw, ec_frame_t *pframe, pooltype_t 
     (void)pool_type;
 
     int ret = EC_OK;
+    ec_t *pec = phw->pec;
     struct hw_stream *phw_stream = container_of(phw, struct hw_stream, common);
 
     // no more datagrams need to be sent or no more space in frame
-    osal_ssize_t bytestx = phw_stream->stream_write(pframe, pframe->len);
+    osal_ssize_t bytestx = phw_stream->stream_write(phw_stream->user, pframe, pframe->len);
 
     if ((osal_ssize_t)pframe->len != bytestx) {
-        ec_log(1, "HW_TX", "got only %" PRId64 " bytes out of %d bytes "
+        ec_log(1, __func__, "got only %" PRId64 " bytes out of %d bytes "
                 "through.\n", bytestx, pframe->len);
 
         if (bytestx == -1) {
-            ec_log(1, "HW_TX", "error: %s\n", strerror(errno));
+            ec_log(1, __func__, "error: %s\n", strerror(errno));
         }
 
         ret = EC_ERROR_HW_SEND;

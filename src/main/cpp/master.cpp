@@ -59,8 +59,8 @@ class ec_log_printer :
 
 ec_log_printer elp;
 
-void log_func(int lvl, void *user, const char *format, ...) {
-//    master *e = (master *)user;
+void log_func(ec_t *pec, int lvl, const char *format, ...) {
+    master *e = (master *)pec->ec_log_func_user;
     va_list ap;
     va_start(ap, format);
 
@@ -74,10 +74,11 @@ void log_func(int lvl, void *user, const char *format, ...) {
 
     char buf[1024];
     vsnprintf(buf, sizeof(buf), format, ap);
+    e->log(loglvl, buf);
 //    e->log(loglvl, format, ap);
     va_end(ap);
 
-    elp.log(loglvl, buf);
+    //elp.log(loglvl, buf);
 }
 
 /*! run */
@@ -121,8 +122,8 @@ void master::init() {
     /* creating dccs */
     dccs = make_shared<dc_clock_setter>(shared_from_this());
 
-    ec_log_func_user = this;
-    ec_log_func = log_func;
+    ec.ec_log_func_user = this;
+    ec.ec_log_func = log_func;
 
     if (config["tun_ip"]) {
         tun_settings.configure_tun = true;
@@ -290,13 +291,14 @@ void master::recv_group(int group_index) {
     g->trigger_modules();
 }
 
-
-robotkernel::sp_stream_t _rk_stream;
-extern "C" size_t hw_stream_read(void *buf, size_t len) {
-    return _rk_stream->read(buf, len);
+extern "C" size_t hw_stream_read(void *user, void *buf, size_t len) {
+    sp_stream_t *rk_stream = (sp_stream_t *)user;
+    return (*rk_stream)->read(buf, len);
 }
-extern "C" size_t hw_stream_write(void *buf, size_t len) {
-    return _rk_stream->write(buf, len);
+
+extern "C" size_t hw_stream_write(void *user, void *buf, size_t len) {
+    sp_stream_t *rk_stream = (sp_stream_t *)user;
+    return (*rk_stream)->write(buf, len);
 }
 
 void master::open() {
@@ -306,16 +308,8 @@ void master::open() {
             
     if ((ifname.compare(0, 7, "stream:") == 0)) {
         string tmp = ifname.substr(7);
-        _rk_stream = kernel::get_instance()->get_stream(tmp);
-        //hw_stream_helper.rk_stream = kernel::get_instance()->get_stream(tmp);
-
-        //stream_write = bind(&stream_helper::write, hw_stream_helper, _1, _2);
-        //stream_read = bind(&stream_helper::read, hw_stream_helper, _1, _2);
-        //ptr_read = stream_read.target<long unsigned int (*)(void *, long unsigned int)>();
-        //ptr_write = stream_write.target<size_t (*)(void *, size_t)>();
-
-        //ret = hw_device_stream_open(&hw_stream, *ptr_read, *ptr_write);
-        ret = hw_device_stream_open(&hw_stream, &ec, hw_stream_read, hw_stream_write);
+        rk_stream = kernel::get_instance()->get_stream(tmp);
+        ret = hw_device_stream_open(&hw_stream, &ec, &rk_stream, hw_stream_read, hw_stream_write, 60, 0xFF);
 
         if (ret == 0) {
             phw = &hw_stream.common;
@@ -380,7 +374,7 @@ void master::open() {
         string tmp = ifname.substr(16);
 
         log(info, "Opening interface as mmaped SOCK_RAW: %s\n", tmp.c_str());
-        ret = hw_device_sock_raw_mmaped_open(&hw_sock_raw_mmaped, tmp.c_str());
+        ret = hw_device_sock_raw_mmaped_open(&hw_sock_raw_mmaped, &ec, tmp.c_str(), recv_prio - 1, recv_mask);
 
         if (ret == 0) {
             phw = &hw_sock_raw_mmaped.common;
