@@ -817,14 +817,14 @@ void slave::pre_state_transition(module_state_t from, module_state_t to) {
                             "cycle_times %d/%d, cycle_shift %d\n",
                             index, dc.cycle_time_0, dc.cycle_time_1, dc.cycle_shift);
 
-                    ec_slave_set_dc_config(&master_dev->ec, index, 1, 1, 
+                    ec_slave_set_dc_config(&master_dev->ec, index, 1, 7, 
                             dc.cycle_time_0, dc.cycle_time_1, dc.cycle_shift);
                 } else {
                     master_dev->log(verbose, "slave %2d configuring dc sync 0, "
                             "cycle_time %d, cycle_shift %d\n",
                             index, dc.cycle_time_0, dc.cycle_shift);
 
-                    ec_slave_set_dc_config(&master_dev->ec, index, 1, 0, 
+                    ec_slave_set_dc_config(&master_dev->ec, index, 1, 3, 
                             dc.cycle_time_0, 0, dc.cycle_shift);
                 }
             } else 
