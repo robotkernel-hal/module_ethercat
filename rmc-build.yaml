@@ -7,6 +7,7 @@ builds:
     build_file: conanfile.py
     configurations:
       - imports: [linux_defaults_build_profile]
+      - debian11-x86_64
   - context: conan
     build_file: conanfile.rkgui.py
     configurations: *build_configs
