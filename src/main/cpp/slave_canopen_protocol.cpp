@@ -219,8 +219,8 @@ void slave::canopen::get_element_description(const uint16_t& index, const uint8_
                         ec_eeprom_cat_pdo_entry_t *entry = &pdo->entries[sub_index-1];
 
                         desc.value_info        = 0x7F;
-                        desc.data_type         = entry->data_type;
-                        desc.bit_length        = entry->bit_len;
+                        desc.data_type         = 0x0007; //DETTYPE_UNSIGNED32; entry->data_type;
+                        desc.bit_length        = 32;     //entry->bit_len;
                         desc.obj_access        = 7;
 
                         if ((entry->entry_name_idx > 0) &&
