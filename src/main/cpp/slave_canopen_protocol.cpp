@@ -55,10 +55,26 @@ void slave::canopen::get_object_dictionary_list(
             // inputs and outputs
             TAILQ_FOREACH(pdo, &ec_slv->eeprom.txpdos, qh) {
                 list.push_back(pdo->pdo_index);
+                
+                for (uint8_t sub_index = 0; sub_index < pdo->n_entry; sub_index++) {
+                    ec_eeprom_cat_pdo_entry_t *entry = &pdo->entries[sub_index];
+
+                    if (entry->entry_index != 0) {
+                        list.push_back(entry->entry_index);
+                    }
+                }
             }
 
             TAILQ_FOREACH(pdo, &ec_slv->eeprom.rxpdos, qh) {
                 list.push_back(pdo->pdo_index);
+                
+                for (uint8_t sub_index = 0; sub_index < pdo->n_entry; sub_index++) {
+                    ec_eeprom_cat_pdo_entry_t *entry = &pdo->entries[sub_index];
+
+                    if (entry->entry_index != 0) {
+                        list.push_back(entry->entry_index);
+                    }
+                }
             }
             break;
         }
@@ -134,6 +150,23 @@ void slave::canopen::get_object_description(const uint16_t& index,
 
                         return;
                     }
+
+                    for (uint8_t sub_index = 0; sub_index < pdo->n_entry; sub_index++) {
+                        ec_eeprom_cat_pdo_entry_t *entry = &pdo->entries[sub_index];
+
+                        if (entry->entry_index == index) {
+                            desc.data_type         = entry->data_type;
+                            desc.object_code       = OBJCODE_VAR;
+                            desc.max_subindices    = 0;
+
+                            if ((entry->entry_name_idx > 0) && 
+                                    (entry->entry_name_idx <= ec_slv->eeprom.strings_cnt)) {
+                                desc.name          = string(ec_slv->eeprom.strings[entry->entry_name_idx-1]);
+                            } 
+
+                            return;
+                        }
+                    }
                 }
             }
             break;
@@ -204,8 +237,27 @@ void slave::canopen::get_element_description(const uint16_t& index, const uint8_
 
             for (int qi = 0; qi < 2; qi++) {
                 TAILQ_FOREACH(pdo, pdos[qi], qh) {
-                    if (pdo->pdo_index != index)
+                    if (pdo->pdo_index != index) {
+                        for (uint8_t sub_index = 0; sub_index < pdo->n_entry; sub_index++) {
+                            ec_eeprom_cat_pdo_entry_t *entry = &pdo->entries[sub_index];
+
+                            if (entry->entry_index == index) {
+                                desc.value_info        = 0x7F;
+                                desc.data_type         = entry->data_type;
+                                desc.bit_length        = entry->bit_len;
+                                desc.obj_access        = 7;
+
+
+                                if ((entry->entry_name_idx > 0) && 
+                                        (entry->entry_name_idx <= ec_slv->eeprom.strings_cnt)) {
+                                    desc.name          = string(ec_slv->eeprom.strings[entry->entry_name_idx-1]);
+                                } 
+
+                                return;
+                            }
+                        }
                         continue;
+                    }
 
                     if (sub_index == 0) {
                         desc.value_info        = 0x7F;
@@ -339,8 +391,19 @@ void slave::canopen::read_element(const uint16_t& index, const uint8_t& sub_inde
 
                 for (int qi = 0; qi < 2; qi++) {
                     TAILQ_FOREACH(pdo, pdos[qi], qh) {
-                        if (pdo->pdo_index != index)
+                        if (pdo->pdo_index != index) {
+                            for (uint8_t sub_index = 0; sub_index < pdo->n_entry; sub_index++) {
+                                ec_eeprom_cat_pdo_entry_t *entry = &pdo->entries[sub_index];
+
+                                if (entry->entry_index == index) {
+                                    value.resize((entry->bit_len + 7)/8);
+                                    memset(&value[0], 0, (entry->bit_len + 7)/8);
+                                    return;
+                                }
+                            }
+                            
                             continue;
+                        }
 
                         if (sub_index == 0) {
                             value.resize(1);
@@ -348,8 +411,12 @@ void slave::canopen::read_element(const uint16_t& index, const uint8_t& sub_inde
                             return;
                         } else if (sub_index <= pdo->n_entry) {
                             ec_eeprom_cat_pdo_entry_t *entry = &pdo->entries[sub_index-1];
-                            value.resize(2);
-                            memcpy(&value[0], &entry->entry_index, 2);
+                            value.resize(4);
+                            uint32_t tmp_val = 0u;
+                            tmp_val |= ((uint32_t)entry->entry_index << 16u) & 0xFFFF0000u;
+                            tmp_val |= ((uint32_t)entry->sub_index << 8u) & 0x0000FF00u;;
+                            tmp_val |= entry->bit_len & 0x000000FFu;
+                            memcpy(&value[0], &tmp_val, 4);
                             return;
                         }
                     } 
