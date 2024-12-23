@@ -124,8 +124,8 @@ void slave::canopen::get_object_description(const uint16_t& index,
                 TAILQ_FOREACH(pdo, pdos[qi], qh) {
                     if (pdo->pdo_index == index) {
                         desc.data_type         = DEFTYPE_PDOMAPPING;
-                        desc.object_code       = pdo->n_entry > 1 ? 9 : 7;
-                        desc.max_subindices    = pdo->n_entry;
+                        desc.object_code       = pdo->n_entry > 0 ? 9 : 7;
+                        desc.max_subindices    = pdo->n_entry + 1;
 
                         if ((pdo->name_idx > 0) && 
                                 (pdo->name_idx <= ec_slv->eeprom.strings_cnt)) {
