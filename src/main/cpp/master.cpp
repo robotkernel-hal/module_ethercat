@@ -186,18 +186,16 @@ void master::init() {
     dc_sync.mode_string                = get_as<string>(config, "dc_sync_mode", "ref_clock");
     dc_sync.first_run                  = true;
     dc_sync.last_diff                  = 0.;
-    dc_sync.diffsum                    = 0.;
+    dc_sync.p_part                     = 0.;
+    dc_sync.i_part                     = 0.;
     dc_sync.kp                         = get_as<double>(config, "dc_sync_kp", 0.5);
     dc_sync.ki                         = get_as<double>(config, "dc_sync_ki", 0.0025);
-    dc_sync.i_limit                    = get_as<double>(config, "dc_sync_i_limit", 0.00000001);
+    dc_sync.i_limit                    = get_as<double>(config, "dc_sync_i_limit", 10.); // in [ns]
     dc_sync.slew_rate                  = get_as<double>(config, "dc_sync_slew_rate", 0.0000001);
     dc_sync.timer_override             = get_as<int>(config, "dc_sync_timer_override", -1);
-    dc_sync.offset_compensation_cycles = get_as<int>(config, "dc_sync_offset_compensation_cycles", 10);
-    dc_sync.offset_compensation_cnt    = 0;
     dc_sync.diff_converge_cycles       = get_as<uint64_t>(config, "dc_sync_converge_cycles", 10);
     dc_sync.diff_converge_cnt          = 0;
     dc_sync.diff_converged             = false;
-    dc_sync.v_part_old                 = 0.;
 
     if (config["dc_sync.kp"] || config["dc_sync.ki"] || config["dc_sync.kd"])
         log(warning, 
@@ -205,6 +203,20 @@ void master::init() {
                 "This is a newer version of module_ethercat which uses a better pi-control\n"
                 "for dc clock synchronization. To modify the gains use parameters \"dc_sync_kp\"\n"
                 "and \"dc_sync_ki\" in your config file. (Using kp=%7.3f, ki=%7.3f)\n", dc_sync.ki, dc_sync.kp);
+
+    if (config["dc_sync_offset_compensation_cycles"]) {
+        log(warning, 
+                "\n"
+                "'dc_sync_offset_compensation_cycles' is deprecated and can be removed from\n"
+                "your config file\n");
+    }
+    
+    if (config["dc_sync_kd"]) {
+        log(warning, 
+                "\n"
+                "'dc_sync_kd' is deprecated and can be removed from\n"
+                "your config file\n");
+    }
 
     pd_cookie = 0;
 }
@@ -218,49 +230,31 @@ static void cb_dc(void *arg, int num) {
 }
 
 void master::recv_dc() {
-    static double timer_correction = 0;
-
     if (ec.dc.mode == dc_mode_ref_clock) {
-        timer_correction += ec.dc.timer_correction;
+        int64_t rate_in_ns = dc_sync.start_timer * 1E9;
+        rate_in_ns += ec.dc.timer_correction;
+        rate = 1./((double)rate_in_ns / 1E9);
+        t_dev->set_rate(rate);
+                    
+        // statistics (not really needed here)
+        dc_sync.last_diff = ec.dc.act_diff;
+        dc_sync.i_part = ec.dc.control.i_part;
+        dc_sync.p_part = ec.dc.control.p_part;
 
-        if ((++dc_sync.offset_compensation_cnt % dc_sync.offset_compensation_cycles) == 0) {
-            dc_sync.offset_compensation_cnt = 0;
-    //        dc_set_clock();
-            try {
-                int64_t rate_in_ns = dc_sync.start_timer * 1E9; //(1. / t_dev->get_rate()) * 1E9;
-                rate_in_ns += timer_correction / dc_sync.offset_compensation_cycles;
-                rate = 1./((double)rate_in_ns / 1E9);
-                t_dev->set_rate(rate);
+        if (!dc_sync.diff_converged) {
+            double margin = 1. / (dc_sync.start_timer / 100.);
+            double fast_margin = 1. / (dc_sync.start_timer / 1000.);
 
-                if (dc_sync.log) {
-                    log(info, "setting new clock rate to %8.3f [Hz], correction %+8.3f, p_part %+8.3f, i_part %+8.3f, rtc %ld, dc %ld, act_diff %ld\n", 
-                            rate, timer_correction, 
-                            ec.dc.control.v_part_old,        
-                            ec.dc.control.diffsum,
-                            ec.dc.rtc_time, ec.dc.dc_time, ec.dc.act_diff);
-                }
-            } catch (exception& e) {
-                log(warning, "setting new clock failed: %s\n", e.what());
+            if (ec.dc.act_diff < fast_margin) {
+                dc_sync.diff_converge_cnt += 10;
+            } else if (ec.dc.act_diff < margin) {
+                dc_sync.diff_converge_cnt ++;
             }
 
-            timer_correction = 0;
-        } 
-        
-        // check if diff converged
-        if (    dc_sync.diff_converge_cycles && 
-                ((++dc_sync.diff_converge_cnt % dc_sync.diff_converge_cycles) == 0)) {
-            dc_sync.diff_converge_cnt = 0;
-
-            double margin = 1. / (dc_sync.start_timer / 100.);
-
-            if ((ec.dc.timer_correction > margin) || (ec.dc.timer_correction < -1 * margin)) {
-            } else {
-                if (!dc_sync.diff_converged) {
-                    dc_sync.diff_converged = true;
-                }
+            if (dc_sync.diff_converge_cnt > dc_sync.diff_converge_cycles) {     
+                dc_sync.diff_converged = true;
             }
         }
-
     }        
     
     if (trigger_dc_sync) {
@@ -493,8 +487,9 @@ void master::open() {
     // add callback for cyclic dc datagram
     ec.dc.cdg.user_cb = cb_dc;
     ec.dc.cdg.user_cb_arg = (void *)this;
-    ec.dc.control.kp = dc_sync.kp / dc_sync.offset_compensation_cycles;
-    ec.dc.control.ki = dc_sync.ki / dc_sync.offset_compensation_cycles;
+    ec.dc.control.kp = dc_sync.kp;
+    ec.dc.control.ki = dc_sync.ki;
+    ec.dc.control.i_part_limit = dc_sync.i_limit;
     
     // -----------------------------------------------------------
     // set pdo mapping entries
@@ -841,8 +836,8 @@ int master::set_state(module_state_t state) {
             if ((ec.dc.have_dc != 0) && (ec.dc.mode == dc_mode_ref_clock)) {
                 while (!dc_sync.diff_converged) {
                     double act_timer = 1. / t_dev->get_rate();
-                    log(info, "waiting for DC to converge... act_timer %13.9f, last_diff %13.9f, diffsum %13.9f\n", act_timer, dc_sync.last_diff, dc_sync.diffsum);
-                    osal_sleep(dc_sync.offset_compensation_cycles * dc_sync.timer_override);
+                    log(info, "waiting for DC to converge... act_timer %13.9f, last_diff %13.9f, i_part %13.9f\n", act_timer, dc_sync.last_diff, dc_sync.i_part);
+                    osal_sleep(1000000000);
                 }
             }
 
@@ -882,23 +877,18 @@ int master::set_state(module_state_t state) {
                 "- uint32_t: first_run\n"
                 "- uint32_t: padding_0\n"
                 "- double: last_diff\n"
-                "- double: i_part\n"
                 "- double: p_part\n"
+                "- double: i_part\n"
                 "- double: start_timer\n"
                 "- double: kp\n"
                 "- double: ki\n"
-                "- double: kd\n"
                 "- double: i_limit\n"
                 "- double: slew_rate\n"
-                "- int32_t: offset_compensation_cycles\n"
-                "- int32_t: offset_compensation_cnt\n"
                 "- int32_t: timer_override\n"
                 "- uint32_t: padding_1\n"
                 "- uint64_t: diff_converge_cycles\n"
                 "- uint64_t: diff_converge_cnt\n"
-                "- uint32_t: diff_converged\n"
-                "- uint32_t: padding_2\n"
-                "- double: v_part_old\n";
+                "- uint32_t: diff_converged\n";
 
             trigger_dc_sync = make_shared<robotkernel::trigger>(name, "dc_sync_ctrl.inputs");
             k.add_device(trigger_dc_sync);
@@ -961,8 +951,8 @@ void master::tick() {
 /*! Correct Master clock according to distributed clock. */
 void master::dc_set_clock() {
     try {
-        int64_t rate_in_ns = dc_sync.start_timer * 1E9; //(1. / t_dev->get_rate()) * 1E9;
-        rate_in_ns += ec.dc.timer_correction / dc_sync.offset_compensation_cycles;
+        int64_t rate_in_ns = dc_sync.start_timer * 1E9;
+        rate_in_ns += ec.dc.timer_correction;
         rate = 1./((double)rate_in_ns / 1E9);
         t_dev->set_rate(rate);
 
@@ -976,6 +966,7 @@ void master::dc_set_clock() {
 
     dc_sync.first_run = false;
     
+#if 0
     // check if diff converged
     if (    !dc_sync.diff_converged         &&
             dc_sync.diff_converge_cycles    && 
@@ -988,6 +979,7 @@ void master::dc_set_clock() {
             dc_sync.diff_converged = true;
         }
     }
+#endif
 
     if (trigger_dc_sync) {
         trigger_dc_sync->trigger_modules();
