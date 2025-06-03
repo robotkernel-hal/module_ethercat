@@ -99,7 +99,7 @@ void dc_clock_setter::run() {
  */
 master::master(const std::string& name, const YAML::Node& node) :
     service_provider::canopen_protocol::base(name, "master.mailbox"),
-    pd_provider(name), module_base("module_ethercat", name, node)
+    module_base("module_ethercat", name, node)
 {
     config = YAML::Clone(node);
     elp.ll = ll;
@@ -257,14 +257,13 @@ void master::recv_dc() {
         }
     }        
     
-    if (trigger_dc_sync) {
-        trigger_dc_sync->trigger_modules();
+    if (pd_dc_sync) {
+        pd_dc_sync->trigger();
     }
 
     if (pdin_dc) {
-        pdin_dc->write(dc_provider_hash, 0, (uint8_t *)&ec.dc.dc_time, 
+        pdin_dc->write(pdin_dc_provider, 0, (uint8_t *)&ec.dc.dc_time, 
                 (size_t)((uint8_t *)&ec.dc.timer_correction - (uint8_t *)&ec.dc.dc_time));
-        pdin_dc_trigger->trigger_modules();
     }
 }
 
@@ -647,19 +646,15 @@ int master::set_state(module_state_t state) {
             // ====> stop receiving measurements
             dccs->stop();
             
-            k.remove_device(trigger_dc_sync);
-            trigger_dc_sync = nullptr;
             k.remove_device(pd_dc_sync);
             pd_dc_sync = nullptr;
 
             if (pdin_dc) {
+                pdin_dc->reset_provider(pdin_dc_provider);
+                pdin_dc_provider = nullptr;
+
                 k.remove_device(pdin_dc);
                 pdin_dc = nullptr;
-            }
-
-            if (pdin_dc_trigger) {
-                k.remove_device(pdin_dc_trigger);
-                pdin_dc_trigger = nullptr;
             }
             
             if (recv_error_trigger) {
@@ -853,12 +848,6 @@ int master::set_state(module_state_t state) {
             if (pdin_dc)
                 k.remove_device(pdin_dc);
 
-            if (pdin_dc_trigger)
-                k.remove_device(pdin_dc_trigger);
-            
-            pdin_dc_trigger = make_shared<robotkernel::trigger>(name, "dc.inputs");
-            k.add_device(pdin_dc_trigger);
-
             string pdo_desc = 
                 "- uint64_t: dc_time\n"
                 "- int64_t: dc_sto\n"
@@ -869,8 +858,9 @@ int master::set_state(module_state_t state) {
 
             pdin_dc = make_shared<robotkernel::triple_buffer>(
                     (uint8_t *)&ec.dc.timer_correction - (uint8_t *)&ec.dc.dc_time,
-                    name, "dc.inputs", pdo_desc, pdin_dc_trigger->id());
-            dc_provider_hash = pdin_dc->set_provider(shared_from_this());
+                    name, "dc.inputs", pdo_desc);
+            pdin_dc_provider = make_shared<robotkernel::pd_provider>(name);
+            pdin_dc->set_provider(pdin_dc_provider);
             k.add_device(pdin_dc);
             
             string pd_dc_sync_desc = 
@@ -890,10 +880,8 @@ int master::set_state(module_state_t state) {
                 "- uint64_t: diff_converge_cnt\n"
                 "- uint32_t: diff_converged\n";
 
-            trigger_dc_sync = make_shared<robotkernel::trigger>(name, "dc_sync_ctrl.inputs");
-            k.add_device(trigger_dc_sync);
             pd_dc_sync = make_shared<robotkernel::pointer_buffer>(sizeof(dc_sync) - (size_t)((uint8_t *)&dc_sync.first_run - (uint8_t *)&dc_sync), (uint8_t *)&dc_sync.first_run, 
-                    name, "dc_sync_ctrl.inputs", pd_dc_sync_desc, trigger_dc_sync->id());
+                    name, "dc_sync_ctrl.inputs", pd_dc_sync_desc);
             k.add_device(pd_dc_sync);
 
             if (state == module_state_safeop)
@@ -981,8 +969,8 @@ void master::dc_set_clock() {
     }
 #endif
 
-    if (trigger_dc_sync) {
-        trigger_dc_sync->trigger_modules();
+    if (pd_dc_sync) {
+        pd_dc_sync->trigger();
     }
 }
 

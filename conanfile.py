@@ -10,13 +10,13 @@ class MainProject(ConanFile):
     exports_sources = ["*", "!.gitignore"]
     requires = [
             "libethercat/[>=0.6.8]@common/unstable",
-            "robotkernel/[~5]@robotkernel/stable",
-            "service_provider_memory_inspection/[~5]@robotkernel/stable",
-            "service_provider_canopen_protocol/[~5 >=5.1.10]@robotkernel/stable",
-            "service_provider_key_value/[~5]@robotkernel/stable",
-            "service_provider_sercos_protocol/[~5]@robotkernel/stable",
-            "service_provider_file_protocol/[~5]@robotkernel/stable",
-            "service_provider_process_data_inspection/[~5]@robotkernel/stable", ]
+            "robotkernel/[~6]@robotkernel/unstable",
+            "service_provider_memory_inspection/[~6]@robotkernel/unstable",
+            "service_provider_canopen_protocol/[~6]@robotkernel/unstable",
+            "service_provider_key_value/[~6]@robotkernel/unstable",
+            "service_provider_sercos_protocol/[~6]@robotkernel/unstable",
+            "service_provider_file_protocol/[~6]@robotkernel/unstable",
+            "service_provider_process_data_inspection/[~6]@robotkernel/unstable", ]
 
     options = {
             "max_slaves"                 : ["ANY"],

@@ -102,10 +102,7 @@ typedef enum {
 
 class slave : 
     public std::enable_shared_from_this<slave>,
-    public service_provider::process_data_inspection::base,
-    public key_value_slave,
-    public robotkernel::pd_provider,
-    public robotkernel::pd_consumer
+    public key_value_slave
 {
     public:
         enum request_type {
@@ -403,11 +400,11 @@ class slave :
 
         // named process data
         robotkernel::sp_process_data_t pdin;
-        robotkernel::sp_trigger_t      pdin_trigger;
-        std::size_t provider_hash;
+        robotkernel::sp_pd_provider_t  pdin_provider;
+        service_provider::process_data_inspection::sp_pd_inspection_t pdin_inspection;
         robotkernel::sp_process_data_t pdout;
-        robotkernel::sp_trigger_t      pdout_trigger;
-        std::size_t consumer_hash;
+        robotkernel::sp_pd_consumer_t  pdout_consumer;
+        service_provider::process_data_inspection::sp_pd_inspection_t pdout_inspection;
 
         // service requesters
         robotkernel::sp_service_interface_t _mbx_foe;    //!< file service requester
@@ -467,18 +464,6 @@ class slave :
          * \param to state switching to
          */
         void post_state_transition(module_state_t from, module_state_t to);
-
-        //! return input process data (measurements)
-        /*!
-         * \param pd return input process data
-         */
-        void get_pdin(service_provider::process_data_inspection::pd_t& pd);
-
-        //! return output process data (commands)
-        /*!
-         * \param pd return output process data
-         */
-        void get_pdout(service_provider::process_data_inspection::pd_t& pd);
 };
 
 //! Emit YAML status of module instance.

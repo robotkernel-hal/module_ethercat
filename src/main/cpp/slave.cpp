@@ -223,15 +223,10 @@ slave::sync_manager_settings::sync_manager_settings(const YAML::Node& node) {
  * \param master_dev master device
  */
 slave::slave(int index, master *master_dev) : 
-    service_provider::process_data_inspection::base(master_dev->name, 
-            format_string("slave_%d", index)),
     key_value_slave(master_dev->name, format_string("slave_%d", index)),
-    pd_provider(master_dev->name + format_string(".slave_%d", index)),
-    pd_consumer(master_dev->name + format_string(".slave_%d", index)),
     sm_set_by_user(false), index(index), master_dev(master_dev) 
 {
     master_dev->log(verbose, "default slave index %d created\n", index);
-    provider_hash = consumer_hash = 0;
     prefer_obj_names = false;
 };
 
@@ -241,17 +236,11 @@ slave::slave(int index, master *master_dev) :
  * \param master_dev master device
  */
 slave::slave(int index, const YAML::Node& node, master *master_dev) : 
-    service_provider::process_data_inspection::base(master_dev->name, 
-            format_string("slave_%d", index)), 
     key_value_slave(master_dev->name, format_string("slave_%d", index)),
-    pd_provider(master_dev->name + format_string(".slave_%d", index)),
-    pd_consumer(master_dev->name + format_string(".slave_%d", index)),
     sm_set_by_user(false), master_dev(master_dev) 
 {
     name  = get_as<string>(node, "name");
     this->index = index;
-
-    provider_hash = consumer_hash = 0;
 
     // sync manager settings
     if (node["sm"]) {
@@ -876,31 +865,24 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
         case safeop_2_init:
         case safeop_2_boot:
             // ====> stop receiving measurements
-            k.remove_device(std::static_pointer_cast<
-                    service_provider::process_data_inspection::base>(shared_from_this())); // process data inspection
-            
             if (pdin)  { 
-                pdin->reset_provider(provider_hash);
-                provider_hash = 0;
+                k.remove_device(pdin_inspection);
+                pdin_inspection = nullptr;
+
+                pdin->reset_provider(pdin_provider);
+                pdin_provider = nullptr;
                 k.remove_device(pdin); 
                 pdin = nullptr; 
             }
 
-            if (pdin_trigger) {
-                k.remove_device(pdin_trigger);
-                pdin_trigger = nullptr;
-            }
-
             if (pdout) { 
-                pdout->reset_consumer(consumer_hash);
-                consumer_hash = 0;
+                k.remove_device(pdout_inspection);
+                pdout_inspection = nullptr;
+
+                pdout->reset_consumer(pdout_consumer);
+                pdout_consumer = nullptr;
                 k.remove_device(pdout); 
                 pdout = nullptr; 
-            }
-
-            if (pdout_trigger) {
-                k.remove_device(pdout_trigger);
-                pdout_trigger = nullptr;
             }
 
             if (to == module_state_preop)
@@ -980,9 +962,6 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
         case preop_2_op:
         case preop_2_safeop:
             // ====> start receiving measurements
-            k.add_device(std::static_pointer_cast<
-                    service_provider::process_data_inspection::base>(shared_from_this()));
-            
             if (slv->pdin.len) {
                 if (pdin)
                     k.remove_device(pdin);
@@ -990,9 +969,6 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                 string base_name = master_dev->use_real_names ?
                     format_string("%s.inputs", name.c_str()) :
                     format_string("slave_%d.inputs", index);
-
-                pdin_trigger = make_shared<robotkernel::trigger>(master_dev->name, base_name, rate);
-                k.add_device(pdin_trigger);
 
                 string pdo_desc = "";
                     
@@ -1008,11 +984,13 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                     pdo_desc = format_string("- uint8_t[%d]: buf\n", slv->pdin.len);
                 }
 
-                pdin = make_shared<robotkernel::triple_buffer_with_injection>(slv->pdin.len, 
-                        master_dev->name, base_name, pdo_desc,
-                        format_string("%s.group_%d.trigger", master_dev->name.c_str(), slv->assigned_pd_group));
-                provider_hash = pdin->set_provider(shared_from_this());
+                pdin = make_shared<robotkernel::triple_buffer>(slv->pdin.len, master_dev->name, base_name, pdo_desc);
+                pdin_provider = make_shared<robotkernel::pd_provider>(master_dev->name + "." + base_name);
+                pdin->set_provider(pdin_provider);
                 k.add_device(pdin);
+
+                pdin_inspection = make_shared<service_provider::process_data_inspection::pd_inspection>(master_dev->name, base_name, pdin);
+                k.add_device(pdin_inspection);
             }
             
             if (slv->pdout.len) {
@@ -1022,9 +1000,6 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                 string base_name = master_dev->use_real_names ?
                     format_string("%s.outputs", name.c_str()) :
                     format_string("slave_%d.outputs", index);
-
-                pdout_trigger = make_shared<robotkernel::trigger>(master_dev->name, base_name, index);
-                k.add_device(pdout_trigger);
 
                 string pdo_desc = "";
                 
@@ -1040,10 +1015,13 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                     pdo_desc = format_string("- uint8_t[%d]: buf\n", slv->pdout.len);
                 }
 
-                pdout = make_shared<robotkernel::triple_buffer_with_injection>(slv->pdout.len, master_dev->name, 
-                        base_name, pdo_desc, pdout_trigger->id());
-                consumer_hash = pdout->set_consumer(shared_from_this());
+                pdout = make_shared<robotkernel::triple_buffer>(slv->pdout.len, master_dev->name, base_name, pdo_desc);
+                pdout_consumer = make_shared<robotkernel::pd_consumer>(master_dev->name + "." + base_name);
+                pdout->set_consumer(pdout_consumer);
                 k.add_device(pdout);
+                
+                pdout_inspection = make_shared<service_provider::process_data_inspection::pd_inspection>(master_dev->name, base_name, pdout);
+                k.add_device(pdout_inspection);
             }
 
             if (to == module_state_safeop)
@@ -1186,46 +1164,21 @@ void slave::sercos::sercos_write_idn(const uint16_t& idn,
     }
 }
 	    
-//! return input process data (measurements)
-/*!
- * \param pd return input process data
- */
-void slave::get_pdin(service_provider::process_data_inspection::pd_t& pd) {
-    ec_slave_t *slv = &master_dev->ec.slaves[index];
-    pd.resize(slv->pdin.len);
-    memcpy(&pd[0], slv->pdin.pd, slv->pdin.len);
-}
-
-//! return output process data (commands)
-/*!
- * \param pd return output process data
- */
-void slave::get_pdout(service_provider::process_data_inspection::pd_t& pd) {
-    ec_slave_t *slv = &master_dev->ec.slaves[index];
-    pd.resize(slv->pdout.len);
-    memcpy(&pd[0], slv->pdout.pd, slv->pdout.len);
-}
-
 //! process data out handler
 void slave::pdout_handler() {
     ec_slave_t *slv = &master_dev->ec.slaves[index];
-    if (!pdout || !consumer_hash || (slv->pdout.len == 0))
+    if (!pdout || !pdout_consumer || (slv->pdout.len == 0))
         return;
 
-    pdout->read(consumer_hash, 0, slv->pdout.pd, slv->pdout.len);
-    pdout->pd_cookie++;
+    pdout->read(pdout_consumer, 0, slv->pdout.pd, slv->pdout.len);
 }
 
 //! process data in handler
 void slave::pdin_handler() {
     ec_slave_t *slv = &master_dev->ec.slaves[index];
-    if (!pdin || !provider_hash || (slv->pdin.len == 0))
+    if (!pdin || !pdin_provider || (slv->pdin.len == 0))
         return;
 
-    pdin->write(provider_hash, 0, slv->pdin.pd, slv->pdin.len);
-    pdin->pd_cookie++;
-
-    if (pdin_trigger)
-        pdin_trigger->trigger_modules();
+    pdin->write(pdin_provider, 0, slv->pdin.pd, slv->pdin.len);
 }
 

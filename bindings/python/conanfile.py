@@ -13,7 +13,7 @@ class lnrk_interface_python(ConanFile):
 
     url = "https://rmc-github.robotic.dlr.de/robotkernel/module_ethercat"
     settings = "os"
-    pure_python_folder = os.path.join("bindings", "python")
+    pure_python_folder = "."
     exports_sources = os.path.join(pure_python_folder, "*")
 
     def requirements(self):

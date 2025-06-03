@@ -108,7 +108,6 @@ class dc_clock_setter :
 class master :
     public std::enable_shared_from_this<master>,
     public service_provider::canopen_protocol::base,
-    public robotkernel::pd_provider,
     public robotkernel::module_base
 {
     public:
@@ -146,7 +145,6 @@ class master :
         } dc_sync;
 
         robotkernel::sp_process_data_t pd_dc_sync;
-        robotkernel::sp_trigger_t      trigger_dc_sync;
 
         struct {
             bool configure_tun;
@@ -205,8 +203,7 @@ class master :
 
         //! named process data for distributed clocks info
         robotkernel::sp_process_data_t pdin_dc;
-        robotkernel::sp_trigger_t      pdin_dc_trigger;
-        std::size_t dc_provider_hash;
+        robotkernel::sp_pd_provider_t  pdin_dc_provider;
 
         robotkernel::sp_trigger_t      recv_error_trigger;
 
