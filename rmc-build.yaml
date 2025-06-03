@@ -9,5 +9,5 @@ builds:
       - imports: [linux_defaults_build_profile]
       - debian11-x86_64
   - context: conan
-    build_file: bindings/python/conanfile.rkgui.py
+    build_file: bindings/python/conanfile.py
     configurations: *build_configs
