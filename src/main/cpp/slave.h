@@ -28,8 +28,8 @@
 #include <stdint.h>
 
 #include "yaml-cpp/yaml.h"
-#include "robotkernel/kernel.h"
 
+#include "robotkernel/module_base.h"
 
 #include "service_provider/memory_inspection/base.h"
 #include "service_provider/canopen_protocol/base.h"

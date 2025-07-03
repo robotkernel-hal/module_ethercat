@@ -29,7 +29,7 @@
 #include <libosal/timer.h>
 
 #include "yaml-cpp/yaml.h"
-#include "robotkernel/kernel.h"
+#include "robotkernel/trigger.h"
 
 //! module_ethercat::
 namespace module_ethercat {

@@ -25,7 +25,8 @@
 #include <math.h>
 
 #include "master.h"
-#include <robotkernel/rt_helper.h>
+#include <robotkernel/helpers.h>
+#include <robotkernel/robotkernel.h>
 
 MODULE_DEF(module_ethercat, module_ethercat::master)
 
@@ -145,7 +146,7 @@ void master::init() {
             groups[g_nr] = make_shared<group>(this, g_nr, it->second);
             
             // add trigger device from group
-            kernel::get_instance()->add_device(groups[g_nr]); 
+            robotkernel::add_device(groups[g_nr]); 
         }
     }
 
@@ -281,7 +282,7 @@ void master::recv_group(int group_index) {
         _slave_info[slave]->pdin_handler();
     }
 
-    g->trigger_modules();
+    g->do_trigger();
 }
 
 extern "C" size_t hw_stream_read(void *user, void *buf, size_t len) {
@@ -301,7 +302,7 @@ void master::open() {
             
     if ((ifname.compare(0, 7, "stream:") == 0)) {
         string tmp = ifname.substr(7);
-        rk_stream = kernel::get_instance()->get_stream(tmp);
+        rk_stream = robotkernel::get_device<stream>(tmp);
         ret = hw_device_stream_open(&hw_stream, &ec, &rk_stream, hw_stream_read, hw_stream_write, 60, 0xFF);
 
         if (ret == 0) {
@@ -581,7 +582,7 @@ void master::open() {
         ec_configure_tun(&ec, tun_settings.ip_address);
     }
 
-//    auto mdl = kernel::get_instance()->get_module(name);
+//    auto mdl = robotkernel::get_module(name);
 //    YAML::Emitter emit;
 //    emit << config;
 //
@@ -610,8 +611,6 @@ master::~master() {
  * \return success or failure
  */
 int master::set_state(module_state_t state) {
-    kernel& k = *kernel::get_instance();
-
     log(info, "setting state from %s to %s\n", 
             state_to_string(this->state), state_to_string(state));
 
@@ -646,25 +645,25 @@ int master::set_state(module_state_t state) {
             // ====> stop receiving measurements
             dccs->stop();
             
-            k.remove_device(pd_dc_sync);
+            robotkernel::remove_device(pd_dc_sync);
             pd_dc_sync = nullptr;
 
             if (pdin_dc) {
                 pdin_dc->reset_provider(pdin_dc_provider);
                 pdin_dc_provider = nullptr;
 
-                k.remove_device(pdin_dc);
+                robotkernel::remove_device(pdin_dc);
                 pdin_dc = nullptr;
             }
             
             if (recv_error_trigger) {
-                k.remove_device(recv_error_trigger);
+                robotkernel::remove_device(recv_error_trigger);
                 recv_error_trigger = nullptr;
             }
 
             // remove group trigger devices
             for (const auto& kv : groups)
-                k.remove_device(kv.second);
+                robotkernel::remove_device(kv.second);
 
             STATE_TRANSITION(pre, module_state_preop);
             ec_set_state(&ec, EC_STATE_PREOP);
@@ -681,7 +680,7 @@ int master::set_state(module_state_t state) {
 
             t_dev = nullptr;
 
-            k.remove_device(static_pointer_cast<service_provider::canopen_protocol::base>(shared_from_this()));
+            robotkernel::remove_device(static_pointer_cast<service_provider::canopen_protocol::base>(shared_from_this()));
 
             ec_close(&ec);
             ec_opened = false;
@@ -729,7 +728,7 @@ int master::set_state(module_state_t state) {
                 return state;
             }
             
-            k.add_device(static_pointer_cast<service_provider::canopen_protocol::base>(shared_from_this()));
+            robotkernel::add_device(static_pointer_cast<service_provider::canopen_protocol::base>(shared_from_this()));
 
             ec.dc.mode = dc_sync.mode_string == "ref_clock" ? 
                 dc_mode_ref_clock : dc_sync.mode_string == "master_as_ref_clock" ?
@@ -746,7 +745,7 @@ int master::set_state(module_state_t state) {
             } else {
                 auto et = mdl->triggers.front();
                 t_divisor = et->divisor;
-                t_dev = kernel::get_instance()->get_trigger(et->dev_name);
+                t_dev = robotkernel::get_device<trigger>(et->dev_name);
             
                 double rate = t_dev->get_rate() / t_divisor;
                 dc_sync.start_timer = (1.f / rate);

@@ -24,8 +24,8 @@
 
 #include "slave.h"
 #include "master.h"
-#include "robotkernel/kernel.h"
 #include "robotkernel/helpers.h"
+#include "robotkernel/robotkernel.h"
 #include "string_util/string_util.h"
 #include <iomanip>
 #include <stdio.h>
@@ -542,10 +542,9 @@ void slave::init_key_value() {
 
 // perform robotkernel clean up
 void slave::clean_up() {
-    kernel& k = *kernel::get_instance();
-    k.remove_device(_eeprom_mi);
-    k.remove_device(_memory_mi);
-    k.remove_device(_eeprom_coe);
+    robotkernel::remove_device(_eeprom_mi);
+    robotkernel::remove_device(_memory_mi);
+    robotkernel::remove_device(_eeprom_coe);
 
     _eeprom_mi = nullptr;
     _memory_mi = nullptr;
@@ -838,14 +837,13 @@ void slave::pre_state_transition(module_state_t from, module_state_t to) {
 void slave::post_state_transition(module_state_t from, module_state_t to) {
     uint32_t mbx_sup = master_dev->ec.slaves[index].eeprom.mbx_supported;
     uint32_t soe_ch  = master_dev->ec.slaves[index].eeprom.general.soe_channels;
-    kernel& k = *kernel::get_instance();
     auto *slv = &(master_dev->ec.slaves[index]);
 
 #define REMOVE_SERVICE_COLLECTOR(req) \
-            { if (req) { k.remove_device(req); (req) = nullptr; } }
+            { if (req) { robotkernel::remove_device(req); (req) = nullptr; } }
 
 #define ADD_SERVICE_COLLECTOR(req) { \
-                k.add_device(req); }
+            robotkernel::add_device(req); }
 
 #define ADD_SERVICE_COLLECTOR_CLASS(req, cls, ...) \
             { if (!(req)) { (req) = make_shared<cls>(shared_from_this(), ##__VA_ARGS__); \
@@ -866,22 +864,22 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
         case safeop_2_boot:
             // ====> stop receiving measurements
             if (pdin)  { 
-                k.remove_device(pdin_inspection);
+                robotkernel::remove_device(pdin_inspection);
                 pdin_inspection = nullptr;
 
                 pdin->reset_provider(pdin_provider);
                 pdin_provider = nullptr;
-                k.remove_device(pdin); 
+                robotkernel::remove_device(pdin); 
                 pdin = nullptr; 
             }
 
             if (pdout) { 
-                k.remove_device(pdout_inspection);
+                robotkernel::remove_device(pdout_inspection);
                 pdout_inspection = nullptr;
 
                 pdout->reset_consumer(pdout_consumer);
                 pdout_consumer = nullptr;
-                k.remove_device(pdout); 
+                robotkernel::remove_device(pdout); 
                 pdout = nullptr; 
             }
 
@@ -939,7 +937,7 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
 
             init_key_value();
             
-            k.add_device(std::static_pointer_cast<
+            robotkernel::add_device(std::static_pointer_cast<
                     service_provider::key_value::base>(shared_from_this()));
             
             if (mbx_sup & EC_EEPROM_MBX_FOE)
@@ -964,7 +962,7 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
             // ====> start receiving measurements
             if (slv->pdin.len) {
                 if (pdin)
-                    k.remove_device(pdin);
+                    robotkernel::remove_device(pdin);
                 
                 string base_name = master_dev->use_real_names ?
                     format_string("%s.inputs", name.c_str()) :
@@ -987,15 +985,15 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                 pdin = make_shared<robotkernel::triple_buffer>(slv->pdin.len, master_dev->name, base_name, pdo_desc);
                 pdin_provider = make_shared<robotkernel::pd_provider>(master_dev->name + "." + base_name);
                 pdin->set_provider(pdin_provider);
-                k.add_device(pdin);
+                robotkernel::add_device(pdin);
 
                 pdin_inspection = make_shared<service_provider::process_data_inspection::pd_inspection>(master_dev->name, base_name, pdin);
-                k.add_device(pdin_inspection);
+                robotkernel::add_device(pdin_inspection);
             }
             
             if (slv->pdout.len) {
                 if (pdout)
-                    k.remove_device(pdout);
+                    robotkernel::remove_device(pdout);
                 
                 string base_name = master_dev->use_real_names ?
                     format_string("%s.outputs", name.c_str()) :
@@ -1018,10 +1016,10 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                 pdout = make_shared<robotkernel::triple_buffer>(slv->pdout.len, master_dev->name, base_name, pdo_desc);
                 pdout_consumer = make_shared<robotkernel::pd_consumer>(master_dev->name + "." + base_name);
                 pdout->set_consumer(pdout_consumer);
-                k.add_device(pdout);
+                robotkernel::add_device(pdout);
                 
                 pdout_inspection = make_shared<service_provider::process_data_inspection::pd_inspection>(master_dev->name, base_name, pdout);
-                k.add_device(pdout_inspection);
+                robotkernel::add_device(pdout_inspection);
             }
 
             if (to == module_state_safeop)

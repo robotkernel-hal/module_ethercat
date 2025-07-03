@@ -27,11 +27,10 @@
 #include <string>
 #include <stdint.h>
 
-#include "robotkernel/kernel.h"
 #include "robotkernel/trigger_base.h"
-#include "robotkernel/module_intf.h"
 #include "robotkernel/module_base.h"
 #include "robotkernel/exceptions.h"
+#include "robotkernel/stream.h"
 
 #include "yaml-cpp/yaml.h"
 
@@ -75,9 +74,6 @@
 
 //! module_ethercat::
 namespace module_ethercat {
-#ifdef EMACS
-}
-#endif
 
 /* forward declarations */
 class master;
@@ -440,9 +436,6 @@ class master :
 };
 
 //! module_ethercat::
-#ifdef EMACS
-{
-#endif
 };
 
 #endif // __MASTER_H__
