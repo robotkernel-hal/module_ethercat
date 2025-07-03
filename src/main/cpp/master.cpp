@@ -119,6 +119,7 @@ void master::init() {
     get_yaml(bool,     threaded_startup, true);
     get_yaml(bool,     monitor_state, false);
     get_yaml(bool,     use_real_names, false);
+    trigger_device = get_as<string>(config, "trigger_device");
 
     /* creating dccs */
     dccs = make_shared<dc_clock_setter>(shared_from_this());
@@ -581,14 +582,6 @@ void master::open() {
     if (tun_settings.configure_tun) {
         ec_configure_tun(&ec, tun_settings.ip_address);
     }
-
-//    auto mdl = robotkernel::get_module(name);
-//    YAML::Emitter emit;
-//    emit << config;
-//
-//    log(verbose, "setting new config: %s\n", emit.c_str());
-//
-//    mdl->config = emit.c_str();
 }
 
 //! destruction 
@@ -674,11 +667,12 @@ int master::set_state(module_state_t state) {
         case preop_2_init:
         case preop_2_boot:
             // ====> deinit devices
+            t_dev->remove_trigger(shared_from_this());
+            t_dev = nullptr;
+
             STATE_TRANSITION(pre, module_state_init);
             ec_set_state(&ec, EC_STATE_INIT);
             STATE_TRANSITION(post, module_state_init);
-
-            t_dev = nullptr;
 
             robotkernel::remove_device(static_pointer_cast<service_provider::canopen_protocol::base>(shared_from_this()));
 
@@ -738,18 +732,12 @@ int master::set_state(module_state_t state) {
             ec_set_state(&ec, EC_STATE_PREOP);
             STATE_TRANSITION(post, module_state_preop);
 
-            auto mdl = get_module();
-            if (mdl->triggers.size() != 1) {
-                log(warning, "we have %d trigger devices set by robotkernel, "
-                        "please use only 1!\n", mdl->triggers.size());
-            } else {
-                auto et = mdl->triggers.front();
-                t_divisor = et->divisor;
-                t_dev = robotkernel::get_device<trigger>(et->dev_name);
-            
-                double rate = t_dev->get_rate() / t_divisor;
-                dc_sync.start_timer = (1.f / rate);
-            }
+            t_dev = robotkernel::get_device<trigger>(trigger_device);
+
+            double rate = t_dev->get_rate() / t_divisor;
+            dc_sync.start_timer = (1.f / rate);
+
+            t_dev->add_trigger(shared_from_this());
 
             if (dc_sync.timer_override > 0) {
                 ec.main_cycle_interval = dc_sync.timer_override;
@@ -802,10 +790,10 @@ int master::set_state(module_state_t state) {
             dc_sync.first_run = true;
             
             if (recv_error_trigger)
-                k.remove_device(recv_error_trigger);
+                robotkernel::remove_device(recv_error_trigger);
             
             recv_error_trigger = make_shared<robotkernel::trigger>(name, "recv_error");
-            k.add_device(recv_error_trigger);
+            robotkernel::add_device(recv_error_trigger);
 
             // start cyclic operation via trigger
             dccs->start();
@@ -816,7 +804,7 @@ int master::set_state(module_state_t state) {
 
                 double grp_rate = (rate / grp->divisor);
                 grp->set_rate(grp_rate);
-                k.add_device(grp);
+                robotkernel::add_device(grp);
     
                 for (auto& s_nr : grp->_slaves) {
                     _slave_info[s_nr]->rate = grp_rate;
@@ -845,7 +833,7 @@ int master::set_state(module_state_t state) {
 
             // distributed clock info process data
             if (pdin_dc)
-                k.remove_device(pdin_dc);
+                robotkernel::remove_device(pdin_dc);
 
             string pdo_desc = 
                 "- uint64_t: dc_time\n"
@@ -860,7 +848,7 @@ int master::set_state(module_state_t state) {
                     name, "dc.inputs", pdo_desc);
             pdin_dc_provider = make_shared<robotkernel::pd_provider>(name);
             pdin_dc->set_provider(pdin_dc_provider);
-            k.add_device(pdin_dc);
+            robotkernel::add_device(pdin_dc);
             
             string pd_dc_sync_desc = 
                 "- uint32_t: first_run\n"
@@ -881,7 +869,7 @@ int master::set_state(module_state_t state) {
 
             pd_dc_sync = make_shared<robotkernel::pointer_buffer>(sizeof(dc_sync) - (size_t)((uint8_t *)&dc_sync.first_run - (uint8_t *)&dc_sync), (uint8_t *)&dc_sync.first_run, 
                     name, "dc_sync_ctrl.inputs", pd_dc_sync_desc);
-            k.add_device(pd_dc_sync);
+            robotkernel::add_device(pd_dc_sync);
 
             if (state == module_state_safeop)
                 break;
