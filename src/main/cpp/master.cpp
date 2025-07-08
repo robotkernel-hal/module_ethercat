@@ -718,8 +718,7 @@ int master::set_state(module_state_t state) {
                 open();
             } catch (exception& e) {
                 log(error, e.what());
-                state = module_state_init;
-                return state;
+                return (this->state = module_state_error);
             }
             
             robotkernel::add_device(static_pointer_cast<service_provider::canopen_protocol::base>(shared_from_this()));
