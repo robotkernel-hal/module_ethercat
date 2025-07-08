@@ -655,8 +655,8 @@ int master::set_state(module_state_t state) {
             }
 
             // remove group trigger devices
-            for (const auto& kv : groups)
-                robotkernel::remove_device(kv.second);
+//            for (const auto& kv : groups)
+//                robotkernel::remove_device(kv.second);
 
             STATE_TRANSITION(pre, module_state_preop);
             ec_set_state(&ec, EC_STATE_PREOP);
@@ -804,7 +804,7 @@ int master::set_state(module_state_t state) {
 
                 double grp_rate = (rate / grp->divisor);
                 grp->set_rate(grp_rate);
-                robotkernel::add_device(grp);
+//                robotkernel::add_device(grp);
     
                 for (auto& s_nr : grp->_slaves) {
                     _slave_info[s_nr]->rate = grp_rate;
