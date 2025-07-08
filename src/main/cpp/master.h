@@ -133,7 +133,7 @@ class master :
             double i_limit;
             double slew_rate;
         
-            int timer_override;
+            int64_t timer_override;
             
             uint64_t diff_converge_cycles;
             uint64_t diff_converge_cnt;
