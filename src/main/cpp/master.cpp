@@ -105,6 +105,7 @@ master::master(const std::string& name, const YAML::Node& node) :
     config = YAML::Clone(node);
     elp.ll = ll;
     ec_opened = false;
+    t_divisor = 1;
 } 
 
 //! second stage init routine
