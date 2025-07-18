@@ -102,6 +102,7 @@ master::master(const std::string& name, const YAML::Node& node) :
     config = YAML::Clone(node);
     elp.ll = ll;
     ec_opened = false;
+    t_divisor = 1;
 } 
 
 //! second stage init routine
@@ -190,8 +191,7 @@ void master::init() {
     dc_sync.kp                         = get_as<double>(config, "dc_sync_kp", 0.5);
     dc_sync.ki                         = get_as<double>(config, "dc_sync_ki", 0.0025);
     dc_sync.i_limit                    = get_as<double>(config, "dc_sync_i_limit", 10.); // in [ns]
-    dc_sync.slew_rate                  = get_as<double>(config, "dc_sync_slew_rate", 0.0000001);
-    dc_sync.timer_override             = get_as<int>(config, "dc_sync_timer_override", -1);
+    dc_sync.timer_override             = get_as<int64_t>(config, "dc_sync_timer_override", -1);
     dc_sync.diff_converge_cycles       = get_as<uint64_t>(config, "dc_sync_converge_cycles", 10);
     dc_sync.diff_converge_cnt          = 0;
     dc_sync.diff_converged             = false;
@@ -652,8 +652,8 @@ int master::set_state(module_state_t state) {
             }
 
             // remove group trigger devices
-            for (const auto& kv : groups)
-                robotkernel::remove_device(kv.second);
+//            for (const auto& kv : groups)
+//                robotkernel::remove_device(kv.second);
 
             STATE_TRANSITION(pre, module_state_preop);
             ec_set_state(&ec, EC_STATE_PREOP);
@@ -715,8 +715,7 @@ int master::set_state(module_state_t state) {
                 open();
             } catch (exception& e) {
                 log(error, e.what());
-                state = module_state_error;
-                return state;
+                return (this->state = module_state_error);
             }
             
             robotkernel::add_device(static_pointer_cast<service_provider_canopen_protocol::base>(shared_from_this()));
@@ -801,7 +800,7 @@ int master::set_state(module_state_t state) {
 
                 double grp_rate = (rate / grp->divisor);
                 grp->set_rate(grp_rate);
-                robotkernel::add_device(grp);
+//                robotkernel::add_device(grp);
     
                 for (auto& s_nr : grp->_slaves) {
                     _slave_info[s_nr]->rate = grp_rate;
@@ -857,9 +856,7 @@ int master::set_state(module_state_t state) {
                 "- double: kp\n"
                 "- double: ki\n"
                 "- double: i_limit\n"
-                "- double: slew_rate\n"
-                "- int32_t: timer_override\n"
-                "- uint32_t: padding_1\n"
+                "- int64_t: timer_override\n"
                 "- uint64_t: diff_converge_cycles\n"
                 "- uint64_t: diff_converge_cnt\n"
                 "- uint32_t: diff_converged\n";
