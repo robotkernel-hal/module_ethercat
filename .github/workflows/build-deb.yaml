@@ -40,7 +40,7 @@ jobs:
           curl -1sLf 'https://dl.cloudsmith.io/basic/robertburger/common/setup.deb.sh' | bash
           curl -1sLf 'https://dl.cloudsmith.io/basic/robertburger/robotkernel/setup.deb.sh' | bash
           apt-get update
-          apt-get install -y libethercat libosal robotkernel-service-helper robotkernel-dev \
+          apt-get install -y libethercat-dev libosal-dev robotkernel-service-helper robotkernel-dev \
             service-provider-canopen-protocol-dev \
             service-provider-file-protocol-dev \
             service-provider-key-value-dev \
