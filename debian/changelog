@@ -1,0 +1,907 @@
+module-ethercat (6.0.0~pre1) unstable; urgency=low
+
+  * prep: 6.0.0
+
+ -- Robert Burger <robert.burger@dlr.de>  Tue, 25 Mar 2025 11:12:34 +0100
+
+module-ethercat (5.4.0) unstable; urgency=low
+
+  * cleanup: fixes and cleanup for dc sync changes in libethercat 0.6.8
+
+ -- Robert Burger <robert.burger@dlr.de>  Tue, 25 Mar 2025 11:12:34 +0100
+
+module-ethercat (5.3.1) unstable; urgency=low
+
+  * fix: package versions
+  * fix: pdo subindex count
+  * Merge branch 'release/5.3.1' of rmc-github.robotic.dlr.de:robotkernel/module-ethercat into release/5.3.1
+  * fix: pdo subindex count
+  * fix: canopen for eeprom stuff
+  * fix: eeprom pdo datatype
+
+ -- Robert Burger <robert.burger@dlr.de>  Tue, 7 Jan 2025 09:47:33 +0100
+
+module-ethercat (5.3.0) unstable; urgency=low
+
+  * add: debian11 build for module
+  * add: debian11 build
+  * bump: libetherat version
+  * fix: dc activation reg
+  * fix: stream hw layer working
+  * chore: hw stream hack
+  * Merge remote-tracking branch 'origin/master' into release/5.3.0
+  * add: attaching libethercat to rk stream devices
+  * fix: changes for hardware layer rework of libethercat 0.6.0
+
+ -- Robert Burger <robert.burger@dlr.de>  Fri, 29 Nov 2024 08:42:42 +0100
+
+module-ethercat (5.2.4) unstable; urgency=low
+
+  * Merge pull request #19 from robotkernel/feat/conan2
+  * fix: add brackets for option values
+  * chore: replace cissy tools with native conan code
+  * chore: revert black formatting
+  * chore: formatting
+  * feat: conan2 compatibility
+
+ -- Burger, Robert <robert.burger@dlr.de>  Thu, 19 Sep 2024 10:21:04 +0200
+
+module-ethercat (5.2.3) unstable; urgency=low
+
+  * Merge pull request #18 from robotkernel/fix/17_cycle_shift_signed
+  * fix: issue #17, making cycle_shift unsigned
+
+ -- Burger, Robert <robert.burger@dlr.de>  Tue, 23 Apr 2024 14:47:23 +0200
+
+module-ethercat (5.2.2) unstable; urgency=low
+
+  * change: using libethercat/0.5.1 stable
+  * Merge branch 'release/5.2.2'
+  * fix: zero length data array #5
+  * add: use_real_names option
+  * Merge branch 'master' into release/5.2.2
+  * feat: real names for rk devices
+  * removed not needed option ecat_device
+  * Merge branch 'master' into release/5.2.1
+  * fixed: hw_device default build
+  * fix: libethercat options
+  * removed disable_sm_map
+  * fix: rkgui should work again
+  * fix: using libethercat unstable for now
+  * fix: must use libethercat >= 0.5.1!
+  * add: options for lwr and overlapping process data exchange
+  * made scan warnings to errors
+  * sync manager status no longer in process data since libethercat/0.5.1
+  * Merge branch 'master' of rmc-github.robotic.dlr.de:robotkernel/module-ethercat
+  * Merge branch 'master' of rmc-github.robotic.dlr.de:robotkernel/module-ethercat
+  * add: writing of master coe element
+
+ -- Robert Burger <robert.burger@dlr.de>  Tue, 20 Feb 2024 14:47:55 +0100
+
+module-ethercat (5.2.1) unstable; urgency=low
+
+  * Merge pull request #16 from robotkernel/feat/conan2
+  * feat: conan2
+  * chore: conan2 port
+
+ -- Mühlbauer, Maximilian Sebastian <Maximilian.Muehlbauer@dlr.de>  Mon, 5 Feb 2024 08:34:35 +0100
+
+module-ethercat (5.2.0) unstable; urgency=low
+
+  * fixed memory_inspection
+  * updated libethercat version to 0.5.0
+  * fixes for libethercat polling version
+
+ -- Robert Burger <robert.burger@dlr.de>  Fri, 11 Aug 2023 13:04:44 +0200
+
+module-ethercat (5.1.4) unstable; urgency=low
+
+  * fix: skip waiting for dc converged when we have no dc's enabled
+
+ -- Robert Burger <robert.burger@dlr.de>  Fri, 10 Mar 2023 15:23:23 +0100
+
+module-ethercat (5.1.3) unstable; urgency=low
+
+  * fix: abort when slave expected but not connected
+  * add feature: vendor_id and product_code check
+
+ -- Robert Burger <robert.burger@dlr.de>  Fri, 3 Mar 2023 14:17:02 +0100
+
+module-ethercat (5.1.2) unstable; urgency=low
+
+  * Merge branch 'release/5.1.1'
+  * cleanup: removed old commented code
+  * change: build against libethercat 0.4.x
+  * fixed 'intialized before...' warning
+  * fix: removing slaves from group which are not connected!
+
+ -- Robert Burger <robert.burger@dlr.de>  Fri, 3 Mar 2023 13:38:39 +0100
+
+module-ethercat (5.1.1) unstable; urgency=low
+
+  * Merge pull request #12 from robotkernel/fix/pd_size_dc
+  * fix: align amount of data copied to dc pd
+  * fix: correct size calculation of dc pd_size
+  * fix: rkgui requirementes
+
+ -- Burger, Robert <robert.burger@dlr.de>  Mon, 27 Feb 2023 09:22:31 +0100
+
+module-ethercat (5.1.0) unstable; urgency=low
+
+  * fix: builds
+  * fix: builds
+  * fix: builds
+  * fix: rkgui requirementes
+  * add rkbui build
+  * new release with separate rkgui
+  * change: switched to libethercat 0.4.0 stable
+  * Merge branch 'master' into release/5.1.0
+  * fix: conan requirements
+  * Merge branch 'release/5.0.19'
+  * change: using triple_buffer_with_injection
+  * fix conanfile
+  * chore: update dependencies
+  * Merge remote-tracking branch 'origin/master' into release/5.1.0
+  * indent fixes
+  * FIX: passing password to foe
+  * fix: padding bytes removed in odlist
+  * cleanup: odlist list on big dictionaries
+  * fix: length of odlist is too big allocate buffer
+  * fix: libethercat version
+  * change: dc default settings
+  * re-added: converge algo
+  * cleanup dc
+  * Merge branch 'release/5.0.19' into release/5.0.19-dc-test
+  * Merge branch 'master' into release/5.0.19-dc-test
+  * switched to libethercat unstable 0.4.0
+  * Merge branch 'release/5.0.19' into release/5.0.19-mdp1100
+  * Merge branch 'master' into release/5.0.19
+  * switched to conan_template
+  * fix: libethercat version dependency
+  * changes: for MDP 1100
+  * change: added packet duration for dc process data
+  * latest libethercat changes
+  * removed old code
+  * dc test added
+  * change: removed tx_sync as it is now directly controlled by libethercat state machine
+  * fix: adapt changed module name
+  * add url to conanfile to reduce noise
+  * notes on debugging config show
+  * debug: more logging and warning about disabled code
+  * fix: compiler warnings regarding strncpy size and -Wno-addresss-of-packed-member flag
+  * Merge branch 'release/5.0.19' of rmc-github.robotic.dlr.de:robotkernel/module-ethercat into release/5.0.19
+  * cleanup: some cyclic frames callback cleanup
+  * Merge branch 'master' into release/5.0.19
+  * change: switched to unstable libethercat
+  * fix: libethercat version
+  * change: latest changes for callback datagrams
+  * fix: clear client list to avoid ever-growing list
+  * fix: using correct libethercat version
+  * change: don't wait on tick for frames received back
+  * chore: FIXME for unnecesarily complex code
+  * trowing exception when switch to INIT fails\n
+  * fix: catch case of empty index/path
+  * fix: uninitialized prefer_obj_names
+  * fix: uninitialized map_mbx_state
+  * add: package options
+  * fixed some compiler warnings
+  * change: re-added dc_sync_log check
+  * feat/py3: apply futurize script
+  * add: option to disable mbx sm state mapping
+  * chore: update conanfile
+  * feat/python3
+  * fixed group divisor asignment, removed unused
+  * latest libethercat changes
+  * feat/gtk3: replace deprecated widgets
+  * feat/gtk3: workaround for definition of treeview model
+  * fix: implemented get CoE emergency message
+  * add more conan options
+  * feat/gtk3: change dependencies
+  * convert to Gtk3
+  * convert to Gtk3
+  * add: device mode builds
+  * fix: libethercat version
+  * fix: latest libethercat changes
+  * fix: changes for latest libethercat
+  * change: using osal timer funcs
+  * fix: reading sdo
+  * fix: cleanup dc pdin
+  * change: latest libethercat-misra dc cleanup
+  * dc working for kp: 1.0, ki: 0.5
+  * fixes and work on dc sync
+  * change: latest changes for misra test
+
+ -- Robert Burger <robert.burger@dlr.de>  Wed, 22 Feb 2023 11:18:04 +0100
+
+module-ethercat (5.0.18) unstable; urgency=low
+
+  * add: flag to skip_pdo_description
+  * del: removed duplicate registering of SoE handlers
+
+ -- Robert Burger <robert.burger@dlr.de>  Mon, 21 Nov 2022 18:17:40 +0100
+
+module-ethercat (5.0.17) unstable; urgency=low
+
+  * add: service collector for SoE
+  * fix: removed setting thread name for threads of libethercat
+  * Update README.wiki
+
+ -- Robert Burger <robert.burger@dlr.de>  Thu, 5 May 2022 06:45:58 +0200
+
+module-ethercat (5.0.16) unstable; urgency=low
+
+  * FIX: decoding SoE answer, impl SoE write service
+  * CHANGE: switching to stable libethercat
+
+ -- Robert Burger <robert.burger@dlr.de>  Tue, 22 Mar 2022 07:40:22 +0100
+
+module-ethercat (5.0.15) unstable; urgency=low
+
+  * fix: add master_clock_as_ref
+  * DEL: removed not needed pt file
+
+ -- Maximilian Mühlbauer <maximilian.muehlbauer@dlr.de>  Thu, 17 Mar 2022 14:55:23 +0100
+
+module-ethercat (5.0.14) unstable; urgency=low
+
+  * MERGE: branch 'release/6.0.0' CHANGE: using new conan template
+  * t MERGE: branch 'master' of rmc-github.robotic.dlr.de:robotkernel/module-ethercat
+  * FIX: removed not needed warning on converted uint16
+  * Merge branch 'master' into release/6.0.0
+  * CHANGE: parsing error code for coe sdo info requests
+  * FIX: reading settings for EoE subnet and gateway
+  * MERGE: branch 'master' into release/6.0.0
+  * FIX: std::chrono::milliseconds for old osl42 compiler
+  * CHANGE: switched to libethercat/0.3
+  * DEL: removed old dcss code
+  * FIX: coe emergency structure change in libethercat 0.3
+  * CHANGE: async mailbox handling done by libethercat 0.3
+  * DEL: old code
+  * ADD: dc clock setter thread
+  * FIX: conan template version
+  * UPDATE: to version 6 unstable
+  * FIX: removing trigger devices
+  * FIX: enabling resending init commands
+  * REMOVE: not emitting new config
+  * FIX: state machine starting EtherCAT at PREOP
+  * CHANGE: open ethercat in PREOP instead of INIT
+
+ -- Robert Burger <robert.burger@dlr.de>  Fri, 3 Dec 2021 06:47:32 +0100
+
+module-ethercat (5.0.13) unstable; urgency=low
+
+  * FIX: using obj name if preferred
+
+ -- Robert Burger <robert.burger@dlr.de>  Thu, 11 Nov 2021 12:30:08 +0100
+
+module-ethercat (5.0.12) unstable; urgency=low
+
+  * fixed unsigned comparision
+  * CHANGE: libethercat 0.3.0 stable
+  * MERGE: branch 'master' into release/5.0.12
+  * FIX: libethercat version to unstable
+  * FIX: libethercat 0.3 is unstable
+  * CHANGE: parsing error code for coe sdo info requests
+  * FIX: reading settings for EoE subnet and gateway
+  * FIX: std::chrono::milliseconds for old osl42 compiler
+  * CHANGE: switched to libethercat/0.3
+  * DEL: removed old dcss code
+  * FIX: coe emergency structure change in libethercat 0.3
+  * CHANGE: async mailbox handling done by libethercat 0.3
+  * DEL: old code
+  * ADD: dc clock setter thread
+  * FIX: removing trigger devices
+  * FIX: enabling resending init commands
+  * REMOVE: not emitting new config
+  * FIX: state machine starting EtherCAT at PREOP
+  * CHANGE: open ethercat in PREOP instead of INIT
+  * fix: add sync_manager_status only for inputs
+  * added sync_manager_status to pdo description
+
+ -- Robert Burger <robert.burger@dlr.de>  Thu, 11 Nov 2021 09:18:26 +0100
+
+module-ethercat (5.0.11) unstable; urgency=low
+
+  * changed error log level
+
+ -- Robert Burger <robert.burger@dlr.de>  Wed, 25 Mar 2020 07:47:40 +0100
+
+module-ethercat (5.0.10) unstable; urgency=low
+
+  * fixed index
+
+ -- Robert Burger <robert.burger@dlr.de>  Tue, 17 Mar 2020 08:51:24 +0100
+
+module-ethercat (5.0.9) unstable; urgency=low
+
+  * Merge branch 'master' of rmc-github.robotic.dlr.de:robotkernel/module-ethercat
+  * added gui plugin
+
+ -- Robert Burger <robert.burger@dlr.de>  Thu, 27 Feb 2020 16:38:52 +0100
+
+module-ethercat (5.0.8) unstable; urgency=low
+
+  * better log output on dc converge
+  * added check when to start dc frame
+  * some config generation
+  * changed sync manager settings to shared pointers
+  * added yaml generation functions
+  * switching to defaults
+
+ -- Robert Burger <robert.burger@dlr.de>  Wed, 19 Feb 2020 14:41:59 +0100
+
+module-ethercat (5.0.7) unstable; urgency=low
+
+  * added recv_error trigger device
+  * fixed dc diff converge code
+  * fixed dc converge logic
+
+ -- Robert Burger <robert.burger@dlr.de>  Tue, 10 Dec 2019 07:25:12 +0100
+
+module-ethercat (5.0.6) unstable; urgency=low
+
+  * fixed floating point exception with dc converge
+  * added author
+
+ -- Robert Burger <robert.burger@dlr.de>  Mon, 25 Nov 2019 11:04:36 +0100
+
+module-ethercat (5.0.5) unstable; urgency=low
+
+  * removed debug builds
+  * checking test ooutput and ignoring 'ec_open failed' error
+
+ -- Robert Burger <robert.burger@dlr.de>  Tue, 12 Nov 2019 07:44:45 +0100
+
+module-ethercat (5.0.4) unstable; urgency=low
+
+  * added test
+
+ -- Robert Burger <robert.burger@dlr.de>  Mon, 11 Nov 2019 14:49:22 +0100
+
+module-ethercat (5.0.3) unstable; urgency=low
+
+  * changed targets
+  * Merge branch 'release/5.0.3'
+  * updated sample module config
+  * added architectures
+  * added architectures
+  * added architectures
+  * added architectures
+  * fixed jenkinsfile
+  * fixed jenkinsfile
+  * added architectures
+  * added architectures
+  * build: updated build/ci files for cissy 1.0->2.0
+  * build: updated build/ci files for cissy 1.0->2.0
+  * changed log message
+  * releasing doc folder
+  * reworked dc sync pic controller
+  * reworked example config file
+  * fixed typo
+  * Merge branch 'release/5.0.3' of rmc-github.robotic.dlr.de:robotkernel/module-ethercat into release/5.0.3
+  * throwing sdo_abort_exception on sdo abort now
+  * fixed race condition writing to pdin
+  * passing trigger rates to group and slave triggers
+  * fixed logging
+  * Merge branch 'master' into release/5.0.3
+  * catching exception on getting pdo descriptions
+  * pdo desc may have unreadable values
+  * updated conanfile
+  * Merge branch 'test' into release/5.0.3
+  * debug output
+  * better pdo description generation
+  * fixed mapping description if bitsizes do not match and combining bitfields
+  * only try to receive dc frame if we sent one
+  * moved setting of offset_compensation_cycles to safeop
+  * cleaning up key_value
+  * code cleanup
+  * working on macros for key_value
+  * working on macros for key_value
+  * working on macros for key_value
+  * added all eeprom general
+  * trying strings macro
+  * trying strings macro
+  * added eeprom fmmu
+  * added eeprom dcs
+  * fixed type
+  * fixed type
+  * fixed type
+  * trying to map eeprom txpdos to key_value
+  * trying to map eeprom txpdos to key_value
+  * trying to map eeprom txpdos to key_value
+  * mapped eeprom sync manager to pdi
+  * added read_only key value stuff, needs to be at service provider level
+  * added read_only key value stuff, needs to be at service provider level
+  * added eeprom product code to key value
+  * added test eeprom key value entry
+  * trying to set dc
+  * style fix
+  * using unstable libethercat for devel
+  * renamed brd_state to monitor_state
+  * added brd read of ec_state
+  * triggering slaves pdin_trigger
+  * added slave pdin_trigger to robotkernel
+  * updated Jenkinsfile
+  * fixed requires
+  * added build depenencies
+  * updated configure script
+  * fixed deps, added build archs
+  * updated pkg config check
+  * updated requiers
+  * added conan/jenkins stuff
+  * fixed add init cmds
+  * added trigger device for distributed clocks process data device
+
+ -- Robert Burger <robert.burger@dlr.de>  Thu, 24 Oct 2019 09:28:53 +0200
+
+module-ethercat (5.0.2) unstable; urgency=low
+
+  * fixed ld library path
+
+ -- Robert Burger <robert.burger@dlr.de>  Fri, 7 Sep 2018 10:59:58 +0200
+
+module-ethercat (5.0.1) unstable; urgency=low
+
+  * fixed non-printable name
+  * shutdown fix
+  * added pop_emergency_message calL
+  * fixed deps
+  * prep 5.0.1
+  * fixed creating pd defintiion
+  * fixed index in pd_consumer/provider
+  * added some verbose logging
+  * fixed libethercat library path
+  * fixed warning message for coe element read
+  * changed inc lnc
+  * moved install rules for share
+  * added robotkernel gui
+
+ -- Robert Burger <robert.burger@dlr.de>  Fri, 7 Sep 2018 10:08:18 +0200
+
+module-ethercat (5.0.0) unstable; urgency=low
+
+  * removed not neededn include
+  * Prep 5.0.0 release
+  * wii
+  * added wiki README
+  * added wiki README
+  * added libethercat link
+  * Update README.wiki
+  * Create README.wiki
+  * auto commit
+  * fixed pdo description
+  * small compile fix
+  * changed to std mutex and condition
+  * added trigger device to process data in
+  * Merge remote-tracking branch 'origin/master' into robotkernel-5
+  * changed version and documentation
+  * fixed linker flags
+  * fixed slave trigger
+  * fixed depenedencies
+  * fixed deps
+  * fixed deps
+  * new beta release
+  * added inc.lnc to ignores, generated from .in file
+  * 5.0.beta1 version
+  * fixed variable name of libpath
+  * adding ld_library_path for libethercat
+  * fixed doc desc in properties
+  * fixed ln include file
+  * removed message defs
+  * latest changes for libethercat
+  * switching to triple_buffer impl
+  * thread_names
+  * some more catches
+  * triple buffer changes
+  * fixed some memory leaks
+  * renamed trigger() to tick()
+  * latest device name fixes
+  * fixes for latest rk changes
+  * changes for latest robotkernel changes
+  * fixed process_data namespace
+  * calling pdin_handler
+  * determine trigger device and adjust interval of trigger device
+  * fixed file protocol prefix
+  * implemented file_read and file_write
+  * added master_as_ref_clock mode
+  * investigating return value
+  * latest changes
+  * fixed preop_2_safeop transition, switching from tx_sync 1 -> 0
+  * state machine cleanup
+  * switched to RK_CHECK_MODULES
+  * Merge branch 'robotkernel-5' of rmc-github.robotic.dlr.de:robotkernel/module-ethercat into robotkernel-5
+  * changed init command behaviour
+  * added deps.m4
+  * added pre and post state transition for slaves
+  * working on service provider registration
+  * changed state machine to use transitions
+  * added initial init_2_init transition
+  * removed state
+  * splitted files
+  * added pc file generation
+  * added programs
+  * added install rule for pc-file
+  * added deps
+  * added deps
+  * added deps
+  * fixed typo
+  * fixed Makefile.am
+  * added m4 macros
+  * Merge branch 'robotkernel-5' of rmc-github.robotic.dlr.de:robotkernel/module-ethercat into robotkernel-5
+  * changes to use smart pointers
+  * updated scritpts
+  * implemented canopen via mailbox and eeprom
+  * changed service requesters to shared pointers
+  * added memory inspection
+  * fixed coe reading
+  * fixed service registering for soe support
+  * Merge branch 'master' of rmc-github.robotic.dlr.de:robotkernel/module-ethercat into robotkernel-5
+  * fixed makefile
+  * changes for robotkernel-5
+  * no_ln work
+
+ -- Robert Burger <robert.burger@dlr.de>  Mon, 12 Mar 2018 13:01:50 +0100
+
+module-ethercat (4.1.7) unstable; urgency=low
+
+  * preparing new release 4.1.7
+  * fixed canopen mailbox requests with new libethercat
+
+ -- Robert Burger <robert.burger@dlr.de>  Wed, 11 Oct 2017 09:09:56 +0200
+
+module-ethercat (4.1.6) unstable; urgency=low
+
+  * fixed ln include file
+  * fixes for latest libethercat changes, now compiles and links against 0.1.beta7
+
+ -- Robert Burger <robert.burger@dlr.de>  Tue, 10 Oct 2017 13:04:53 +0200
+
+module-ethercat (4.1.5) unstable; urgency=low
+
+  * fixed deps
+  * increased libethercat to 0.0.5
+  * fixed dependencies
+  * inc version, build against libethercat 0.0.4 which has grant_cap_net_raw support§
+
+ -- Robert Burger <robert.burger@dlr.de>  Mon, 13 Feb 2017 10:05:24 +0100
+
+module-ethercat (4.1.4) unstable; urgency=low
+
+  * new libethercat 0.0.3
+  * use up-to-date scripts
+  * use -pthread and -lpthread so fix not-working sem_post
+
+ -- Robert Burger <robert.burger@dlr.de>  Thu, 2 Feb 2017 14:26:12 +0100
+
+module-ethercat (4.1.3) unstable; urgency=low
+
+  * prep 4.1.3 release
+  * fixed distributed clock shift
+
+ -- Robert Burger <robert.burger@dlr.de>  Mon, 12 Dec 2016 13:44:14 +0100
+
+module-ethercat (4.1.2) unstable; urgency=low
+
+  * fixed distributed clocks drift compensation
+  * 4.1.2 release
+  * added better mapping of pdos, clearly readable in yaml-config file
+
+ -- Robert Burger <robert.burger@dlr.de>  Thu, 8 Dec 2016 11:38:07 +0100
+
+module-ethercat (4.1.1) unstable; urgency=low
+
+  * switched to libethercat 0.0.2
+
+ -- Robert Burger <robert.burger@dlr.de>  Thu, 8 Dec 2016 06:56:06 +0100
+
+module-ethercat (4.1.0) unstable; urgency=low
+
+  * 'automated_commit'
+  * fixed dc mode, using enum from libethercat
+  * 'scripts_updated'
+  * 'scripts_updated'
+  * switched to libethercat package
+  * removed libethercat source
+  * removed debug messages
+  * added second memory inspection for eeprom
+  * added coe interface for eeprom contents
+  * fixed parsing pdo in eeprom, added dc parsing
+  * Merge branch 'master' of rmc-github.robotic.dlr.de:robotkernel/module-ethercat
+  * project files
+  * reorganized stuff
+  * adding init commands and distributed clock settings
+  * more eeprom log messages
+  * fixed segfault if no mailbox is allocated
+  * do not always read the full eeprom if we have a mailbox present
+  * fixed segfault if mailbox is not initialized
+  * removed frame debugging
+  * fixed build
+  * added osl42-x86_64 to supported archs
+  * 'scripts_updated'
+  * moved files to src dir
+  * 'scripts_updated'
+  * 'replaced_with_default'
+  * 'scripts_updated'
+  * 'scripts_updated'
+  * Merge branch 'master' of rmc-github.robotic.dlr.de:robotkernel/module-ethercat
+  * 'scripts_updated'
+  * fixed gradle build
+  * small segfault fix
+  * 'scripts_updated'
+  * 'scripts_updated'
+  * "transforming"
+  * 'scripts_updated'
+  * fixed version
+  * gparent files
+  * removed makefile
+  * added interface file protocol
+  * prep 4.0.12
+  * some logging
+  * fixed minor valgrind bugs
+  * using file protocol now
+  * interface registering depending on module state
+
+ -- Robert Burger <robert.burger@dlr.de>  Wed, 30 Nov 2016 10:28:07 +0100
+
+module-ethercat (4.0.11) unstable; urgency=low
+
+  * Merge branch 'master' of rmc-github.robotic.dlr.de:robotkernel/module-ethercat
+  * crash fixes
+  * scripts changed to master
+  * added libstring_util
+
+ -- Robert Burger <robert.burger@dlr.de>  Fri, 10 Jun 2016 10:55:53 +0200
+
+module-ethercat (4.0.10) unstable; urgency=low
+
+  * prep 4.0.10
+
+ -- Robert Burger <robert.burger@dlr.de>  Tue, 7 Jun 2016 09:29:58 +0200
+
+module-ethercat (4.0.9) unstable; urgency=low
+
+  * drecksgit ...
+  * fixed dependencies, prep 4.0.9
+  * updated scripts
+  * added missing md
+  * prep 4.0.8
+  * added boostrap mbx sizes
+  * s.o.
+  * added foe file_write
+  * work on foe
+  * added ethercat boot state
+
+ -- Robert Burger <robert.burger@dlr.de>  Tue, 7 Jun 2016 09:23:14 +0200
+
+module-ethercat (4.0.7) unstable; urgency=low
+
+  * scheiß git
+  * changes coe names to variable len
+  * gitignore, foe
+  * only get dc trigger clock once
+  * do not configure dc if we do not have one ;-)
+  * only calculate sm start address if not set
+
+ -- Robert Burger <robert.burger@dlr.de>  Mon, 11 Apr 2016 13:12:41 +0200
+
+module-ethercat (4.0.6) unstable; urgency=low
+
+  * prep 4.0.6
+  * dc and mailbox
+  * Merge branch 'master' of https://rmc-github.robotic.dlr.de/robotkernel/module-ethercat
+  * distributed clock extensions
+
+ -- Robert Burger <robert.burger@dlr.de>  Thu, 31 Mar 2016 09:58:42 +0200
+
+module-ethercat (4.0.5) unstable; urgency=low
+
+  * prep 4.0.5
+  * use RMPM_ENV and RM_FIND_LN_FROM_ENV macros
+  * undo regression with pd_cookie
+  * making log_eeprom_data optional, default false
+  * added group trigger
+
+ -- Florian Schmidt <florian.schmidt@dlr.de>  Tue, 8 Mar 2016 10:45:27 +0100
+
+module-ethercat (4.0.4) unstable; urgency=low
+
+  * drecks git Merge branch 'master' of https://rmc-github.robotic.dlr.de/robotkernel/module-ethercat
+  * added trigger_interval check
+  * fixed dc time base
+  * added emacs dir-locals for robert's style
+  * small simplification a = b vs. a += b - a
+  * fixed race condition with pd_cookie
+  * inc version
+  * added group receive timeouts
+  * added ethercat master state
+  * added eeprom write functions
+  * added al status code display
+  * added parsing of init_cmd values instead of raw data
+  * working on dc and eeprom log
+  * added submodule scripts
+  * added init function for registering set/get state services fixed deleting of mailbox services
+  * added init function for registering set/get state services fixed deleting of mailbox services
+  * ec_slave_get_state now also can return the alstatuscode value set timeout of ethercat frames to 250us print out warning message of wrong wkc only every 1000 times
+  * fixed index error in generate_mapping fixed initialization of _pd_intf to NULL fixed bracket around log message in eeprom.c (already set by user)
+
+ -- Robert Burger <robert.burger@dlr.de>  Mon, 7 Mar 2016 15:38:55 +0100
+
+module-ethercat (4.0.3) unstable; urgency=low
+
+  * prep 4.0.3
+  * fixed dc clock drift
+
+ -- Robert Burger <robert.burger@dlr.de>  Thu, 12 Nov 2015 08:46:04 +0000
+
+module-ethercat (4.0.2) unstable; urgency=low
+
+  * prep 4.0.2
+  * fixes for ax5000 soe transfers
+
+ -- Robert Burger <robert.burger@dlr.de>  Fri, 23 Oct 2015 06:41:20 +0000
+
+module-ethercat (4.0.1) unstable; urgency=low
+
+  * prep 4.0.1
+  * fixes for soe, prep 4.0.1
+
+ -- Robert Burger <robert.burger@dlr.de>  Wed, 21 Oct 2015 07:14:43 +0000
+
+module-ethercat (4.0.0) unstable; urgency=low
+
+  * switched to yamlcpp 0.5.2 prep 4.0.0
+  * removed m4 dir
+
+ -- Robert Burger <robert.burger@dlr.de>  Tue, 15 Sep 2015 11:17:14 +0000
+
+module-ethercat (3.1.12) unstable; urgency=low
+
+  * added ignores, prep 3.1.12
+  * removed Makfile.defs
+  * 
+  * added pd_cookie and set_pdout
+
+ -- Robert Burger <robert.burger@dlr.de>  Wed, 9 Sep 2015 06:29:36 +0000
+
+module-ethercat (3.1.11) unstable; urgency=low
+
+  * prep 3.1.11
+  * fixed unregister interfaecs
+  * fixed for soe and soe channels
+  * working on some slave id thoughts
+  * bug fix in writing big soe values
+  * cleaned up some code
+  * working on ax5000
+  * added get_ec_state and set_ec_state, dc's seem to be working on ax5000
+  * added asynch thread for mailbox event handling
+  * added mailbox locking
+
+ -- Robert Burger <robert.burger@dlr.de>  Thu, 20 Aug 2015 04:57:59 +0000
+
+module-ethercat (3.1.10) unstable; urgency=low
+
+  * added process data inspection for distributed clocks fixed small bug in distributed clock calculation
+
+ -- Robert Burger <robert.burger@dlr.de>  Thu, 6 Aug 2015 08:36:05 +0000
+
+module-ethercat (3.1.9) unstable; urgency=low
+
+  * fixed for fts100, reading coe obj dict now with prio 0 and len 8
+
+ -- Robert Burger <robert.burger@dlr.de>  Thu, 6 Aug 2015 05:25:41 +0000
+
+module-ethercat (3.1.8) unstable; urgency=low
+
+  * 3.1.8 prepare
+  * some mods for slaves without coe, map eeprom to coe dict
+  * fixed mbx_supported check
+  * working on coe mapping
+  * some indenting
+  * added mailbox check in soe
+  * working on soe error handling added mailbox check in coe
+  * name fix
+  * added soe filesimplemented generate mapping in coe implemented generate mapping in soe
+  * working on mapping, coe, soe
+
+ -- Robert Burger <robert.burger@dlr.de>  Thu, 2 Jul 2015 13:43:46 +0000
+
+module-ethercat (3.1.7) unstable; urgency=low
+
+  * fixed archs in ptfile
+  * fixed archs in ptfile
+  * 
+  * supporting vxworks with snaff ll
+
+ -- Robert Burger <robert.burger@dlr.de>  Wed, 27 May 2015 06:44:41 +0000
+
+module-ethercat (3.1.6) unstable; urgency=low
+
+  * prep 3.1.6
+  * fixed compiler warning
+  * fixed md path
+  * added supported archs
+  * added m4 dir
+  * removed Makefile.suggested and added symlink
+  * removed generated ptfile
+  * added dependencies
+
+ -- Robert Burger <robert.burger@dlr.de>  Tue, 26 May 2015 11:11:31 +0000
+
+module-ethercat (3.1.5) unstable; urgency=low
+
+  * prep 3.1.5
+  * fixed error message on sdo read
+  * handle sdo abort now on read
+
+ -- Robert Burger <robert.burger@dlr.de>  Wed, 6 May 2015 08:23:20 +0000
+
+module-ethercat (3.1.4) unstable; urgency=low
+
+  * prep 3.1.4
+  * fixed too late pthread_mutex_init
+  * build on hannibal
+  * optional AM_PROG_AR and added rk_depends to .inc.lnc for ln_generate_includes
+
+ -- Robert Burger <robert.burger@dlr.de>  Fri, 10 Apr 2015 09:29:23 +0000
+
+module-ethercat (3.1.3) unstable; urgency=low
+
+  * prep 3.1.3
+  * added rtc_time measurement
+  * fixed sto calculation
+  * working on sto
+  * cleanup added dcsystemtimeoffset sync with master, first try
+  * better trigger handlign working on async check added mtu_size readded index lock
+  * switched all timespec's to ec_timer_t
+  * added mesage loop
+  * added new ec_timer function
+  * modifications for reorganized libethercat
+  * reorganized libethercat
+  * added expected_wkc changed include guard of module slave.h check in trigger function of working counter vs. expected_wkc
+
+ -- Robert Burger <robert.burger@dlr.de>  Mon, 9 Mar 2015 13:20:59 +0000
+
+module-ethercat (3.1.2) unstable; urgency=low
+
+  * prep 3.1.2
+  * added timeout for datagram receive and message in that case
+
+ -- Robert Burger <robert.burger@dlr.de>  Fri, 13 Feb 2015 08:50:38 +0000
+
+module-ethercat (3.1.1) unstable; urgency=low
+
+  * added missing timer
+  * perp 3.1.1
+  * fixed reading of coe elements
+  * added loglevel configured distributed clocks working on justin
+  * fixed struct in coe
+  * working on coe
+
+ -- Robert Burger <robert.burger@dlr.de>  Wed, 11 Feb 2015 11:52:29 +0000
+
+module-ethercat (3.1.0) unstable; urgency=low
+
+  * first release 3.1.0
+  * first release 3.1.0
+  * some format
+  * fixed for loop in dc initialization fixed uninitialized values renamed recv_frame to send_frame in hw_tx
+  * fixed for loop in dc initialization fixed uninitialized values renamed recv_frame to send_frame in hw_tx
+  * fixed slave triggers
+  * immediately tx removed
+  * faster read should work if clock is faster, use group divisors
+  * not working fixes for faster mailbox comm
+  * reworked memory interface   0-0xffff     esc mem   0x10000-     eeprom mem cleaned up slave added master files added distributed clocks and config option
+  * first dc version
+  * added memory interface for slave memory added memory interface for eeprom memory
+  * added groups reorganized sync manager setting
+  * 
+  * some improvements on example seupt
+  * 
+  * working with one elmo and process data
+  * added pool lock
+  * modified code to ethercat
+  * initial import
+  * creating svn directory 'https://rmsvn01.robotic.dlr.de/software/robotkernel/src/module-ethercat/trunk' [rmpm admintool (burger_r, 2014-11-27-12-45-31)]
+
+ -- Robert Burger <robert.burger@dlr.de>  Mon, 2 Feb 2015 09:24:10 +0000
+
