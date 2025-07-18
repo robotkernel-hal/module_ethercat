@@ -9,15 +9,8 @@ Vcs-Browser: https://github.com/robotkernel-hal/module_ethercat.git
 Vcs-Git: https://github.com/robotkernel-hal/module_ethercat.git
 Rules-Requires-Root: no
 
-Package: module-ethercat-dev
-Section: libdevel
-Architecture: any
-Multi-Arch: same
-Depends: robotkernel-dev (= ${binary:Version}), ${misc:Depends}
-Description: TODO
-
 Package: module-ethercat
 Architecture: any
 Multi-Arch: same
-Depends: robotkernel ${misc:Depends}
+Depends: robotkernel libosal libethercat ${misc:Depends}
 Description: TODO
