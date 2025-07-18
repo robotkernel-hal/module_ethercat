@@ -12,5 +12,5 @@ Rules-Requires-Root: no
 Package: module-ethercat
 Architecture: any
 Multi-Arch: same
-Depends: robotkernel libosal libethercat ${misc:Depends}
+Depends: robotkernel, libosal, libethercat, ${misc:Depends}
 Description: TODO
