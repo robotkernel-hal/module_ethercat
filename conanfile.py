@@ -72,7 +72,7 @@ class MainProject(ConanFile):
             }
     
     def source(self):
-        self.run(f"sed 's/AC_INIT(.*/AC_INIT([robotkernel], [{self.version}], [{self.author}])/' configure.ac.in > configure.ac")
+        self.run(f"sed 's/AC_INIT(.*/AC_INIT([module_ethercat], [{self.version}], [{self.author}])/' configure.ac.in > configure.ac")
 
     def configure(self):
         self.options["libethercat"].max_slaves                  = self.options.max_slaves
