@@ -92,7 +92,6 @@ jobs:
         run: |
           VERSION=$(dpkg-parsechangelog | sed -n 's/^Version: //p')
           FILENAME="artifacts/${{ matrix.os }}/${{ matrix.version }}/module-ethercat_${VERSION}_amd64.deb"
-          FILENAME_DEV="artifacts/${{ matrix.os }}/${{ matrix.version }}/module-ethercat-dev_${VERSION}_amd64.deb"
         
           python3 -m venv cloudsmith
           cd cloudsmith
@@ -105,6 +104,3 @@ jobs:
             --republish \
             --api-key "$CLOUDSMITH_API_KEY"
           
-            cloudsmith push deb robertburger/robotkernel/${{ matrix.os }}/${{ matrix.version }} ../${FILENAME_DEV} \
-            --republish \
-            --api-key "$CLOUDSMITH_API_KEY"
