@@ -70,6 +70,9 @@ class MainProject(ConanFile):
             "hw_device_bpf"              : False,
             "hw_device_pikeos"           : False,
             }
+    
+    def source(self):
+        self.run(f"sed 's/AC_INIT(.*/AC_INIT([robotkernel], [{self.version}], [{self.author}])/' configure.ac.in > configure.ac")
 
     def configure(self):
         self.options["libethercat"].max_slaves                  = self.options.max_slaves

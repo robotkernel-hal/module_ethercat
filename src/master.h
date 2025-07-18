@@ -4,24 +4,25 @@
  */
 
 /*
- * This file is part of robotkernel.
+ * This file is part of module_ethercat.
  *
- * robotkernel is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * robotkernel is distributed in the hope that it will be useful,
+ * module_ethercat is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 3 of the License, or (at your option) any later version.
+ * 
+ * module_ethercat is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with robotkernel.  If not, see <http://www.gnu.org/licenses/>.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ * 
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with module_ethercat; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
-#ifndef __MASTER_H__
-#define __MASTER_H__
+#ifndef MODULE_ETHERCAT__MASTER_H
+#define MODULE_ETHERCAT__MASTER_H
 
 #include <list>
 #include <string>
@@ -39,6 +40,7 @@
 #include "hw_stream.h"
 
 #include "libethercat/config.h"
+#include "libethercat/common.h"
 #include "libethercat/ec.h"
 #include "libethercat/slave.h"
 #include "libethercat/coe.h"
@@ -68,7 +70,7 @@
 #include <libethercat/hw_sock_raw_mmaped.h>
 #endif
 
-#include "service_provider/canopen_protocol/base.h"
+#include "service_provider_canopen_protocol/base.h"
 
 #define COE_DATA_MAXLEN     512
 
@@ -103,7 +105,7 @@ class dc_clock_setter :
 
 class master :
     public std::enable_shared_from_this<master>,
-    public service_provider::canopen_protocol::base,
+    public service_provider_canopen_protocol::base,
     public robotkernel::module_base
 {
     public:
@@ -218,12 +220,12 @@ class master :
         ~master();
 
         //! second stage init routine
-        void init();
+        virtual void init() override;
 
         void open();
 
         //! module trigger callback
-        void tick();
+        virtual void tick() override;
 
         //! set module state machine to defined state
         /*!
@@ -239,19 +241,19 @@ class master :
         void recv_dc();
         
         //! return a list with all indices of the object dictionary
-        // derived from service_provider::canopen_protocol::base
+        // derived from service_provider_canopen_protocol::base
         /*!
          * \param list returns the list with all indices
          */
         void get_object_dictionary_list(
-                service_provider::canopen_protocol::object_dictionary_list_t& list) {
+                service_provider_canopen_protocol::object_dictionary_list_t& list) {
             uint8_t buf[COE_DATA_MAXLEN];
             size_t len = COE_DATA_MAXLEN;
             int ret = ec_coe_master_odlist_read(&ec, buf, &len);
 
             if (ret != 0) {
-                throw string_util::str_exception("master: reading CoE object dictionary list "
-                        "returned errorcode 0x%X!\n", ret);
+                throw std::runtime_error(robotkernel::string_printf("master: reading CoE object dictionary list "
+                        "returned errorcode 0x%X!\n", ret));
             }
 
             list.resize(len/2);
@@ -259,13 +261,13 @@ class master :
         }
 
         //! return a object description of given index
-        // derived from service_provider::canopen_protocol::base
+        // derived from service_provider_canopen_protocol::base
         /*!
          * \param index requested index
          * \param desc returns the object description
          */
         void get_object_description(const uint16_t& index, 
-                service_provider::canopen_protocol::object_description_t& desc) {
+                service_provider_canopen_protocol::object_description_t& desc) {
             
             // get description
             uint32_t error_code = 0;
@@ -275,8 +277,8 @@ class master :
 
             if (ret != 0) {
                 // decode ret
-                throw string_util::str_exception("master: reading CoE object description index 0x%X "
-                        "returned errorcode 0x%X: %s!\n", index, error_code, get_sdo_info_error_string(error_code));
+                throw std::runtime_error(robotkernel::string_printf("master: reading CoE object description index 0x%X "
+                        "returned errorcode 0x%X: %s!\n", index, error_code, get_sdo_info_error_string(error_code)));
             }
 
             desc.data_type      = obj_desc.data_type;
@@ -289,14 +291,14 @@ class master :
         }
 
         //! return a element description of given index and sub index
-        // derived from service_provider::canopen_protocol::base
+        // derived from service_provider_canopen_protocol::base
         /*!
          * \param index requested index
          * \param sub_index requested sub index
          * \param desc returns the object description
          */
         void get_element_description(const uint16_t& index, const uint8_t& sub_index,
-                service_provider::canopen_protocol::element_description_t& desc) {
+                service_provider_canopen_protocol::element_description_t& desc) {
             // get description
             uint32_t error_code = 0;
             ec_coe_sdo_entry_desc_t entry_desc;
@@ -306,8 +308,8 @@ class master :
 
             if (ret != 0) {
                 // decode ret
-                throw string_util::str_exception("master: reading CoE element description index 0x%X sub index %d"
-                        "returned errorcode 0x%X: %s!\n", index, sub_index, error_code, get_sdo_info_error_string(error_code));
+                throw std::runtime_error(robotkernel::string_printf("master: reading CoE element description index 0x%X sub index %d"
+                        "returned errorcode 0x%X: %s!\n", index, sub_index, error_code, get_sdo_info_error_string(error_code)));
             }
 
             desc.value_info    = entry_desc.value_info;
@@ -362,20 +364,20 @@ class master :
 
                     if ((signed)desc.name.length() != std::count_if(desc.name.begin(), desc.name.end(), 
                                 [](unsigned char c){ return std::isprint(c); } ))
-                        desc.name = string_util::format_string("subindex_%d", sub_index); // name is not printable
+                        desc.name = robotkernel::string_printf("subindex_%d", sub_index); // name is not printable
                 }
             }
         }
 
         //! reads one element
-        // derived from service_provider::canopen_protocol::base
+        // derived from service_provider_canopen_protocol::base
         /*!
          * \param index requested index
          * \param sub_index requested sub index
          * \param value returns read value 
          */
         void read_element(const uint16_t& index, const uint8_t& sub_index,
-                service_provider::canopen_protocol::element_t& value) {
+                service_provider_canopen_protocol::element_t& value) {
             uint8_t buf[64]; 
             size_t buf_len = 64;
             uint32_t abort_code = 0;
@@ -385,13 +387,13 @@ class master :
 
             if (ret != 0) {
                 //if (ret == EC_ERROR_MAILBOX_ABORT) {
-                //    throw service_provider::canopen_protocol::sdo_abort_exception(abort_code);
+                //    throw service_provider_canopen_protocol::sdo_abort_exception(abort_code);
                 //}
 
                 // decode ret
-                throw string_util::str_exception("master: reading CoE element index 0x%X "
+                throw std::runtime_error(robotkernel::string_printf("master: reading CoE element index 0x%X "
                         "sub index %d returned errorcode 0x%X!\n",
-                        index, sub_index, ret);
+                        index, sub_index, ret));
             }
 
             if (buf_len) {
@@ -401,14 +403,14 @@ class master :
         }
 
         //! writes one element
-        // derived from service_provider::canopen_protocol::base
+        // derived from service_provider_canopen_protocol::base
         /*!
          * \param index requested index
          * \param sub_index requested sub index
          * \param value value to write
          */
         void write_element(const uint16_t& index, const uint8_t& sub_index,
-                const service_provider::canopen_protocol::element_t& value) 
+                const service_provider_canopen_protocol::element_t& value) 
         {
             uint32_t abort_code = 0;
 
@@ -417,9 +419,9 @@ class master :
 
             if (ret != 0) {
                 // decode ret
-                throw string_util::str_exception("master: writing CoE element value index 0x%X "
+                throw std::runtime_error(robotkernel::string_printf("master: writing CoE element value index 0x%X "
                         "sub index %d returned errorcode 0x%X!\n", 
-                        index, sub_index, ret);
+                        index, sub_index, ret));
             }
         }
 
@@ -427,7 +429,7 @@ class master :
         /*!
          * \param msg return emergency message
          */
-        void pop_emergency_message(service_provider::canopen_protocol::emergency_message_t& msg) {}
+        void pop_emergency_message(service_provider_canopen_protocol::emergency_message_t& msg) {}
 
         //! return process data description yaml string 
         /*!

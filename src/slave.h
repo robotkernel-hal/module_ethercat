@@ -4,24 +4,25 @@
  */
 
 /*
- * This file is part of robotkernel.
+ * This file is part of module_ethercat.
  *
- * robotkernel is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * robotkernel is distributed in the hope that it will be useful,
+ * module_ethercat is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 3 of the License, or (at your option) any later version.
+ * 
+ * module_ethercat is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with robotkernel.  If not, see <http://www.gnu.org/licenses/>.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ * 
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with module_ethercat; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
-#ifndef __MODULE_ETHERCAT_SLAVE_H__
-#define __MODULE_ETHERCAT_SLAVE_H__
+#ifndef MODULE_ETHERCAT__SLAVE_H
+#define MODULE_ETHERCAT__SLAVE_H
 
 #include <list>
 #include <string>
@@ -31,13 +32,13 @@
 
 #include "robotkernel/module_base.h"
 
-#include "service_provider/memory_inspection/base.h"
-#include "service_provider/canopen_protocol/base.h"
-#include "service_provider/sercos_protocol/base.h"
-#include "service_provider/file_protocol/base.h"
-#include "service_provider/process_data_inspection/base.h"
-#include "service_provider/key_value/base.h"
-#include "service_provider/key_value/key_value_helper.h"
+#include "service_provider_memory_inspection/base.h"
+#include "service_provider_canopen_protocol/base.h"
+#include "service_provider_sercos_protocol/base.h"
+#include "service_provider_file_protocol/base.h"
+#include "service_provider_process_data_inspection/base.h"
+#include "service_provider_key_value/base.h"
+#include "service_provider_key_value/key_value_helper.h"
 
 extern "C" void convert_string_to_hex(std::string input, 
         char **output, size_t *outlen);
@@ -102,7 +103,7 @@ typedef enum {
 
 class slave : 
     public std::enable_shared_from_this<slave>,
-    public key_value_slave
+    public service_provider_key_value::slave
 {
     public:
         enum request_type {
@@ -111,7 +112,7 @@ class slave :
             request_type_mailbox
         };
 
-        class memory_inspection : public service_provider::memory_inspection::base {
+        class memory_inspection : public service_provider_memory_inspection::base {
             public:
                 std::shared_ptr<slave> slv;     //!< our slave pointer
                 request_type type;              //!< request type
@@ -123,7 +124,7 @@ class slave :
                  * \param areas list of areas
                  */
                 void get_memory_areas(
-                        service_provider::memory_inspection::area_list_t& areas);
+                        service_provider_memory_inspection::area_list_t& areas);
 
                 //! read memory
                 /*!
@@ -131,7 +132,7 @@ class slave :
                  * \param data read data
                  */
                 void read_memory(const uint64_t& address, 
-                        service_provider::memory_inspection::data_t& data);
+                        service_provider_memory_inspection::data_t& data);
 
                 //! write memory
                 /*!
@@ -139,10 +140,10 @@ class slave :
                  * \param data data to write
                  */
                 void write_memory(const uint64_t& address, 
-                        const service_provider::memory_inspection::data_t& data);
+                        const service_provider_memory_inspection::data_t& data);
         };
         
-        class canopen : public service_provider::canopen_protocol::base {
+        class canopen : public service_provider_canopen_protocol::base {
             public:
                 std::shared_ptr<slave> slv;     //!< our slave pointer
                 request_type type;              //!< request type
@@ -150,57 +151,57 @@ class slave :
                 canopen(std::shared_ptr<slave> slv, const request_type& type);
 
                 //! return a list with all indices of the object dictionary
-                // derived from service_provider::canopen_protocol::base
+                // derived from service_provider_canopen_protocol::base
                 /*!
                  * \param list returns the list with all indices
                  */
                 void get_object_dictionary_list(
-                        service_provider::canopen_protocol::object_dictionary_list_t& list);
+                        service_provider_canopen_protocol::object_dictionary_list_t& list);
 
                 //! return a object description of given index
-                // derived from service_provider::canopen_protocol::base
+                // derived from service_provider_canopen_protocol::base
                 /*!
                  * \param index requested index
                  * \param desc returns the object description
                  */
                 void get_object_description(const uint16_t& index, 
-                        service_provider::canopen_protocol::object_description_t& desc);
+                        service_provider_canopen_protocol::object_description_t& desc);
 
                 //! return a element description of given index and sub index
-                // derived from service_provider::canopen_protocol::base
+                // derived from service_provider_canopen_protocol::base
                 /*!
                  * \param index requested index
                  * \param sub_index requested sub index
                  * \param desc returns the object description
                  */
                 void get_element_description(const uint16_t& index, const uint8_t& sub_index,
-                        service_provider::canopen_protocol::element_description_t& desc);
+                        service_provider_canopen_protocol::element_description_t& desc);
 
                 //! reads one element
-                // derived from service_provider::canopen_protocol::base
+                // derived from service_provider_canopen_protocol::base
                 /*!
                  * \param index requested index
                  * \param sub_index requested sub index
                  * \param value returns read value 
                  */
                 void read_element(const uint16_t& index, const uint8_t& sub_index,
-                        service_provider::canopen_protocol::element_t& value);
+                        service_provider_canopen_protocol::element_t& value);
 
                 //! writes one element
-                // derived from service_provider::canopen_protocol::base
+                // derived from service_provider_canopen_protocol::base
                 /*!
                  * \param index requested index
                  * \param sub_index requested sub index
                  * \param value value to write
                  */
                 void write_element(const uint16_t& index, const uint8_t& sub_index,
-                        const service_provider::canopen_protocol::element_t& value);
+                        const service_provider_canopen_protocol::element_t& value);
                 
                 //! pop next emergency message, throw exception if non present
                 /*!
                  * \param msg return emergency message
                  */
-                void pop_emergency_message(service_provider::canopen_protocol::emergency_message_t& msg);
+                void pop_emergency_message(service_provider_canopen_protocol::emergency_message_t& msg);
 
                 //! return process data description yaml string 
                 /*!
@@ -209,7 +210,7 @@ class slave :
                 std::string get_pdo_description(uint16_t idx);
         };
         
-        class sercos : public service_provider::sercos_protocol::base {
+        class sercos : public service_provider_sercos_protocol::base {
             public:
                 std::shared_ptr<slave> slv;     //!< our slave pointer
                 int atn;                        //!< sercos at number
@@ -223,8 +224,8 @@ class slave :
                  * \param data data to read
                  */
                 void sercos_read_idn(const uint16_t& idn, 
-                        const service_provider::sercos_protocol::sercos_service_elements_t& elements, 
-                        service_provider::sercos_protocol::service_data_t& data);
+                        const service_provider_sercos_protocol::sercos_service_elements_t& elements, 
+                        service_provider_sercos_protocol::service_data_t& data);
 
                 //! write sercos id number
                 /*!
@@ -233,11 +234,11 @@ class slave :
                  * \param data data to write
                  */
                 void sercos_write_idn(const uint16_t& idn, 
-                        const service_provider::sercos_protocol::sercos_service_elements_t& elements, 
-                        service_provider::sercos_protocol::service_data_t& data);
+                        const service_provider_sercos_protocol::sercos_service_elements_t& elements, 
+                        service_provider_sercos_protocol::service_data_t& data);
         };
 
-        class file_protocol : public service_provider::file_protocol::base {
+        class file_protocol : public service_provider_file_protocol::base {
             public:
                 std::shared_ptr<slave> slv;     //!< our slave pointer
 
@@ -248,14 +249,14 @@ class slave :
                  * \param info file info structure
                  */
                 void file_read(
-                        service_provider::file_protocol::file_readwrite_info_t& info);
+                        service_provider_file_protocol::file_readwrite_info_t& info);
 
                 //! write to file
                 /*!
                  * \param info file info structure
                  */
                 void file_write(
-                        const service_provider::file_protocol::file_readwrite_info_t& info);
+                        const service_provider_file_protocol::file_readwrite_info_t& info);
         };
 
         typedef enum mem_type {
@@ -401,10 +402,10 @@ class slave :
         // named process data
         robotkernel::sp_process_data_t pdin;
         robotkernel::sp_pd_provider_t  pdin_provider;
-        service_provider::process_data_inspection::sp_pd_inspection_t pdin_inspection;
+        service_provider_process_data_inspection::sp_pd_inspection_t pdin_inspection;
         robotkernel::sp_process_data_t pdout;
         robotkernel::sp_pd_consumer_t  pdout_consumer;
-        service_provider::process_data_inspection::sp_pd_inspection_t pdout_inspection;
+        service_provider_process_data_inspection::sp_pd_inspection_t pdout_inspection;
 
         // service requesters
         robotkernel::sp_service_interface_t _mbx_foe;    //!< file service requester

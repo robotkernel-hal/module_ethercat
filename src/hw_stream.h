@@ -1,46 +1,32 @@
-/**
- * \stream hw_stream.h
- *
+//! robotkernel module ethercat master hw from robotkernel stream
+/*
  * \author Robert Burger <robert.burger@dlr.de>
- *
- * \date 24 Nov 2016
- *
- * \brief stream/char device hardware access functions
- *
  */
 
 /*
- * This stream is part of libethercat.
+ * This file is part of module_ethercat.
  *
- * libethercat is free software; you can redistribute it and/or
+ * module_ethercat is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 3 of the License, or (at your option) any later version.
  * 
- * libethercat is distributed in the hope that it will be useful,
+ * module_ethercat is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  * 
- * You should have received a copy of the GNU Lesser General Public 
- * License along with libethercat (LICENSE.LGPL-V3); if not, write 
- * to the Free Software Foundation, Inc., 51 Franklin Street, Fifth 
- * Floor, Boston, MA  02110-1301, USA.
- * 
- * Please note that the use of the EtherCAT technology, the EtherCAT 
- * brand name and the EtherCAT logo is only permitted if the property 
- * rights of Beckhoff Automation GmbH are observed. For further 
- * information please contact Beckhoff Automation GmbH & Co. KG, 
- * Hülshorstweg 20, D-33415 Verl, Germany (www.beckhoff.com) or the 
- * EtherCAT Technology Group, Ostendstraße 196, D-90482 Nuremberg, 
- * Germany (ETG, www.ethercat.org).
- *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with module_ethercat; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
-#ifndef LIBETHERCAT_HW_STREAM_H
-#define LIBETHERCAT_HW_STREAM_H
+#ifndef MODULE_ETHERCAT__HW_STREAM_H
+#define MODULE_ETHERCAT__HW_STREAM_H
 
-#include <libethercat/hw.h>
+#include "libethercat/config.h"
+#include "libethercat/common.h"
+#include "libethercat/hw.h"
 
 typedef size_t (*stream_read_t)(void *user, void *buf, size_t nbyte);
 typedef size_t (*stream_write_t)(void *user, void *buf, size_t nbyte);
@@ -85,5 +71,5 @@ int hw_device_stream_open(struct hw_stream *phw, struct ec *pec, void *user,
 }
 #endif
 
-#endif // LIBETHERCAT_HW_STREAM_H
+#endif // MODULE_ETHERCAT__HW_STREAM_H
 

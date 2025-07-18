@@ -1,8 +1,24 @@
 //! robotkernel module ethercat slave
 /*!
- * author: Robert Burger
+ * author: Robert Burger <robert.burger@dlr.de>
+ */
+
+/*
+ * This file is part of module_ethercat.
  *
- * $Id$
+ * module_ethercat is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 3 of the License, or (at your option) any later version.
+ * 
+ * module_ethercat is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ * 
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with module_ethercat; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
 /*
@@ -26,13 +42,11 @@
 #include "master.h"
 #include "robotkernel/helpers.h"
 #include "robotkernel/robotkernel.h"
-#include "string_util/string_util.h"
 #include <iomanip>
 #include <stdio.h>
 
 using namespace std;
 using namespace robotkernel;
-using namespace string_util;
 using namespace module_ethercat;
 
 //! forward declaration ethercat state string
@@ -185,8 +199,8 @@ slave::slave_eoe::slave_eoe(const YAML::Node& node) {
 //! emit yaml node
 YAML::Node slave::sync_manager_settings::to_yaml() {
     YAML::Node node(YAML::NodeType::Map);
-    node["address"] = format_string("0x%X", _address);
-    node["flags"]   = format_string("0x%X", _flags);
+    node["address"] = string_printf("0x%X", _address);
+    node["flags"]   = string_printf("0x%X", _flags);
     node["length"]  = _length;
     return node;
 }
@@ -223,7 +237,7 @@ slave::sync_manager_settings::sync_manager_settings(const YAML::Node& node) {
  * \param master_dev master device
  */
 slave::slave(int index, master *master_dev) : 
-    key_value_slave(master_dev->name, format_string("slave_%d", index)),
+    service_provider_key_value::slave(master_dev->name, string_printf("slave_%d", index)),
     sm_set_by_user(false), index(index), master_dev(master_dev) 
 {
     master_dev->log(verbose, "default slave index %d created\n", index);
@@ -236,7 +250,7 @@ slave::slave(int index, master *master_dev) :
  * \param master_dev master device
  */
 slave::slave(int index, const YAML::Node& node, master *master_dev) : 
-    key_value_slave(master_dev->name, format_string("slave_%d", index)),
+    service_provider_key_value::slave(master_dev->name, string_printf("slave_%d", index)),
     sm_set_by_user(false), master_dev(master_dev) 
 {
     name  = get_as<string>(node, "name");
@@ -361,9 +375,9 @@ YAML::Node slave::to_yaml() {
 }
 
 template <typename T>
-key_value_key<T> *create_key(key_value_slave *parent, std::string name, T* val, std::string desc = "", 
+service_provider_key_value::key<T> *create_key(service_provider_key_value::slave *parent, std::string name, T* val, std::string desc = "", 
         std::string unit = "", std::string default_value = "", std::string format = "") {
-    auto *k = new key_value_key<T>(parent, name, val, false);
+    auto *k = new service_provider_key_value::key<T>(parent, name, val, false);
     k->describe(desc);
     k->unit(unit);
     k->default_value(default_value);
@@ -372,9 +386,9 @@ key_value_key<T> *create_key(key_value_slave *parent, std::string name, T* val, 
 }
 
 template <typename T>
-key_value_key_read_only<T> *create_key_read_only(key_value_slave *parent, std::string name, T* val, std::string desc = "", 
+service_provider_key_value::key_read_only<T> *create_key_read_only(service_provider_key_value::slave *parent, std::string name, T* val, std::string desc = "", 
         std::string unit = "", std::string default_value = "", std::string format = "") {
-    auto *k = new key_value_key_read_only<T>(parent, name, val, false);
+    auto *k = new service_provider_key_value::key_read_only<T>(parent, name, val, false);
     k->describe(desc);
     k->unit(unit);
     k->default_value(default_value);
@@ -392,7 +406,7 @@ void slave::init_key_value() {
     _add_key(create_key<int32_t> (this, "dc.cycle_shift", &dc.cycle_shift, "Cyclce Shift"));
             
     for (int i = 0; i < master_dev->ec.slaves[index].sm_ch; ++i) {
-        auto prefix = format_string("sync_manager.%d.", i);
+        auto prefix = string_printf("sync_manager.%d.", i);
         _add_key(create_key<uint16_t>(this, prefix + "address", 
                     &master_dev->ec.slaves[index].sm[i].adr, "Physical start address"));
         _add_key(create_key<uint16_t>(this, prefix + "length", 
@@ -403,7 +417,7 @@ void slave::init_key_value() {
 
     for (int i = 0; i < master_dev->ec.slaves[index].fmmu_ch; ++i) {
 #define _add_key_fmmu(type, mbr, desc)\
-        _add_key(create_key<type>(this, format_string("fmmu.%d." # mbr, i), \
+        _add_key(create_key<type>(this, string_printf("fmmu.%d." # mbr, i), \
                     &master_dev->ec.slaves[index].fmmu[i].mbr, desc))
 
         _add_key_fmmu(uint32_t, log,            "Logical bus address");
@@ -451,19 +465,19 @@ void slave::init_key_value() {
 
 
     for (int i = 0; i < master_dev->ec.slaves[index].eeprom.strings_cnt; ++i) {
-        auto prefix = format_string("eeprom.strings.%d", i);
+        auto prefix = string_printf("eeprom.strings.%d", i);
         _add_key(create_key_read_only<char *>(this, prefix,
                     (osal_char_t **)&master_dev->ec.slaves[index].eeprom.strings[i], ""));
     }
 
     for (int i = 0; i < master_dev->ec.slaves[index].eeprom.fmmus_cnt; ++i) {
-        auto prefix = format_string("eeprom.fmmu.%d.", i);
+        auto prefix = string_printf("eeprom.fmmu.%d.", i);
         _add_key(create_key_read_only<uint8_t>(this, prefix + "type",
                     &master_dev->ec.slaves[index].eeprom.fmmus[i].type, "FMMU type"));
     }
 
     for (int i = 0; i < master_dev->ec.slaves[index].eeprom.sms_cnt; ++i) {
-        auto prefix = format_string("eeprom.sync_manager.%d.", i);
+        auto prefix = string_printf("eeprom.sync_manager.%d.", i);
         _add_key(create_key_read_only<uint16_t>(this, prefix + "adr",
                     &master_dev->ec.slaves[index].eeprom.sms[i].adr, "Physical start address"));
         _add_key(create_key_read_only<uint16_t>(this, prefix + "len",
@@ -479,7 +493,7 @@ void slave::init_key_value() {
     }
 
     for (int i = 0; i < master_dev->ec.slaves[index].eeprom.dcs_cnt; ++i) {
-        auto prefix = format_string("eeprom.distributed_clocks.%d.", i);
+        auto prefix = string_printf("eeprom.distributed_clocks.%d.", i);
         _add_key(create_key_read_only<uint32_t>(this, prefix + "cycle_time_0",
                     &master_dev->ec.slaves[index].eeprom.dcs[i].cycle_time_0, "Cycle time Sync0"));
         _add_key(create_key_read_only<uint32_t>(this, prefix + "shift_time_0",
@@ -509,7 +523,7 @@ void slave::init_key_value() {
         string type = u == 0 ? string("txpdo") : string("rxpdo");
 
         TAILQ_FOREACH(entry, pdos[u], qh) {
-            auto prefix = format_string("eeprom.%s.0x%04X.", type.c_str(), entry->pdo_index);
+            auto prefix = string_printf("eeprom.%s.0x%04X.", type.c_str(), entry->pdo_index);
             _add_key(create_key_read_only<uint8_t>(this, prefix + "n_entry",
                         &entry->n_entry, "Number of PDO entries"));
             _add_key(create_key_read_only<uint8_t>(this, prefix + "sm_nr",
@@ -523,7 +537,7 @@ void slave::init_key_value() {
                         &entry->flags, "PDO flags"));
 
             for (int i = 0; i < entry->n_entry; ++i) {
-                auto prefix2 = format_string("%s0x%04X.%d.", prefix.c_str(), 
+                auto prefix2 = string_printf("%s0x%04X.%d.", prefix.c_str(), 
                         entry->entries[i].entry_index, entry->entries[i].sub_index);
                 _add_key(create_key_read_only<uint8_t>(this, prefix2 + "entry_name_idx",
                             &entry->entries[i].entry_name_idx, "Name index in strings"));
@@ -567,126 +581,13 @@ void slave::add_init_cmds() {
                     cmd->index, cmd->subindex, 0x7F, &entry_desc, &error_code);
 
             if (ret2 == 0) {
-                py_value    *pval       = eval_full(cmd->value);
-                py_int      *pintval    = dynamic_cast<py_int *>(pval);
-                py_long     *plongval   = dynamic_cast<py_long *>(pval);
-                py_float    *pfloatval  = dynamic_cast<py_float *>(pval);
-                py_special  *pspval     = dynamic_cast<py_special *>(pval);
+                auto elem = service_provider_canopen_protocol::string_to_value(cmd->value, entry_desc.data_type, entry_desc.bit_length);
 
-                cmd->datalen = (entry_desc.bit_length+7)/8;
-                cmd->data = new char[cmd->datalen];
-
-                switch (entry_desc.data_type) {
-                    case ECT_BOOLEAN:
-                        if (!pspval)
-                            break;
-
-                        (*(uint8_t *)cmd->data) = (bool)*pspval;
-                        break;
-                    case ECT_INTEGER8:
-                        if (!pintval) 
-                            break;
-
-                        (*(int8_t *)cmd->data) = (int)*pintval;
-                        break;
-                    case ECT_INTEGER16:
-                        if (!pintval)
-                            break;
-
-                        (*(int16_t *)cmd->data) = (int)*pintval;
-                        break;
-                    case ECT_INTEGER32:
-                    case ECT_INTEGER24:
-                        if (!pintval)
-                            break;
-
-                        (*(int32_t *)cmd->data) = (int)*pintval;
-                        break;
-                    case ECT_INTEGER64: {
-                        if (!pintval)
-                            break;
-
-                        if (plongval) 
-                            (*(int64_t *)cmd->data) = (int64_t)*plongval;
-                        else
-                            (*(int64_t *)cmd->data) = (int)*pintval;
-                        break;
-                    }
-                    case ECT_UNSIGNED8:
-                        if (!pintval)
-                            break;
-
-                        (*(uint8_t *)cmd->data) = (unsigned int)*pintval;
-                        break;
-                    case ECT_UNSIGNED16:
-                        if (!pintval)
-                            break;
-
-                        (*(uint16_t *)cmd->data) = (unsigned int)*pintval;
-                        break;
-                    case ECT_UNSIGNED32:
-                    case ECT_UNSIGNED24:
-                        if (!pintval)
-                            break;
-
-                        (*(uint32_t *)cmd->data) = (unsigned int)*pintval;
-                        break;
-                    case ECT_UNSIGNED64: {
-                        if (!pintval)
-                            break;
-
-                        if (plongval) 
-                            (*(uint64_t *)cmd->data) = (int64_t)*plongval;
-                        else
-                            (*(uint64_t *)cmd->data) = (unsigned int)*pintval;
-                        break;
-                    }
-                    case ECT_REAL32:
-                        if (pfloatval)
-                            (*(float *)cmd->data) = (float)*pfloatval;
-                        else if (pintval)
-                            (*(float *)cmd->data) = (float)*pintval;
-                        else if (plongval)
-                            (*(float *)cmd->data) = (float)*plongval;
-                        break;
-                    case ECT_REAL64:
-                        if (pfloatval) 
-                            (*(float *)cmd->data) = (float)*pfloatval;
-                        else if (pintval)
-                            (*(float *)cmd->data) = (float)*pintval;
-                        else if (plongval)
-                            (*(float *)cmd->data) = (float)*plongval;
-                        break;
-                    case ECT_BIT1:
-                    case ECT_BIT2:
-                    case ECT_BIT3:
-                    case ECT_BIT4:
-                    case ECT_BIT5:
-                    case ECT_BIT6:
-                    case ECT_BIT7:
-                    case ECT_BIT8:
-                    case ECT_VISIBLE_STRING:
-                        break;
-                    case ECT_OCTET_STRING: {
-                        py_list *plist  = dynamic_cast<py_list *>(pval);
-                        if (!plist)
-                            break;
-
-                        int num = 0;
-                        for (py_list_value_t::iterator it = plist->value.begin();
-                                it != plist->value.end(); ++it) {
-                            //py_long *plongval2     = dynamic_cast<py_long *>(*it);
-                            py_int *pintval2     = dynamic_cast<py_int *>(*it);
-                            cmd->data[num++] = (int)*pintval2;
-                        }
-                        break;
-                    }
-                    default:
-                        break;
+                if (elem.size() > 0) {
+                    cmd->datalen = elem.size();
+                    cmd->data = new char[cmd->datalen];
+                    memcpy(cmd->data, &elem[0], cmd->datalen);
                 }
-
-                if (pval)
-                    delete pval;
             }
         }
         
@@ -749,14 +650,14 @@ void slave::pre_state_transition(module_state_t from, module_state_t to) {
         case preop_2_boot:
             // ====> deinit devices
             for (int i = 0; i < master_dev->ec.slaves[index].sm_ch; ++i) {
-                auto prefix = format_string("sync_manager.%d.", i);
+                auto prefix = string_printf("sync_manager.%d.", i);
                 key_map.erase(prefix + "address");
                 key_map.erase(prefix + "length");
                 key_map.erase(prefix + "flags");    
             }
             
             for (int i = 0; i < master_dev->ec.slaves[index].fmmu_ch; ++i) {
-                auto prefix = format_string("fmmu.%d.", i);
+                auto prefix = string_printf("fmmu.%d.", i);
                 key_map.erase(prefix + "log");
                 key_map.erase(prefix + "log_len");
                 key_map.erase(prefix + "log_bit_start");
@@ -938,7 +839,7 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
             init_key_value();
             
             robotkernel::add_device(std::static_pointer_cast<
-                    service_provider::key_value::base>(shared_from_this()));
+                    service_provider_key_value::base>(shared_from_this()));
             
             if (mbx_sup & EC_EEPROM_MBX_FOE)
                 ADD_SERVICE_COLLECTOR_CLASS(_mbx_foe, slave::file_protocol);
@@ -965,8 +866,8 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                     robotkernel::remove_device(pdin);
                 
                 string base_name = master_dev->use_real_names ?
-                    format_string("%s.inputs", name.c_str()) :
-                    format_string("slave_%d.inputs", index);
+                    string_printf("%s.inputs", name.c_str()) :
+                    string_printf("slave_%d.inputs", index);
 
                 string pdo_desc = "";
                     
@@ -979,7 +880,7 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                 }
 
                 if (pdo_desc == "") {
-                    pdo_desc = format_string("- uint8_t[%d]: buf\n", slv->pdin.len);
+                    pdo_desc = string_printf("- uint8_t[%d]: buf\n", slv->pdin.len);
                 }
 
                 pdin = make_shared<robotkernel::triple_buffer>(slv->pdin.len, master_dev->name, base_name, pdo_desc);
@@ -987,7 +888,7 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                 pdin->set_provider(pdin_provider);
                 robotkernel::add_device(pdin);
 
-                pdin_inspection = make_shared<service_provider::process_data_inspection::pd_inspection>(master_dev->name, base_name, pdin);
+                pdin_inspection = make_shared<service_provider_process_data_inspection::pd_inspection>(master_dev->name, base_name, pdin);
                 robotkernel::add_device(pdin_inspection);
             }
             
@@ -996,8 +897,8 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                     robotkernel::remove_device(pdout);
                 
                 string base_name = master_dev->use_real_names ?
-                    format_string("%s.outputs", name.c_str()) :
-                    format_string("slave_%d.outputs", index);
+                    string_printf("%s.outputs", name.c_str()) :
+                    string_printf("slave_%d.outputs", index);
 
                 string pdo_desc = "";
                 
@@ -1010,7 +911,7 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                 }
                 
                 if (pdo_desc == "") {
-                    pdo_desc = format_string("- uint8_t[%d]: buf\n", slv->pdout.len);
+                    pdo_desc = string_printf("- uint8_t[%d]: buf\n", slv->pdout.len);
                 }
 
                 pdout = make_shared<robotkernel::triple_buffer>(slv->pdout.len, master_dev->name, base_name, pdo_desc);
@@ -1018,7 +919,7 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                 pdout->set_consumer(pdout_consumer);
                 robotkernel::add_device(pdout);
                 
-                pdout_inspection = make_shared<service_provider::process_data_inspection::pd_inspection>(master_dev->name, base_name, pdout);
+                pdout_inspection = make_shared<service_provider_process_data_inspection::pd_inspection>(master_dev->name, base_name, pdout);
                 robotkernel::add_device(pdout_inspection);
             }
 
@@ -1035,40 +936,40 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
 }
 
 slave::sercos::sercos(std::shared_ptr<slave> slv, int atn)
-:   service_provider::sercos_protocol::base(slv->master_dev->name, 
-        format_string("slave_%d.atn_%d", slv->index, atn)), slv(slv), atn(atn) {
+:   service_provider_sercos_protocol::base(slv->master_dev->name, 
+        string_printf("slave_%d.atn_%d", slv->index, atn)), slv(slv), atn(atn) {
 }
 
 
-static int decode_soe_answer(uint8_t *tmp, service_provider::sercos_protocol::sercos_service_attribute_t attr, 
+static int decode_soe_answer(uint8_t *tmp, service_provider_sercos_protocol::sercos_service_attribute_t attr, 
     std::vector<uint16_t>& value) 
 {
     bool is_fix = true;
     size_t elem_size = 1;
 
     switch (attr.datalength) {
-        case service_provider::sercos_protocol::SSA_DATALENGTH_2BYTEFIX:
+        case service_provider_sercos_protocol::SSA_DATALENGTH_2BYTEFIX:
             elem_size = 2;
             break;
-        case service_provider::sercos_protocol::SSA_DATALENGTH_4BYTEFIX:
+        case service_provider_sercos_protocol::SSA_DATALENGTH_4BYTEFIX:
             elem_size = 4;
             break;
-        case service_provider::sercos_protocol::SSA_DATALENGTH_8BYTEFIX:
+        case service_provider_sercos_protocol::SSA_DATALENGTH_8BYTEFIX:
             elem_size = 8;
             break;
-        case service_provider::sercos_protocol::SSA_DATALENGTH_1BYTEVAR:
+        case service_provider_sercos_protocol::SSA_DATALENGTH_1BYTEVAR:
             is_fix = false;
             elem_size = 1;
             break;
-        case service_provider::sercos_protocol::SSA_DATALENGTH_2BYTEVAR:
+        case service_provider_sercos_protocol::SSA_DATALENGTH_2BYTEVAR:
             is_fix = false;
             elem_size = 2;
             break;
-        case service_provider::sercos_protocol::SSA_DATALENGTH_4BYTEVAR:
+        case service_provider_sercos_protocol::SSA_DATALENGTH_4BYTEVAR:
             is_fix = false;
             elem_size = 4;
             break;
-        case service_provider::sercos_protocol::SSA_DATALENGTH_8BYTEVAR:
+        case service_provider_sercos_protocol::SSA_DATALENGTH_8BYTEVAR:
             is_fix = false;
             elem_size = 8;
             break;
@@ -1093,50 +994,50 @@ static int decode_soe_answer(uint8_t *tmp, service_provider::sercos_protocol::se
  * \param data data to read
  */
 void slave::sercos::sercos_read_idn(const uint16_t& idn, 
-        const service_provider::sercos_protocol::sercos_service_elements_t& elements, 
-        service_provider::sercos_protocol::service_data_t& data) {
+        const service_provider_sercos_protocol::sercos_service_elements_t& elements, 
+        service_provider_sercos_protocol::service_data_t& data) {
     uint8_t buf[1024]; 
-    uint8_t serc_elements = (elements | service_provider::sercos_protocol::SSE_ATTR) >> 1;
+    uint8_t serc_elements = (elements | service_provider_sercos_protocol::SSE_ATTR) >> 1;
     size_t buf_len = 1024;
     int ret;
 
     if ((ret = ec_soe_read(&slv->master_dev->ec, slv->index, atn, idn,
                 &serc_elements, buf, &buf_len)) != 0) {
-        throw str_exception("slave %2d: reading sercos atn %d idn 0x%X "
+        throw runtime_error(string_printf("slave %2d: reading sercos atn %d idn 0x%X "
                 "elements 0x%X returned errorcode 0x%X!\n", slv->index, 
-                atn, idn, serc_elements, ret);
+                atn, idn, serc_elements, ret));
     }
 
     // todo decode answer
     uint8_t *tmp = buf;
-    if (serc_elements & (service_provider::sercos_protocol::SSE_NAME >> 1)) {
+    if (serc_elements & (service_provider_sercos_protocol::SSE_NAME >> 1)) {
         uint16_t name_len = *(uint16_t *)tmp; 
         tmp += 4;
         data.name = string((char *)tmp, (size_t)name_len);
         tmp += name_len;
     }
 
-    if (serc_elements & (service_provider::sercos_protocol::SSE_ATTR >> 1)) {
-        data.attr = *(service_provider::sercos_protocol::sercos_service_attribute *)tmp;
+    if (serc_elements & (service_provider_sercos_protocol::SSE_ATTR >> 1)) {
+        data.attr = *(service_provider_sercos_protocol::sercos_service_attribute *)tmp;
         tmp += 4;
     }
 
-    if (serc_elements & (service_provider::sercos_protocol::SSE_UNIT >> 1)) {
+    if (serc_elements & (service_provider_sercos_protocol::SSE_UNIT >> 1)) {
         uint16_t unit_len = *(uint16_t *)tmp; 
         tmp += 4;
         data.unit = string((char *)tmp, (size_t)unit_len);
         tmp += unit_len;
     }
 
-    if (serc_elements & (service_provider::sercos_protocol::SSE_MAXVAL >> 1)) {
+    if (serc_elements & (service_provider_sercos_protocol::SSE_MAXVAL >> 1)) {
         tmp += decode_soe_answer(tmp, data.attr, data.min_value);
     }
 
-    if (serc_elements & (service_provider::sercos_protocol::SSE_MINVAL >> 1)) {
+    if (serc_elements & (service_provider_sercos_protocol::SSE_MINVAL >> 1)) {
         tmp += decode_soe_answer(tmp, data.attr, data.max_value);
     }
 
-    if (serc_elements & (service_provider::sercos_protocol::SSE_DATA >> 1)) {
+    if (serc_elements & (service_provider_sercos_protocol::SSE_DATA >> 1)) {
         tmp += decode_soe_answer(tmp, data.attr, data.value);
     }
 }
@@ -1148,17 +1049,17 @@ void slave::sercos::sercos_read_idn(const uint16_t& idn,
  * \param data data to write
  */
 void slave::sercos::sercos_write_idn(const uint16_t& idn, 
-        const service_provider::sercos_protocol::sercos_service_elements_t& elements, 
-        service_provider::sercos_protocol::service_data_t& data) {
+        const service_provider_sercos_protocol::sercos_service_elements_t& elements, 
+        service_provider_sercos_protocol::service_data_t& data) {
         // todo implement
-    uint8_t serc_elements = (elements | service_provider::sercos_protocol::SSE_ATTR) >> 1;
+    uint8_t serc_elements = (elements | service_provider_sercos_protocol::SSE_ATTR) >> 1;
     int ret;
 
     if ((ret = ec_soe_write(&slv->master_dev->ec, slv->index, atn, idn,
                 serc_elements, (uint8_t *)&data.value[0], data.value.size() * 2)) != 0) {
-        throw str_exception("slave %2d: writing sercos atn %d idn 0x%X "
+        throw runtime_error(string_printf("slave %2d: writing sercos atn %d idn 0x%X "
                 "elements 0x%X returned errorcode 0x%X!\n", slv->index, 
-                atn, idn, serc_elements, ret);
+                atn, idn, serc_elements, ret));
     }
 }
 	    

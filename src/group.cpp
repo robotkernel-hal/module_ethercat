@@ -4,30 +4,31 @@
  */
 
 /*
- * This file is part of robotkernel.
+ * This file is part of module_ethercat.
  *
- * robotkernel is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * robotkernel is distributed in the hope that it will be useful,
+ * module_ethercat is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 3 of the License, or (at your option) any later version.
+ * 
+ * module_ethercat is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with robotkernel.  If not, see <http://www.gnu.org/licenses/>.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ * 
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with module_ethercat; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
 #include "group.h"
 #include "master.h"
 
-#include "string_util/string_util.h"
+#include "robotkernel/helpers.h"
 
 using namespace std;
+using namespace robotkernel;
 using namespace module_ethercat;
-using namespace string_util;
 
 //! group creation
 /*!
@@ -36,8 +37,7 @@ using namespace string_util;
  * \param node configuration node
  */
 group::group(master *parent, int index, const YAML::Node& node) :
-    trigger(parent->name, format_string("group_%d", index)),
-    parent(parent)
+    trigger(parent->name, string_printf("group_%d", index)), parent(parent)
 {
     _index         = index;
     divisor        = get_as<int>(node, "divisor");

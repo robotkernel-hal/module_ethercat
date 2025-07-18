@@ -1,25 +1,24 @@
 //! robotkernel module ethercat master
 /*!
- * author: Robert Burger
- *
- * $Id$
+ * author: Robert Burger <robert.burger@dlr.de>
  */
 
 /*
- * This file is part of robotkernel.
+ * This file is part of module_ethercat.
  *
- * robotkernel is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * robotkernel is distributed in the hope that it will be useful,
+ * module_ethercat is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 3 of the License, or (at your option) any later version.
+ * 
+ * module_ethercat is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with robotkernel.  If not, see <http://www.gnu.org/licenses/>.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ * 
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with module_ethercat; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
 #include <math.h>
@@ -31,9 +30,7 @@
 MODULE_DEF(module_ethercat, module_ethercat::master)
 
 using namespace std;
-using namespace std::placeholders;
 using namespace robotkernel;
-using namespace string_util;
 using namespace module_ethercat;
 
 //! ethercat state string
@@ -99,7 +96,7 @@ void dc_clock_setter::run() {
  * \param node yaml intialization node
  */
 master::master(const std::string& name, const YAML::Node& node) :
-    service_provider::canopen_protocol::base(name, "master.mailbox"),
+    service_provider_canopen_protocol::base(name, "master.mailbox"),
     module_base("module_ethercat", name, node)
 {
     config = YAML::Clone(node);
@@ -378,18 +375,18 @@ void master::open() {
 #endif
 
     if (ret != 0) 
-        throw str_exception("opening hardware layer failed!\n");
+        throw runtime_error(string("opening hardware layer failed!\n"));
 
     // -----------------------------------------------------------
     // open ethercat interface
     ret = ec_open(&ec, phw, log_eeprom_data);
     if (ret != 0) 
-        throw str_exception("ec_open failed: %s!\n", strerror(ret));
+        throw runtime_error(string_printf("ec_open failed: %s!\n", strerror(ret)));
 
     ec_opened = true;
         
     if (ec_set_state(&ec, EC_STATE_INIT) != EC_STATE_INIT) {
-        throw str_exception("fatal: state switch to init failed!\n");
+        throw runtime_error(string("fatal: state switch to init failed!\n"));
     }
 
     ec.threaded_startup = threaded_startup;
@@ -443,7 +440,7 @@ void master::open() {
     }
 
     if (abort) {
-        throw str_exception("fatal: config mismatch!\n");
+        throw runtime_error(string("fatal: config mismatch!\n"));
     }
 
     // -----------------------------------------------------------
@@ -674,7 +671,7 @@ int master::set_state(module_state_t state) {
             ec_set_state(&ec, EC_STATE_INIT);
             STATE_TRANSITION(post, module_state_init);
 
-            robotkernel::remove_device(static_pointer_cast<service_provider::canopen_protocol::base>(shared_from_this()));
+            robotkernel::remove_device(static_pointer_cast<service_provider_canopen_protocol::base>(shared_from_this()));
 
             ec_close(&ec);
             ec_opened = false;
@@ -702,7 +699,7 @@ int master::set_state(module_state_t state) {
             // ====> re-/open ethercat device
             STATE_TRANSITION(pre, module_state_init);
             if (ec_set_state(&ec, EC_STATE_INIT) != EC_OK) {
-                throw str_exception("setting state to INIT failed!\n");
+                throw runtime_error(string("setting state to INIT failed!\n"));
             }
             STATE_TRANSITION(post, module_state_init);
 
@@ -718,11 +715,11 @@ int master::set_state(module_state_t state) {
                 open();
             } catch (exception& e) {
                 log(error, e.what());
-                state = module_state_init;
+                state = module_state_error;
                 return state;
             }
             
-            robotkernel::add_device(static_pointer_cast<service_provider::canopen_protocol::base>(shared_from_this()));
+            robotkernel::add_device(static_pointer_cast<service_provider_canopen_protocol::base>(shared_from_this()));
 
             ec.dc.mode = dc_sync.mode_string == "ref_clock" ? 
                 dc_mode_ref_clock : dc_sync.mode_string == "master_as_ref_clock" ?

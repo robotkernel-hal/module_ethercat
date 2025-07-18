@@ -4,20 +4,21 @@
  */
 
 /*
- * This file is part of robotkernel.
+ * This file is part of module_ethercat.
  *
- * robotkernel is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * robotkernel is distributed in the hope that it will be useful,
+ * module_ethercat is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 3 of the License, or (at your option) any later version.
+ * 
+ * module_ethercat is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with robotkernel.  If not, see <http://www.gnu.org/licenses/>.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ * 
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with module_ethercat; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
 #include "slave.h"
@@ -25,23 +26,22 @@
 
 using namespace std;
 using namespace robotkernel;
-using namespace string_util;
 using namespace module_ethercat;
 
 slave::canopen::canopen(std::shared_ptr<slave> slv, const request_type& type) :
-    service_provider::canopen_protocol::base(slv->master_dev->name, format_string(
+    service_provider_canopen_protocol::base(slv->master_dev->name, string_printf(
                 "slave_%d.%s", slv->index, type == request_type_eeprom ? "eeprom" : "mailbox")), 
     slv(slv), type(type) 
 {
 }
         
 //! return a list with all indices of the object dictionary
-// derived from service_provider::canopen_protocol::base
+// derived from service_provider_canopen_protocol::base
 /*!
  * \param list returns the list with all indices
  */
 void slave::canopen::get_object_dictionary_list(
-        service_provider::canopen_protocol::object_dictionary_list_t& list) {
+        service_provider_canopen_protocol::object_dictionary_list_t& list) {
 
     switch (type) {
         default:
@@ -89,8 +89,8 @@ void slave::canopen::get_object_dictionary_list(
                 int ret = ec_coe_odlist_read(&slv->master_dev->ec, slv->index, (osal_uint8_t *)&list[0], &len);
 
                 if (ret != 0) {
-                    throw str_exception("slave %2d: reading CoE object dictionary list "
-                            "returned errorcode 0x%X!\n", slv->index, ret);
+                    throw runtime_error(string_printf("slave %2d: reading CoE object dictionary list "
+                            "returned errorcode 0x%X!\n", slv->index, ret));
                 }
 
                 // reduce size to eliminite padding bytes at the end
@@ -99,8 +99,8 @@ void slave::canopen::get_object_dictionary_list(
                 list.resize(len/2);
                 memcpy(&list[0], buf, len);
             } else {
-                throw str_exception("slave %2d: reading CoE object dictionary list "
-                        "returned errorcode 0x%X!\n", slv->index, ret);
+                throw runtime_error(string_printf("slave %2d: reading CoE object dictionary list "
+                        "returned errorcode 0x%X!\n", slv->index, ret));
             } 
 
             break;
@@ -109,13 +109,13 @@ void slave::canopen::get_object_dictionary_list(
 }
 
 //! return a object description of given index
-// derived from service_provider::canopen_protocol::base
+// derived from service_provider_canopen_protocol::base
 /*!
  * \param index requested index
  * \param desc returns the object description
  */
 void slave::canopen::get_object_description(const uint16_t& index, 
-        service_provider::canopen_protocol::object_description_t& desc) {
+        service_provider_canopen_protocol::object_description_t& desc) {
     
     switch (type) {
         default:
@@ -180,8 +180,8 @@ void slave::canopen::get_object_description(const uint16_t& index,
 
             if (ret != 0) {
                 // decode ret
-                throw str_exception("slave %2d: reading CoE object description index 0x%X "
-                        "returned errorcode 0x%X: %s!\n", slv->index, index, error_code, get_sdo_info_error_string(error_code));
+                throw runtime_error(string_printf("slave %2d: reading CoE object description index 0x%X "
+                        "returned errorcode 0x%X: %s!\n", slv->index, index, error_code, get_sdo_info_error_string(error_code)));
             }
 
             desc.data_type      = obj_desc.data_type;
@@ -197,14 +197,14 @@ void slave::canopen::get_object_description(const uint16_t& index,
 }
 
 //! return a element description of given index and sub index
-// derived from service_provider::canopen_protocol::base
+// derived from service_provider_canopen_protocol::base
 /*!
  * \param index requested index
  * \param sub_index requested sub index
  * \param desc returns the object description
  */
 void slave::canopen::get_element_description(const uint16_t& index, const uint8_t& sub_index,
-        service_provider::canopen_protocol::element_description_t& desc) {
+        service_provider_canopen_protocol::element_description_t& desc) {
     
     switch (type) {
         default:
@@ -296,8 +296,8 @@ void slave::canopen::get_element_description(const uint16_t& index, const uint8_
 
             if (ret != 0) {
                 // decode ret
-                throw str_exception("slave %2d: reading CoE element description index 0x%X sub index %d"
-                        "returned errorcode 0x%X: %s!\n", slv->index, index, sub_index, error_code, get_sdo_info_error_string(error_code));
+                throw runtime_error(string_printf("slave %2d: reading CoE element description index 0x%X sub index %d"
+                        "returned errorcode 0x%X: %s!\n", slv->index, index, sub_index, error_code, get_sdo_info_error_string(error_code)));
             }
 
             desc.value_info    = entry_desc.value_info;
@@ -352,7 +352,7 @@ void slave::canopen::get_element_description(const uint16_t& index, const uint8_
 
                     if ((signed)desc.name.length() != std::count_if(desc.name.begin(), desc.name.end(), 
                                 [](unsigned char c){ return std::isprint(c); } ))
-                        desc.name = format_string("subindex_%d", sub_index); // name is not printable
+                        desc.name = string_printf("subindex_%d", sub_index); // name is not printable
                 }
             }
             break;
@@ -361,14 +361,14 @@ void slave::canopen::get_element_description(const uint16_t& index, const uint8_
 }
 
 //! reads one element
-// derived from service_provider::canopen_protocol::base
+// derived from service_provider_canopen_protocol::base
 /*!
  * \param index requested index
  * \param sub_index requested sub index
  * \param value returns read value 
  */
 void slave::canopen::read_element(const uint16_t& index, const uint8_t& sub_index,
-        service_provider::canopen_protocol::element_t& value) {
+        service_provider_canopen_protocol::element_t& value) {
     switch (type) {
         default:
             break;
@@ -434,13 +434,13 @@ void slave::canopen::read_element(const uint16_t& index, const uint8_t& sub_inde
 
             if (ret != 0) {
                 if (ret == EC_ERROR_MAILBOX_ABORT) {
-                    throw service_provider::canopen_protocol::sdo_abort_exception(abort_code);
+                    throw service_provider_canopen_protocol::sdo_abort_exception(abort_code);
                 }
 
                 // decode ret
-                throw str_exception("slave %2d: reading CoE element index 0x%X "
+                throw runtime_error(string_printf("slave %2d: reading CoE element index 0x%X "
                         "sub index %d returned errorcode 0x%X!\n", slv->index, 
-                        index, sub_index, ret);
+                        index, sub_index, ret));
             }
 
             if (buf_len) {
@@ -453,20 +453,20 @@ void slave::canopen::read_element(const uint16_t& index, const uint8_t& sub_inde
 }
 
 //! writes one element
-// derived from service_provider::canopen_protocol::base
+// derived from service_provider_canopen_protocol::base
 /*!
  * \param index requested index
  * \param sub_index requested sub index
  * \param value value to write
  */
 void slave::canopen::write_element(const uint16_t& index, const uint8_t& sub_index,
-        const service_provider::canopen_protocol::element_t& value) {
+        const service_provider_canopen_protocol::element_t& value) {
     switch (type) {
         default:
             break;
         case request_type_eeprom:
-            throw str_exception("slave %2d: writing canopen value in eeprom is not supported!\n", 
-                    slv->index);
+            throw runtime_error(string_printf("slave %2d: writing canopen value in eeprom is not supported!\n", 
+                    slv->index));
         case request_type_mailbox: {
             uint32_t abort_code = 0;
 
@@ -475,9 +475,9 @@ void slave::canopen::write_element(const uint16_t& index, const uint8_t& sub_ind
 
             if (ret != 0) {
                 // decode ret
-                throw str_exception("slave %2d: writing CoE element value index 0x%X "
+                throw runtime_error(string_printf("slave %2d: writing CoE element value index 0x%X "
                         "sub index %d returned errorcode 0x%X!\n", slv->index, 
-                        index, sub_index, ret);
+                        index, sub_index, ret));
             }
             break;
         }
@@ -489,7 +489,7 @@ void slave::canopen::write_element(const uint16_t& index, const uint8_t& sub_ind
  * \param msg ret   urn emergency message
  */
 void slave::canopen::pop_emergency_message(
-        service_provider::canopen_protocol::emergency_message_t& msg) {
+        service_provider_canopen_protocol::emergency_message_t& msg) {
     ec_coe_emergency_message_t msg_tmp;
     if (ec_coe_emergency_get_next(&slv->master_dev->ec, slv->index, &msg_tmp) == EC_OK) {
         msg.ts.tv_sec = msg_tmp.timestamp.sec;
@@ -579,7 +579,7 @@ string slave::canopen::get_pdo_description(uint16_t idx) {
     out << YAML::BeginSeq;
 
     // read mapped pdo count
-    service_provider::canopen_protocol::element_t element;
+    service_provider_canopen_protocol::element_t element;
     read_element(idx, 0, element);
     uint8_t entry_cnt = element[0];
 
@@ -609,8 +609,8 @@ string slave::canopen::get_pdo_description(uint16_t idx) {
             read_element(entry_idx, entry_sub_idx, element);
             uint32_t entry = *(uint32_t *)&element[0];
 
-            service_provider::canopen_protocol::element_description_t desc;
-            service_provider::canopen_protocol::object_description_t obj_desc;
+            service_provider_canopen_protocol::element_description_t desc;
+            service_provider_canopen_protocol::object_description_t obj_desc;
 
             uint16_t pdo_entry_id = (entry & 0xFFFF0000) >> 16;
             uint16_t pdo_entry_subid = (entry & 0x0000FF00) >> 8;
@@ -644,11 +644,11 @@ string slave::canopen::get_pdo_description(uint16_t idx) {
 
             //if ((signed)desc.name.length() != std::count_if(desc.name.begin(), desc.name.end(), 
             //            [](unsigned char c){ return std::isprint(c); } )) {
-            //    desc.name = format_string("no_text_%d", entry_sub_idx); // name is not printable
+            //    desc.name = string_printf("no_text_%d", entry_sub_idx); // name is not printable
             //}
 
             if (desc.name == "") {
-                desc.name = format_string("padding_%d", entry_sub_idx);
+                desc.name = string_printf("padding_%d", entry_sub_idx);
             }
 
             auto& _data_type_desc = data_type_2_desc[desc.data_type];

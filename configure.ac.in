@@ -2,10 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.69])
-AC_INIT(
-	[module_ethercat], 
-	m4_esyscmd_s([cat project.properties | grep VERSION    | cut -d'=' -f2 | xargs printf "%s"]),
-	m4_esyscmd_s([cat project.properties | grep MAINTAINER | cut -d'=' -f2 | xargs printf "%s"]))
+AC_INIT([module_ethercat], [PACKAGE_VERSION], [Robert Burger <robert.burger@dlr.de>])
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_MACRO_DIR([m4])
 AM_INIT_AUTOMAKE([-Wall -Werror foreign subdir-objects silent-rules])
@@ -51,6 +48,6 @@ AC_CHECK_LIB(dl, dlopen)
 AX_CHECK_COMPILE_FLAG([-pthread], [AX_APPEND_FLAG([-pthread])] )
 AC_CHECK_LIB([pthread], [pthread_create])
 
-AC_CONFIG_FILES([Makefile src/main/cpp/Makefile module_ethercat.pc])
+AC_CONFIG_FILES([Makefile src/Makefile module_ethercat.pc])
 
 AC_OUTPUT

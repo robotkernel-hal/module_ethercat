@@ -4,20 +4,21 @@
  */
 
 /*
- * This file is part of robotkernel.
+ * This file is part of module_ethercat.
  *
- * robotkernel is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * robotkernel is distributed in the hope that it will be useful,
+ * module_ethercat is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 3 of the License, or (at your option) any later version.
+ * 
+ * module_ethercat is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with robotkernel.  If not, see <http://www.gnu.org/licenses/>.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ * 
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with module_ethercat; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
 #include "slave.h"
@@ -25,12 +26,11 @@
 
 using namespace std;
 using namespace robotkernel;
-using namespace string_util;
 using namespace module_ethercat;
 
 slave::file_protocol::file_protocol(std::shared_ptr<slave> slv)
-    :   service_provider::file_protocol::base(slv->master_dev->name, 
-            format_string("slave_%d.mailbox", slv->index)), slv(slv) 
+    :   service_provider_file_protocol::base(slv->master_dev->name, 
+            string_printf("slave_%d.mailbox", slv->index)), slv(slv) 
 {
 }
 
@@ -39,7 +39,7 @@ slave::file_protocol::file_protocol(std::shared_ptr<slave> slv)
  * \param info file info structure
  */
 void slave::file_protocol::file_read(
-        service_provider::file_protocol::file_readwrite_info_t& info) {
+        service_provider_file_protocol::file_readwrite_info_t& info) {
     // file data buffer
     uint8_t *buffer = NULL;
     size_t buffer_len = 0;
@@ -66,7 +66,7 @@ void slave::file_protocol::file_read(
             free(buffer);
 
         std::string msg = string(error_message);
-        throw str_exception(msg.c_str());
+        throw runtime_error(msg);
     }
 
     if (buffer) {
@@ -80,7 +80,7 @@ void slave::file_protocol::file_read(
  * \param info file info structure
  */
 void slave::file_protocol::file_write(
-        const service_provider::file_protocol::file_readwrite_info_t& info) {
+        const service_provider_file_protocol::file_readwrite_info_t& info) {
     slv->master_dev->log(robotkernel::info, "writing file %s\n", info.file_name.c_str());
 
     // file name truncation
@@ -108,7 +108,7 @@ void slave::file_protocol::file_write(
         slv->master_dev->log(robotkernel::error, "writing file failed: %s\n", 
                 msg.c_str());
 
-        throw str_exception(msg.c_str());
+        throw runtime_error(msg);
     }
 
     slv->master_dev->log(robotkernel::info, "writing file succeeded!\n");
