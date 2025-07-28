@@ -106,7 +106,8 @@ class dc_clock_setter :
 class master :
     public std::enable_shared_from_this<master>,
     public service_provider_canopen_protocol::base,
-    public robotkernel::module_base
+    public robotkernel::module_base,
+    public robotkernel::trigger_base
 {
     public:
         friend class slave;
