@@ -1,4 +1,4 @@
-module-ethercat (6.0.0~pre1) unstable; urgency=low
+module-ethercat (6.0.0) unstable; urgency=low
 
   * prep: 6.0.0
 
