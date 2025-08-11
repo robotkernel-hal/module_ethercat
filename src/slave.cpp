@@ -45,6 +45,8 @@
 #include <iomanip>
 #include <stdio.h>
 
+#include "libethercat/slave.h"
+
 using namespace std;
 using namespace robotkernel;
 using namespace module_ethercat;
