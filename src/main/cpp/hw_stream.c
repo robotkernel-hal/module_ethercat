@@ -40,7 +40,6 @@
 
 #include "hw_stream.h"
 
-#include <libethercat/config.h>
 #include <libethercat/hw.h>
 #include <libethercat/ec.h>
 #include <libethercat/idx.h>
@@ -56,18 +55,26 @@
 #include <stdlib.h>
 #include <inttypes.h>
 
-#if LIBETHERCAT_HAVE_NETINET_IN_H == 1
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
+#if HAVE_NETINET_IN_H == 1
 #include <netinet/in.h>
 #endif
 
-#if LIBETHERCAT_HAVE_WINSOCK_H == 1
+#if HAVE_WINSOCK_H == 1
 #include <winsock.h>
 #endif
 
-#if LIBETHERCAT_HAVE_NET_UTIL_INET_H == 1
+#if HAVE_NET_UTIL_INET_H == 1
 #include <net/util/inet.h>
 #endif
-    
+
+#if HAVE_ARPA_INET_H == 1
+#include <arpa/inet.h>
+#endif
+
 // forward decls
 int hw_device_stream_recv(struct hw_common *phw);
 int hw_device_stream_get_tx_buffer(struct hw_common *phw, ec_frame_t **ppframe);
