@@ -10,7 +10,7 @@ class MainProject(ConanFile):
     exports_sources = ["*", "!.gitignore"]
     requires = [
             "libethercat/[>=0.7.2]@common/stable",
-            "robotkernel/[~6]@robotkernel/unstable",
+            "robotkernel/[~6]@robotkernel/snapshot",
             "service_provider_memory_inspection/[~6]@robotkernel/unstable",
             "service_provider_canopen_protocol/[~6]@robotkernel/unstable",
             "service_provider_key_value/[~6]@robotkernel/unstable",

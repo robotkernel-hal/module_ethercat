@@ -228,6 +228,8 @@ class master :
         //! module trigger callback
         virtual void tick() override;
 
+        void state_transition(const module_state_t& to_state); 
+
         //! set module state machine to defined state
         /*!
          * \param state requested state

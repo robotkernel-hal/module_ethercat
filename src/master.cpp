@@ -595,6 +595,51 @@ master::~master() {
         kv.second = nullptr;
 }
 
+void master::state_transition(const module_state_t& to_state) {
+    // pre stuff
+    for (int nr = 0; nr < ec.slave_cnt; ++nr) {
+        if (_slave_info.find(nr) == _slave_info.end()) continue;
+        
+        sp_slave_t slv = _slave_info[nr];
+        
+        try {
+            slv->pre_state_transition(this->state, to_state);
+        } catch (exception& e) {
+            log(warning, e.what());
+            set_error();
+        }
+    }
+
+    auto ec_state = [to_state]() {
+        if (to_state == module_state_boot) return EC_STATE_BOOT;
+        if (to_state == module_state_init) return EC_STATE_INIT;
+        if (to_state == module_state_preop) return EC_STATE_PREOP;
+        if (to_state == module_state_safeop) return EC_STATE_SAFEOP;
+        if (to_state == module_state_op) return EC_STATE_OP;
+        return EC_STATE_INIT;
+    };
+
+    if (!is_error()) {
+        ec_set_state(&ec, ec_state());
+    }
+
+    if (!is_error()) {
+        // post stuff
+        for (int nr = 0; nr < ec.slave_cnt; ++nr) {
+            if (_slave_info.find(nr) == _slave_info.end()) continue;
+
+            sp_slave_t slv = _slave_info[nr];
+
+            try {
+                slv->post_state_transition(this->state, to_state);
+            } catch (exception& e) {
+                log(warning, e.what());
+                set_error();
+            }
+        }
+    }
+}
+
 //! set module state machine to defined state
 /*!
  * \param state requested state
@@ -607,25 +652,13 @@ int master::set_state(module_state_t state) {
     // get transition
     uint32_t transition = GEN_STATE(this->state, state);
 
-#define STATE_TRANSITION(slave_func, to) { \
-    for (int nr = 0; nr < ec.slave_cnt; ++nr) { \
-        if (_slave_info.find(nr) == _slave_info.end()) continue; \
-        sp_slave_t slv = _slave_info[nr]; \
-        try { \
-        slv->slave_func##_state_transition(this->state, to); \
-        } catch (exception& e) { \
-            log(warning, e.what()); \
-        }}} 
-
     switch (transition) {
         case op_2_safeop:
         case op_2_preop:
         case op_2_init:
         case op_2_boot:
             // ====> stop sending commands
-            STATE_TRANSITION(pre, module_state_safeop);
-            ec_set_state(&ec, EC_STATE_SAFEOP);
-            STATE_TRANSITION(post, module_state_safeop);
+            state_transition(module_state_safeop);
 
             if (state == module_state_safeop)
                 break;
@@ -655,9 +688,7 @@ int master::set_state(module_state_t state) {
 //            for (const auto& kv : groups)
 //                robotkernel::remove_device(kv.second);
 
-            STATE_TRANSITION(pre, module_state_preop);
-            ec_set_state(&ec, EC_STATE_PREOP);
-            STATE_TRANSITION(post, module_state_preop);
+            state_transition(module_state_preop);
 
             if (state == module_state_preop)
                 break;
@@ -667,9 +698,7 @@ int master::set_state(module_state_t state) {
             t_dev->remove_trigger(shared_from_this());
             t_dev = nullptr;
 
-            STATE_TRANSITION(pre, module_state_init);
-            ec_set_state(&ec, EC_STATE_INIT);
-            STATE_TRANSITION(post, module_state_init);
+            state_transition(module_state_init);
 
             robotkernel::remove_device(static_pointer_cast<service_provider_canopen_protocol::base>(shared_from_this()));
 
@@ -677,7 +706,7 @@ int master::set_state(module_state_t state) {
             ec_opened = false;
         case init_2_init:
             // ====> re-/open ethercat device
-            if (state == module_state_init)
+            if (!is_error() || (state == module_state_init))
                 break;
         case init_2_boot:
             try {
@@ -688,96 +717,94 @@ int master::set_state(module_state_t state) {
                 return state;
             }
             
-            STATE_TRANSITION(pre, module_state_boot);
-            ec_set_state(&ec, EC_STATE_BOOT);
-            STATE_TRANSITION(post, module_state_boot);
+            state_transition(module_state_boot);
+
             break;
         case boot_2_init:
         case boot_2_preop:
         case boot_2_safeop:
         case boot_2_op:
             // ====> re-/open ethercat device
-            STATE_TRANSITION(pre, module_state_init);
-            if (ec_set_state(&ec, EC_STATE_INIT) != EC_OK) {
-                throw runtime_error(string("setting state to INIT failed!\n"));
-            }
-            STATE_TRANSITION(post, module_state_init);
+            state_transition(module_state_init);
 
             ec_close(&ec);
             ec_opened = false;
             
-            if (state == module_state_init)
+            if (!is_error() || (state == module_state_init))
                 break;
         case init_2_op:
         case init_2_safeop:
         case init_2_preop: {
+            // ====> initialize devices
+            
             try {
                 open();
             } catch (exception& e) {
                 log(error, e.what());
-                return (this->state = module_state_error);
+                set_error();
             }
             
-            robotkernel::add_device(static_pointer_cast<service_provider_canopen_protocol::base>(shared_from_this()));
+            if (!is_error()) {
+                robotkernel::add_device(static_pointer_cast<service_provider_canopen_protocol::base>(shared_from_this()));
 
-            ec.dc.mode = dc_sync.mode_string == "ref_clock" ? 
-                dc_mode_ref_clock : dc_sync.mode_string == "master_as_ref_clock" ?
-                dc_mode_master_as_ref_clock : dc_mode_master_clock;
-            
-            STATE_TRANSITION(pre, module_state_preop);
-            ec_set_state(&ec, EC_STATE_PREOP);
-            STATE_TRANSITION(post, module_state_preop);
-
-            t_dev = robotkernel::get_device<trigger>(trigger_device);
-
-            double rate = t_dev->get_rate() / t_divisor;
-            dc_sync.start_timer = (1.f / rate);
-
-            t_dev->add_trigger(shared_from_this());
-
-            if (dc_sync.timer_override > 0) {
-                ec.main_cycle_interval = dc_sync.timer_override;
-
-                rate = 1. / (dc_sync.timer_override / 1E9);
-            } else {
-                // trigger devices stores rate in [Hz]
-                rate = t_dev->get_rate() / t_divisor;
-
-                // ethercat master need timer interval in [ns]
-                dc_sync.timer_override = 
-                    ec.main_cycle_interval = (1.f / rate) * 1E9;
-
-                log(info, "got trigger rate %f Hz\n", rate);
+                ec.dc.mode = dc_sync.mode_string == "ref_clock" ? 
+                    dc_mode_ref_clock : dc_sync.mode_string == "master_as_ref_clock" ?
+                    dc_mode_master_as_ref_clock : dc_mode_master_clock;
             }
 
-            for (int nr = 0; nr < ec.slave_cnt; ++nr) {
-                log(verbose, "slave %d: propagation delay %d [ns]\n", 
-                        nr, ec.slaves[nr].pdelay);
+            state_transition(module_state_preop);
 
-                sp_slave_t slv = _slave_info[nr];
+            if (!is_error()) {
+                t_dev = robotkernel::get_device<trigger>(trigger_device);
 
-                // apply sm and fmmu config
-                for (slave::sm_map_t::iterator it = slv->_sm_map.begin();
-                        it != slv->_sm_map.end(); ++it) {
-                    int sm_nr = it->first;
+                double rate = t_dev->get_rate() / t_divisor;
+                dc_sync.start_timer = (1.f / rate);
 
-                    if (sm_nr < ec.slaves[nr].sm_ch) {
-                        log(verbose, "slave %d: applying sm%d: adr 0x%X, len %d, flags 0x%X\n",
-                                nr, sm_nr, it->second->_address,
-                                it->second->_length,
-                                it->second->_flags);
+                t_dev->add_trigger(shared_from_this());
 
-                        ec.slaves[nr].sm[sm_nr].adr   = it->second->_address;
-                        ec.slaves[nr].sm[sm_nr].len   = it->second->_length;
-                        ec.slaves[nr].sm[sm_nr].flags = it->second->_flags;
+                if (dc_sync.timer_override > 0) {
+                    ec.main_cycle_interval = dc_sync.timer_override;
+
+                    rate = 1. / (dc_sync.timer_override / 1E9);
+                } else {
+                    // trigger devices stores rate in [Hz]
+                    rate = t_dev->get_rate() / t_divisor;
+
+                    // ethercat master need timer interval in [ns]
+                    dc_sync.timer_override = 
+                        ec.main_cycle_interval = (1.f / rate) * 1E9;
+
+                    log(info, "got trigger rate %f Hz\n", rate);
+                }
+
+                for (int nr = 0; nr < ec.slave_cnt; ++nr) {
+                    log(verbose, "slave %d: propagation delay %d [ns]\n", 
+                            nr, ec.slaves[nr].pdelay);
+
+                    sp_slave_t slv = _slave_info[nr];
+
+                    // apply sm and fmmu config
+                    for (slave::sm_map_t::iterator it = slv->_sm_map.begin();
+                            it != slv->_sm_map.end(); ++it) {
+                        int sm_nr = it->first;
+
+                        if (sm_nr < ec.slaves[nr].sm_ch) {
+                            log(verbose, "slave %d: applying sm%d: adr 0x%X, len %d, flags 0x%X\n",
+                                    nr, sm_nr, it->second->_address,
+                                    it->second->_length,
+                                    it->second->_flags);
+
+                            ec.slaves[nr].sm[sm_nr].adr   = it->second->_address;
+                            ec.slaves[nr].sm[sm_nr].len   = it->second->_length;
+                            ec.slaves[nr].sm[sm_nr].flags = it->second->_flags;
+                        }
+
+                        ec.slaves[nr].sm_set_by_user  = slv->sm_set_by_user;
                     }
-                        
-                    ec.slaves[nr].sm_set_by_user  = slv->sm_set_by_user;
                 }
             }
 
-            // ====> initial devices            
-            if (state == module_state_preop)
+            if (is_error() || (state == module_state_preop))
                 break;
         }
         case preop_2_op:
@@ -807,72 +834,70 @@ int master::set_state(module_state_t state) {
                 }
             }
                 
-            STATE_TRANSITION(pre, module_state_safeop);
-            ec_set_state(&ec, EC_STATE_SAFEOP);
-            STATE_TRANSITION(post, module_state_safeop);
+            state_transition(module_state_safeop);
 
-            if ((ec.dc.have_dc != 0) && (ec.dc.mode == dc_mode_ref_clock)) {
-                while (!dc_sync.diff_converged) {
-                    double act_timer = 1. / t_dev->get_rate();
-                    log(info, "waiting for DC to converge... act_timer %13.9f, last_diff %13.9f, i_part %13.9f\n", act_timer, dc_sync.last_diff, dc_sync.i_part);
-                    osal_sleep(1000000000);
+            if (!is_error()) {
+                if ((ec.dc.have_dc != 0) && (ec.dc.mode == dc_mode_ref_clock)) {
+                    while (!dc_sync.diff_converged) {
+                        double act_timer = 1. / t_dev->get_rate();
+                        log(info, "waiting for DC to converge... act_timer %13.9f, last_diff %13.9f, i_part %13.9f\n", act_timer, dc_sync.last_diff, dc_sync.i_part);
+                        osal_sleep(1000000000);
+                    }
                 }
+
+                // process data is now available, create names process data
+                for (int nr = 0; nr < ec.slave_cnt; ++nr) {
+                    log(verbose, "slave %d: propagation delay %d [ns]\n", 
+                            nr, ec.slaves[nr].pdelay);
+
+                    sp_slave_t slv = _slave_info[nr];
+                }
+
+                // distributed clock info process data
+                if (pdin_dc)
+                    robotkernel::remove_device(pdin_dc);
+
+                string pdo_desc = 
+                    "- uint64_t: dc_time\n"
+                    "- int64_t: dc_sto\n"
+                    "- uint64_t: rtc_time\n"
+                    "- int64_t: rtc_sto\n"
+                    "- int64_t: act_diff\n"
+                    "- uint64_t: packet_duration\n";
+
+                pdin_dc = make_shared<robotkernel::triple_buffer>(
+                        (uint8_t *)&ec.dc.timer_correction - (uint8_t *)&ec.dc.dc_time,
+                        name, "dc.inputs", pdo_desc);
+                pdin_dc_provider = make_shared<robotkernel::pd_provider>(name);
+                pdin_dc->set_provider(pdin_dc_provider);
+                robotkernel::add_device(pdin_dc);
+
+                string pd_dc_sync_desc = 
+                    "- uint32_t: first_run\n"
+                    "- uint32_t: padding_0\n"
+                    "- double: last_diff\n"
+                    "- double: p_part\n"
+                    "- double: i_part\n"
+                    "- double: start_timer\n"
+                    "- double: kp\n"
+                    "- double: ki\n"
+                    "- double: i_limit\n"
+                    "- int64_t: timer_override\n"
+                    "- uint64_t: diff_converge_cycles\n"
+                    "- uint64_t: diff_converge_cnt\n"
+                    "- uint32_t: diff_converged\n";
+
+                pd_dc_sync = make_shared<robotkernel::pointer_buffer>(sizeof(dc_sync) - (size_t)((uint8_t *)&dc_sync.first_run - (uint8_t *)&dc_sync), (uint8_t *)&dc_sync.first_run, 
+                        name, "dc_sync_ctrl.inputs", pd_dc_sync_desc);
+                robotkernel::add_device(pd_dc_sync);
             }
 
-            // process data is now available, create names process data
-            for (int nr = 0; nr < ec.slave_cnt; ++nr) {
-                log(verbose, "slave %d: propagation delay %d [ns]\n", 
-                        nr, ec.slaves[nr].pdelay);
-
-                sp_slave_t slv = _slave_info[nr];
-            }
-
-            // distributed clock info process data
-            if (pdin_dc)
-                robotkernel::remove_device(pdin_dc);
-
-            string pdo_desc = 
-                "- uint64_t: dc_time\n"
-                "- int64_t: dc_sto\n"
-                "- uint64_t: rtc_time\n"
-                "- int64_t: rtc_sto\n"
-                "- int64_t: act_diff\n"
-                "- uint64_t: packet_duration\n";
-
-            pdin_dc = make_shared<robotkernel::triple_buffer>(
-                    (uint8_t *)&ec.dc.timer_correction - (uint8_t *)&ec.dc.dc_time,
-                    name, "dc.inputs", pdo_desc);
-            pdin_dc_provider = make_shared<robotkernel::pd_provider>(name);
-            pdin_dc->set_provider(pdin_dc_provider);
-            robotkernel::add_device(pdin_dc);
-            
-            string pd_dc_sync_desc = 
-                "- uint32_t: first_run\n"
-                "- uint32_t: padding_0\n"
-                "- double: last_diff\n"
-                "- double: p_part\n"
-                "- double: i_part\n"
-                "- double: start_timer\n"
-                "- double: kp\n"
-                "- double: ki\n"
-                "- double: i_limit\n"
-                "- int64_t: timer_override\n"
-                "- uint64_t: diff_converge_cycles\n"
-                "- uint64_t: diff_converge_cnt\n"
-                "- uint32_t: diff_converged\n";
-
-            pd_dc_sync = make_shared<robotkernel::pointer_buffer>(sizeof(dc_sync) - (size_t)((uint8_t *)&dc_sync.first_run - (uint8_t *)&dc_sync), (uint8_t *)&dc_sync.first_run, 
-                    name, "dc_sync_ctrl.inputs", pd_dc_sync_desc);
-            robotkernel::add_device(pd_dc_sync);
-
-            if (state == module_state_safeop)
+            if (is_error() || (state == module_state_safeop))
                 break;
         }
         case safeop_2_op:
             // ====> start sending commands
-            STATE_TRANSITION(pre, module_state_op);
-            ec_set_state(&ec, EC_STATE_OP);
-            STATE_TRANSITION(post, module_state_op);
+            state_transition(module_state_op);
             break;
         case op_2_op:
         case safeop_2_safeop:
@@ -884,7 +909,11 @@ int master::set_state(module_state_t state) {
             break;
     }
 
-    return (this->state = state);
+    if (!is_error()) {
+        this->state = state;
+    }
+
+    return state;
 }
 
 //! module trigger callback
