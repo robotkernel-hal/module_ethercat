@@ -913,7 +913,7 @@ int master::set_state(module_state_t state) {
         this->state = state;
     }
 
-    return state;
+    return this->state;
 }
 
 //! module trigger callback
