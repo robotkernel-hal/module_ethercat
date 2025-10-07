@@ -5,14 +5,12 @@ AC_PREREQ([2.69])
 AC_INIT([module_ethercat], [PACKAGE_VERSION], [Robert Burger <robert.burger@dlr.de>])
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_MACRO_DIR([m4])
-AM_INIT_AUTOMAKE([-Wall -Werror foreign subdir-objects silent-rules])
-m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
+AM_INIT_AUTOMAKE([-Wall -Werror foreign subdir-objects])
 
 # Checks for programs.
 m4_ifdef([AM_PROG_AR], [AM_PROG_AR])
-AX_CHECK_COMPILE_FLAG([-std=gnu11], [CFLAGS+=" -std=gnu11"], [AC_PROG_CC_C99])
 AC_PROG_CXX
-AX_CXX_COMPILE_STDCXX_11([ext], [mandatory])
+AX_CXX_COMPILE_STDCXX(14, [ext], [mandatory])
 AC_PROG_AWK
 AC_PROG_INSTALL
 AC_PROG_LIBTOOL
