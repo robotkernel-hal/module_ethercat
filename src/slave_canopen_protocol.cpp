@@ -29,8 +29,11 @@ using namespace robotkernel;
 using namespace module_ethercat;
 
 slave::canopen::canopen(std::shared_ptr<slave> slv, const request_type& type) :
-    service_provider_canopen_protocol::base(slv->master_dev->name, string_printf(
-                "slave_%d.%s", slv->index, type == request_type_eeprom ? "eeprom" : "mailbox")), 
+    service_provider_canopen_protocol::base(
+            slv->master_dev->name, 
+            slv->master_dev->use_real_names ?
+            string_printf("%s.%s", slv->name.c_str(), type == request_type_eeprom ? "eeprom" : "mailbox") : 
+            string_printf("slave_%d.%s", slv->index, type == request_type_eeprom ? "eeprom" : "mailbox")), 
     slv(slv), type(type) 
 {
 }

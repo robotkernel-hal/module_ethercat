@@ -28,9 +28,12 @@ using namespace std;
 using namespace robotkernel;
 using namespace module_ethercat;
 
-slave::file_protocol::file_protocol(std::shared_ptr<slave> slv)
-    :   service_provider_file_protocol::base(slv->master_dev->name, 
-            string_printf("slave_%d.mailbox", slv->index)), slv(slv) 
+slave::file_protocol::file_protocol(std::shared_ptr<slave> slv) :
+    service_provider_file_protocol::base(slv->master_dev->name, 
+            slv->master_dev->use_real_names ?
+            string_printf("%s.mailbox", slv->name.c_str()) : 
+            string_printf("slave_%d.mailbox", slv->index)), 
+    slv(slv) 
 {
 }
 
