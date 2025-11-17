@@ -252,7 +252,9 @@ slave::slave(int index, master *master_dev) :
  * \param master_dev master device
  */
 slave::slave(int index, const YAML::Node& node, master *master_dev) : 
-    service_provider_key_value::slave(master_dev->name, string_printf("slave_%d", index)),
+    service_provider_key_value::slave(master_dev->name, 
+            master_dev->use_real_names ? 
+            get_as<string>(node, "name") : string_printf("slave_%d", index)),
     sm_set_by_user(false), master_dev(master_dev) 
 {
     name  = get_as<string>(node, "name");
