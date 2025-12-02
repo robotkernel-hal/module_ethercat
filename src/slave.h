@@ -102,7 +102,7 @@ typedef enum {
 } ec_data_type;
 
 class slave : 
-    public std::enable_shared_from_this<slave>,
+    public virtual robotkernel::shared_base,
     public service_provider_key_value::slave
 {
     public:

@@ -751,7 +751,7 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
             robotkernel::add_device(req); }
 
 #define ADD_SERVICE_COLLECTOR_CLASS(req, cls, ...) \
-            { if (!(req)) { (req) = make_shared<cls>(shared_from_this(), ##__VA_ARGS__); \
+            { if (!(req)) { (req) = make_shared<cls>(shared_from_this_as<slave>(), ##__VA_ARGS__); \
                 ADD_SERVICE_COLLECTOR(req); } }
     // get transition
     uint32_t transition = GEN_STATE(from, to);
@@ -842,8 +842,7 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
 
             init_key_value();
             
-            robotkernel::add_device(std::static_pointer_cast<
-                    service_provider_key_value::base>(shared_from_this()));
+            robotkernel::add_device(shared_from_this_as<service_provider_key_value::base>());
             
             if (mbx_sup & EC_EEPROM_MBX_FOE)
                 ADD_SERVICE_COLLECTOR_CLASS(_mbx_foe, slave::file_protocol);

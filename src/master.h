@@ -104,7 +104,7 @@ class dc_clock_setter :
 };
 
 class master :
-    public std::enable_shared_from_this<master>,
+    public virtual robotkernel::shared_base,
     public service_provider_canopen_protocol::base,
     public robotkernel::module_base,
     public robotkernel::trigger_base
@@ -198,6 +198,7 @@ class master :
 
         std::string trigger_mod_name;
 
+        std::shared_ptr<robotkernel::triggerable> trg;
         int t_divisor;                        //!< trigger divisor
         robotkernel::sp_trigger_t t_dev;      //!< trigger device
 

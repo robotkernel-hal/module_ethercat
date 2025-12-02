@@ -102,7 +102,6 @@ master::master(const std::string& name, const YAML::Node& node) :
     config = YAML::Clone(node);
     elp.ll = ll;
     ec_opened = false;
-    t_divisor = 1;
 } 
 
 //! second stage init routine
@@ -117,10 +116,11 @@ void master::init() {
     get_yaml(bool,     threaded_startup, true);
     get_yaml(bool,     monitor_state, false);
     get_yaml(bool,     use_real_names, false);
-    trigger_device = get_as<string>(config, "trigger_device");
+    
+    trg = make_shared<triggerable>(config["trigger"], std::bind(&master::tick, this));
 
     /* creating dccs */
-    dccs = make_shared<dc_clock_setter>(shared_from_this());
+    dccs = make_shared<dc_clock_setter>(shared_from_this_as<master>());
 
     ec.ec_log_func_user = this;
     ec.ec_log_func = log_func;
@@ -695,12 +695,11 @@ int master::set_state(module_state_t state) {
         case preop_2_init:
         case preop_2_boot:
             // ====> deinit devices
-            t_dev->remove_trigger(shared_from_this());
-            t_dev = nullptr;
+            trg->release();
 
             state_transition(module_state_init);
 
-            robotkernel::remove_device(static_pointer_cast<service_provider_canopen_protocol::base>(shared_from_this()));
+            robotkernel::remove_device(shared_from_this_as<service_provider_canopen_protocol::base>());
 
             ec_close(&ec);
             ec_opened = false;
@@ -745,7 +744,7 @@ int master::set_state(module_state_t state) {
             }
             
             if (!is_error()) {
-                robotkernel::add_device(static_pointer_cast<service_provider_canopen_protocol::base>(shared_from_this()));
+                robotkernel::add_device(shared_from_this_as<service_provider_canopen_protocol::base>());
 
                 ec.dc.mode = dc_sync.mode_string == "ref_clock" ? 
                     dc_mode_ref_clock : dc_sync.mode_string == "master_as_ref_clock" ?
@@ -755,21 +754,16 @@ int master::set_state(module_state_t state) {
             state_transition(module_state_preop);
 
             if (!is_error()) {
-                t_dev = robotkernel::get_device<trigger>(trigger_device);
-
-                double rate = t_dev->get_rate() / t_divisor;
-                dc_sync.start_timer = (1.f / rate);
-
-                t_dev->add_trigger(shared_from_this());
+                trg->aquire();
+            
+                // trigger devices stores rate in [Hz]
+                double rate = trg->dev->get_rate() / trg->divisor;
 
                 if (dc_sync.timer_override > 0) {
                     ec.main_cycle_interval = dc_sync.timer_override;
 
                     rate = 1. / (dc_sync.timer_override / 1E9);
                 } else {
-                    // trigger devices stores rate in [Hz]
-                    rate = t_dev->get_rate() / t_divisor;
-
                     // ethercat master need timer interval in [ns]
                     dc_sync.timer_override = 
                         ec.main_cycle_interval = (1.f / rate) * 1E9;
