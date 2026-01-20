@@ -31,6 +31,7 @@ MODULE_DEF(module_ethercat, module_ethercat::master)
 
 using namespace std;
 using namespace robotkernel;
+using namespace robotkernel::helpers;
 using namespace module_ethercat;
 
 //! ethercat state string

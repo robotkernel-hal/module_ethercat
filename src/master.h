@@ -256,7 +256,7 @@ class master :
             int ret = ec_coe_master_odlist_read(&ec, buf, &len);
 
             if (ret != 0) {
-                throw std::runtime_error(robotkernel::string_printf("master: reading CoE object dictionary list "
+                throw std::runtime_error(robotkernel::helpers::string_printf("master: reading CoE object dictionary list "
                         "returned errorcode 0x%X!\n", ret));
             }
 
@@ -281,7 +281,7 @@ class master :
 
             if (ret != 0) {
                 // decode ret
-                throw std::runtime_error(robotkernel::string_printf("master: reading CoE object description index 0x%X "
+                throw std::runtime_error(robotkernel::helpers::string_printf("master: reading CoE object description index 0x%X "
                         "returned errorcode 0x%X: %s!\n", index, error_code, get_sdo_info_error_string(error_code)));
             }
 
@@ -312,7 +312,7 @@ class master :
 
             if (ret != 0) {
                 // decode ret
-                throw std::runtime_error(robotkernel::string_printf("master: reading CoE element description index 0x%X sub index %d"
+                throw std::runtime_error(robotkernel::helpers::string_printf("master: reading CoE element description index 0x%X sub index %d"
                         "returned errorcode 0x%X: %s!\n", index, sub_index, error_code, get_sdo_info_error_string(error_code)));
             }
 
@@ -368,7 +368,7 @@ class master :
 
                     if ((signed)desc.name.length() != std::count_if(desc.name.begin(), desc.name.end(), 
                                 [](unsigned char c){ return std::isprint(c); } ))
-                        desc.name = robotkernel::string_printf("subindex_%d", sub_index); // name is not printable
+                        desc.name = robotkernel::helpers::string_printf("subindex_%d", sub_index); // name is not printable
                 }
             }
         }
@@ -395,7 +395,7 @@ class master :
                 //}
 
                 // decode ret
-                throw std::runtime_error(robotkernel::string_printf("master: reading CoE element index 0x%X "
+                throw std::runtime_error(robotkernel::helpers::string_printf("master: reading CoE element index 0x%X "
                         "sub index %d returned errorcode 0x%X!\n",
                         index, sub_index, ret));
             }
@@ -423,7 +423,7 @@ class master :
 
             if (ret != 0) {
                 // decode ret
-                throw std::runtime_error(robotkernel::string_printf("master: writing CoE element value index 0x%X "
+                throw std::runtime_error(robotkernel::helpers::string_printf("master: writing CoE element value index 0x%X "
                         "sub index %d returned errorcode 0x%X!\n", 
                         index, sub_index, ret));
             }

@@ -28,6 +28,7 @@
 
 using namespace std;
 using namespace robotkernel;
+using namespace robotkernel::helpers;
 using namespace module_ethercat;
 
 slave::memory_inspection::memory_inspection(std::shared_ptr<slave> slv, const request_type& type) :

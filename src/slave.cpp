@@ -49,6 +49,7 @@
 
 using namespace std;
 using namespace robotkernel;
+using namespace robotkernel::helpers;
 using namespace module_ethercat;
 
 //! forward declaration ethercat state string
@@ -883,7 +884,7 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                 }
 
                 if (pdo_desc == "") {
-                    pdo_desc = string_printf("- uint8_t[%d]: buf\n", slv->pdin.len);
+                    pdo_desc = string_printf("- uint8_t[%zu]: buf\n", slv->pdin.len);
                 }
 
                 pdin = make_shared<robotkernel::triple_buffer>(slv->pdin.len, master_dev->name, base_name, pdo_desc);
@@ -914,7 +915,7 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                 }
                 
                 if (pdo_desc == "") {
-                    pdo_desc = string_printf("- uint8_t[%d]: buf\n", slv->pdout.len);
+                    pdo_desc = string_printf("- uint8_t[%zu]: buf\n", slv->pdout.len);
                 }
 
                 pdout = make_shared<robotkernel::triple_buffer>(slv->pdout.len, master_dev->name, base_name, pdo_desc);

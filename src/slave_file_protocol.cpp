@@ -26,6 +26,7 @@
 
 using namespace std;
 using namespace robotkernel;
+using namespace robotkernel::helpers;
 using namespace module_ethercat;
 
 slave::file_protocol::file_protocol(std::shared_ptr<slave> slv) :

@@ -28,6 +28,7 @@
 
 using namespace std;
 using namespace robotkernel;
+using namespace robotkernel::helpers;
 using namespace module_ethercat;
 
 //! group creation
