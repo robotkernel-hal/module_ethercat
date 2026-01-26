@@ -1,13 +1,10 @@
 _: &build_configs
-  - imports: [linux_defaults_build_profile]
-  - debian11-x86_64
+  - imports: [linux_defaults]
 
 builds:
   - context: conan
     build_file: conanfile.py
-    configurations:
-      - imports: [linux_defaults_build_profile]
-      - debian11-x86_64
+    configurations: *build_configs
   - context: conan
     build_file: bindings/python/conanfile.py
     configurations: *build_configs
