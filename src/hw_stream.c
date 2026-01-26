@@ -205,6 +205,7 @@ int hw_device_stream_get_tx_buffer(struct hw_common *phw, ec_frame_t **ppframe) 
     pframe->len = sizeof(ec_frame_t);
 
     *ppframe = pframe;
+    ret = EC_OK;
 
     return ret;
 }
