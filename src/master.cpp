@@ -302,7 +302,7 @@ void master::open() {
     if ((ifname.compare(0, 7, "stream:") == 0)) {
         string tmp = ifname.substr(7);
         rk_stream = robotkernel::get_device<stream>(tmp);
-        ret = hw_device_stream_open(&hw_stream, &ec, &rk_stream, hw_stream_read, hw_stream_write, 60, 0xFF);
+        ret = hw_device_stream_open(&hw_stream, &ec, &rk_stream, hw_stream_read, hw_stream_write, recv_prio - 1, recv_mask);
 
         if (ret == 0) {
             phw = &hw_stream.common;
