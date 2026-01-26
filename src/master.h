@@ -199,8 +199,6 @@ class master :
         std::string trigger_mod_name;
 
         std::shared_ptr<robotkernel::triggerable> trg;
-        int t_divisor;                        //!< trigger divisor
-        robotkernel::sp_trigger_t t_dev;      //!< trigger device
 
         //! named process data for distributed clocks info
         robotkernel::sp_process_data_t pdin_dc;

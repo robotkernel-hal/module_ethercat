@@ -234,7 +234,7 @@ void master::recv_dc() {
         int64_t rate_in_ns = dc_sync.start_timer * 1E9;
         rate_in_ns += ec.dc.timer_correction;
         rate = 1./((double)rate_in_ns / 1E9);
-        t_dev->set_rate(rate);
+        trg->dev->set_rate(rate);
                     
         // statistics (not really needed here)
         dc_sync.last_diff = ec.dc.act_diff;
@@ -834,7 +834,7 @@ int master::set_state(module_state_t state) {
             if (!is_error()) {
                 if ((ec.dc.have_dc != 0) && (ec.dc.mode == dc_mode_ref_clock)) {
                     while (!dc_sync.diff_converged) {
-                        double act_timer = 1. / t_dev->get_rate();
+                        double act_timer = 1. / trg->dev->get_rate();
                         log(info, "waiting for DC to converge... act_timer %13.9f, last_diff %13.9f, i_part %13.9f\n", act_timer, dc_sync.last_diff, dc_sync.i_part);
                         osal_sleep(1000000000);
                     }
@@ -947,7 +947,7 @@ void master::dc_set_clock() {
         int64_t rate_in_ns = dc_sync.start_timer * 1E9;
         rate_in_ns += ec.dc.timer_correction;
         rate = 1./((double)rate_in_ns / 1E9);
-        t_dev->set_rate(rate);
+        trg->dev->set_rate(rate);
 
         log(info, "setting new clock rate to %8.3f [Hz], correction %+8.3f, rtc %ld, dc %ld, act_diff %ld\n", rate, ec.dc.timer_correction, ec.dc.rtc_time, ec.dc.dc_time, ec.dc.act_diff);
         if (dc_sync.log) {
