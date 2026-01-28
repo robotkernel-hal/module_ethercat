@@ -27,6 +27,10 @@
 #include <list>
 #include <string>
 #include <stdint.h>
+#include <iostream>
+#include <vector>
+#include <cstddef>
+#include <type_traits>
 
 #include "robotkernel/trigger_base.h"
 #include "robotkernel/module_base.h"
@@ -78,29 +82,55 @@
 namespace module_ethercat {
 
 /* forward declarations */
-class master;
 class slave;
 extern const std::string state_strings[];
 
-class dc_clock_setter :
-    public robotkernel::runnable
+template<typename T>
+class moving_average
 {
-    private:
-        std::shared_ptr<master> parent;
+public:
+    explicit moving_average(size_t n)
+        : buffer_(n)
+    {}
 
-        std::mutex sync_m;
-        std::condition_variable sync_cv;
-
-    public:
-        dc_clock_setter(std::shared_ptr<master> parent) : parent(parent) {};
-        
-        /*! signal waiter */
-        void signal() {
-            sync_cv.notify_one();
+    /// Adds a new sample value and returns current average.
+    constexpr T add(T v)
+    {
+        if (count_ == buffer_.size()) {
+            sum_ -= buffer_[pos_];
+        } else {
+            ++count_;
         }
 
-        /* run thread */
-        void run();
+        buffer_[pos_] = v;
+        sum_ += v;
+
+        pos_ = (pos_ + 1) % buffer_.size();
+        return sum_ / static_cast<T>(count_);
+    }
+
+    /// Returns true if we already got <n> samples.
+    constexpr bool full() const noexcept 
+    { return count_ == buffer_.size(); }
+
+    /// Reset moving average.
+    constexpr void reset() noexcept {
+        sum_   = T{};
+        pos_   = 0;
+        count_ = 0;
+    }
+
+    constexpr std::size_t size() const noexcept
+    { return count_; }
+
+    constexpr std::size_t capacity() const noexcept
+    { return buffer_.size(); }
+
+private:
+    std::vector<T> buffer_;
+    T sum_{};             // moving sum
+    std::size_t pos_ = 0; // ring buffer position index
+    std::size_t count_ = 0;
 };
 
 class master :
@@ -123,6 +153,7 @@ class master :
         struct {
             bool log;
             std::string mode_string;
+            bool adjust_master_clock;
 
             bool first_run;
             double last_diff;
@@ -141,7 +172,11 @@ class master :
             uint64_t diff_converge_cycles;
             uint64_t diff_converge_cnt;
             bool diff_converged;
+    
+            uint64_t act_diff_threshold_dcsoffset_correction;
         } dc_sync;
+
+        moving_average<int64_t> act_diff_avg;
 
         robotkernel::sp_process_data_t pd_dc_sync;
 
@@ -207,8 +242,6 @@ class master :
         robotkernel::sp_trigger_t      recv_error_trigger;
 
         YAML::Node config;
-
-        std::shared_ptr<dc_clock_setter> dccs;
     public:
         //! construction
         /*!

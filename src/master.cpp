@@ -80,25 +80,14 @@ void log_func(ec_t *pec, int lvl, const char *format, ...) {
     //elp.log(loglvl, buf);
 }
 
-/*! run */
-void dc_clock_setter::run() {
-    while (running()) {
-        std::unique_lock<std::mutex> lk(sync_m);
-
-        if (sync_cv.wait_for(lk, std::chrono::milliseconds(100)) == std::cv_status::no_timeout) {
-            /* got signal here */
-            parent->dc_set_clock();
-        }
-    }
-}
-
 //! construction
 /*!
  * \param node yaml intialization node
  */
 master::master(const std::string& name, const YAML::Node& node) :
     service_provider_canopen_protocol::base(name, "master.mailbox"),
-    module_base("module_ethercat", name, node)
+    module_base("module_ethercat", name, node),
+    act_diff_avg(get_as<unsigned int>(node, "dc_act_diff_average_count", 100))
 {
     config = YAML::Clone(node);
     elp.ll = ll;
@@ -119,9 +108,6 @@ void master::init() {
     get_yaml(bool,     use_real_names, false);
     
     trg = make_shared<triggerable>(config["trigger"], std::bind(&master::tick, this));
-
-    /* creating dccs */
-    dccs = make_shared<dc_clock_setter>(shared_from_this_as<master>());
 
     ec.ec_log_func_user = this;
     ec.ec_log_func = log_func;
@@ -185,6 +171,7 @@ void master::init() {
     // read in distributed clocks settings
     dc_sync.log                        = get_as<bool>(config, "dc_sync_log", false);
     dc_sync.mode_string                = get_as<string>(config, "dc_sync_mode", "ref_clock");
+    dc_sync.adjust_master_clock        = get_as<bool>(config, "dc_adjust_master_clock", true);
     dc_sync.first_run                  = true;
     dc_sync.last_diff                  = 0.;
     dc_sync.p_part                     = 0.;
@@ -196,6 +183,8 @@ void master::init() {
     dc_sync.diff_converge_cycles       = get_as<uint64_t>(config, "dc_sync_converge_cycles", 10);
     dc_sync.diff_converge_cnt          = 0;
     dc_sync.diff_converged             = false;
+    dc_sync.act_diff_threshold_dcsoffset_correction = get_as<uint64_t>(config, "dc_act_diff_threshold_dcsoffset_correction", 100000);
+
 
     if (config["dc_sync.kp"] || config["dc_sync.ki"] || config["dc_sync.kd"])
         log(warning, 
@@ -231,10 +220,21 @@ static void cb_dc(void *arg, int num) {
 
 void master::recv_dc() {
     if (ec.dc.mode == dc_mode_ref_clock) {
-        int64_t rate_in_ns = dc_sync.start_timer * 1E9;
-        rate_in_ns += ec.dc.timer_correction;
-        rate = 1./((double)rate_in_ns / 1E9);
-        trg->dev->set_rate(rate);
+        if (dc_sync.adjust_master_clock) {
+            int64_t rate_in_ns = dc_sync.start_timer * 1E9;
+            rate_in_ns += ec.dc.timer_correction;
+            rate = 1./((double)rate_in_ns / 1E9);
+            trg->dev->set_rate(rate);
+        } else {
+            int64_t act_diff_middle = act_diff_avg.add(ec.dc.act_diff);
+
+            if (    act_diff_avg.full() && 
+                    (   (act_diff_middle > (int64_t)dc_sync.act_diff_threshold_dcsoffset_correction) || 
+                        (act_diff_middle < (-1 * (int64_t)dc_sync.act_diff_threshold_dcsoffset_correction)))) {
+                ec_async_check_dcsoffset(&ec.async_loop, act_diff_middle);
+                act_diff_avg.reset();
+            }
+        }
                     
         // statistics (not really needed here)
         dc_sync.last_diff = ec.dc.act_diff;
@@ -667,8 +667,6 @@ int master::set_state(module_state_t state) {
         case safeop_2_init:
         case safeop_2_boot:
             // ====> stop receiving measurements
-            dccs->stop();
-            
             robotkernel::remove_device(pd_dc_sync);
             pd_dc_sync = nullptr;
 
@@ -684,10 +682,6 @@ int master::set_state(module_state_t state) {
                 robotkernel::remove_device(recv_error_trigger);
                 recv_error_trigger = nullptr;
             }
-
-            // remove group trigger devices
-//            for (const auto& kv : groups)
-//                robotkernel::remove_device(kv.second);
 
             state_transition(module_state_preop);
 
@@ -772,6 +766,9 @@ int master::set_state(module_state_t state) {
                     log(info, "got trigger rate %f Hz\n", rate);
                 }
 
+                dc_sync.start_timer = ec.main_cycle_interval / 1E9;
+                log(info, "start timer %13.9f\n", dc_sync.start_timer);
+
                 for (int nr = 0; nr < ec.slave_cnt; ++nr) {
                     log(verbose, "slave %d: propagation delay %d [ns]\n", 
                             nr, ec.slaves[nr].pdelay);
@@ -813,16 +810,12 @@ int master::set_state(module_state_t state) {
             recv_error_trigger = make_shared<robotkernel::trigger>(name, "recv_error");
             robotkernel::add_device(recv_error_trigger);
 
-            // start cyclic operation via trigger
-            dccs->start();
-
             // add group trigger devices
             for (auto& kv : groups) {
                 auto& grp = kv.second; 
 
                 double grp_rate = (rate / grp->divisor);
                 grp->set_rate(grp_rate);
-//                robotkernel::add_device(grp);
     
                 for (auto& s_nr : grp->_slaves) {
                     _slave_info[s_nr]->rate = grp_rate;
@@ -836,6 +829,7 @@ int master::set_state(module_state_t state) {
                     while (!dc_sync.diff_converged) {
                         double act_timer = 1. / trg->dev->get_rate();
                         log(info, "waiting for DC to converge... act_timer %13.9f, last_diff %13.9f, i_part %13.9f\n", act_timer, dc_sync.last_diff, dc_sync.i_part);
+                        log(info, "ec info: act_diff %zd, p_part %13.9f, i_part %13.9f, timer corr %13.9f\n", ec.dc.act_diff, ec.dc.control.p_part, ec.dc.control.i_part, ec.dc.timer_correction);
                         osal_sleep(1000000000);
                     }
                 }
