@@ -153,7 +153,6 @@ class master :
         struct {
             bool log;
             std::string mode_string;
-            bool adjust_master_clock;
 
             bool first_run;
             double last_diff;
@@ -173,6 +172,7 @@ class master :
             uint64_t diff_converge_cnt;
             bool diff_converged;
     
+            bool adjust_master_clock;
             uint64_t act_diff_threshold_dcsoffset_correction;
         } dc_sync;
 

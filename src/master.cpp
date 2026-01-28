@@ -874,7 +874,9 @@ int master::set_state(module_state_t state) {
                     "- int64_t: timer_override\n"
                     "- uint64_t: diff_converge_cycles\n"
                     "- uint64_t: diff_converge_cnt\n"
-                    "- uint32_t: diff_converged\n";
+                    "- uint32_t: diff_converged\n"
+                    "- uint32_t: adjust_master_clock\n"
+                    "- uint64_t: act_diff_threshold_dcsoffset_correction\n";
 
                 pd_dc_sync = make_shared<robotkernel::pointer_buffer>(sizeof(dc_sync) - (size_t)((uint8_t *)&dc_sync.first_run - (uint8_t *)&dc_sync), (uint8_t *)&dc_sync.first_run, 
                         name, "dc_sync_ctrl.inputs", pd_dc_sync_desc);
