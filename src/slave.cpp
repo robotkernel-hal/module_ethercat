@@ -401,6 +401,35 @@ service_provider_key_value::key_read_only<T> *create_key_read_only(service_provi
     return k;
 }
 
+namespace service_provider_key_value {
+
+class key_read_only_charp : public service_provider_key_value::key_base {
+    char *ptr;
+
+    public:
+        key_read_only_charp(slave *parent, std::string name, char *ptr, bool after_change_cb) 
+            : service_provider_key_value::key_base(parent, name, after_change_cb), ptr(ptr) {};
+
+         virtual void _set_value(std::string repr) override {}
+         virtual void _set_value_from_yaml(const YAML::Node& value) override {}
+         virtual void* get_void_pointer() override { return (void*)ptr; }
+         virtual std::string get_value() override {
+            return string_printf("%s", ptr);
+        }
+};
+
+};
+
+service_provider_key_value::key_read_only_charp *create_key_read_only_charp(service_provider_key_value::slave *parent, std::string name, char* val, std::string desc = "", 
+        std::string unit = "", std::string default_value = "", std::string format = "") {
+    auto *k = new service_provider_key_value::key_read_only_charp(parent, name, val, false);
+    k->describe(desc);
+    k->unit(unit);
+    k->default_value(default_value);
+    k->format(format);
+    return k;
+}
+
 void slave::init_key_value() {
     _add_key(create_key<int>     (this, "index", &index, "Position where attached on EtherCAT"));
     _add_key(create_key<string>  (this, "name", &name, "Slave name"));
@@ -445,8 +474,8 @@ void slave::init_key_value() {
                 &master_dev->ec.slaves[index].eeprom.general.mbr, (desc)));
 #define _add_key_string(idx, name, desc) \
     if (((idx) > 0) && ((idx) <=master_dev->ec.slaves[index].eeprom.strings_cnt)) \
-    _add_key(create_key_read_only<char *>(this, (name), \
-                (osal_char_t **)&master_dev->ec.slaves[index].eeprom.strings[(idx) - 1], (desc)));
+    _add_key(create_key_read_only_charp(this, (name), \
+                (char *)&(master_dev->ec.slaves[index].eeprom.strings[(idx) - 1][0]), (desc)));
 #define _add_key_general_string(mbr, name, desc) \
     _add_key_string(master_dev->ec.slaves[index].eeprom.general.mbr, "eeprom.general." name, (desc)) 
 
@@ -471,8 +500,8 @@ void slave::init_key_value() {
 
     for (int i = 0; i < master_dev->ec.slaves[index].eeprom.strings_cnt; ++i) {
         auto prefix = string_printf("eeprom.strings.%d", i);
-        _add_key(create_key_read_only<char *>(this, prefix,
-                    (osal_char_t **)&master_dev->ec.slaves[index].eeprom.strings[i], ""));
+        _add_key(create_key_read_only_charp(this, prefix,
+                    &(master_dev->ec.slaves[index].eeprom.strings[i][0]), ""));
     }
 
     for (int i = 0; i < master_dev->ec.slaves[index].eeprom.fmmus_cnt; ++i) {
