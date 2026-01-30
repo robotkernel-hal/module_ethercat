@@ -658,7 +658,7 @@ string slave::canopen::get_pdo_description(uint16_t idx) {
             auto& _data_type_desc = data_type_2_desc[desc.data_type];
             string data_type = _data_type_desc.data_type;
 
-            if (desc.data_type == 0x0000) {
+            if ((desc.data_type == 0x0000) || (_data_type_desc.bitsize == -1)) {
                 stringstream ss;
                 ss << "int" << (entry & 0x000000FF) << "_t";
                 data_type = ss.str();
