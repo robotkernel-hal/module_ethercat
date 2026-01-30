@@ -34,8 +34,8 @@ using namespace module_ethercat;
 slave::memory_inspection::memory_inspection(std::shared_ptr<slave> slv, const request_type& type) :
     service_provider_memory_inspection::base(slv->master_dev->name, 
             slv->master_dev->use_real_names ?
-            string_printf("%s.%s", slv->name.c_str(), type == request_type_eeprom ? "eeprom" : "mailbox") : 
-            string_printf("slave_%d.%s", slv->index, type == request_type_eeprom ? "eeprom" : "mailbox")), 
+            string_printf("%s.%s", slv->name.c_str(), type == request_type_eeprom ? "eeprom" : "memory") : 
+            string_printf("slave_%d.%s", slv->index, type == request_type_eeprom ? "eeprom" : "memory")), 
     slv(slv), type(type) 
 {
 
