@@ -168,6 +168,9 @@ void master::init() {
         }
     }
 
+    max_timer_deviation_in_percent = get_as<unsigned int>(config, "max_timer_deviation_in_percent", 5);
+    if (max_timer_deviation_in_percent > 100) { max_timer_deviation_in_percent = 100; }
+
     // read in distributed clocks settings
     dc_sync.log                        = get_as<bool>(config, "dc_sync_log", false);
     dc_sync.mode_string                = get_as<string>(config, "dc_sync_mode", "ref_clock");
@@ -184,7 +187,6 @@ void master::init() {
     dc_sync.diff_converge_cnt          = 0;
     dc_sync.diff_converged             = false;
     dc_sync.act_diff_threshold_dcsoffset_correction = get_as<uint64_t>(config, "dc_act_diff_threshold_dcsoffset_correction", 100000);
-
 
     if (config["dc_sync.kp"] || config["dc_sync.ki"] || config["dc_sync.kd"])
         log(warning, 
@@ -221,10 +223,18 @@ static void cb_dc(void *arg, int num) {
 void master::recv_dc() {
     if (ec.dc.mode == dc_mode_ref_clock) {
         if (dc_sync.adjust_master_clock) {
-            int64_t rate_in_ns = dc_sync.start_timer * 1E9;
+            int64_t rate_in_ns = dc_sync.start_timer;
             rate_in_ns += ec.dc.timer_correction;
-            rate = 1./((double)rate_in_ns / 1E9);
-            trg->dev->set_rate(rate);
+            rate = ((double)rate_in_ns / 1E9);
+
+            // apply max deviation (all in [s])
+            if (rate < min_timer_rate) {
+                rate = min_timer_rate;
+            } else if (rate > max_timer_rate) {
+                rate = max_timer_rate;
+            }
+
+            trg->dev->set_rate(1. / rate); // set in [Hz]
         } else {
             int64_t act_diff_middle = act_diff_avg.add(ec.dc.act_diff);
 
@@ -242,8 +252,8 @@ void master::recv_dc() {
         dc_sync.p_part = ec.dc.control.p_part;
 
         if (!dc_sync.diff_converged) {
-            double margin = 1. / (dc_sync.start_timer / 100.);
-            double fast_margin = 1. / (dc_sync.start_timer / 1000.);
+            double margin = dc_sync.start_timer / 100.;
+            double fast_margin = dc_sync.start_timer / 1000.;
 
             if (ec.dc.act_diff < fast_margin) {
                 dc_sync.diff_converge_cnt += 10;
@@ -769,8 +779,11 @@ int master::set_state(module_state_t state) {
                     log(info, "got trigger rate %f Hz\n", rate);
                 }
 
-                dc_sync.start_timer = ec.main_cycle_interval / 1E9;
-                log(info, "start timer %13.9f\n", dc_sync.start_timer);
+                dc_sync.start_timer = ec.main_cycle_interval;
+                min_timer_rate = (1. - (max_timer_deviation_in_percent / 100.)) * ec.main_cycle_interval;
+                max_timer_rate = (1. + (max_timer_deviation_in_percent / 100.)) * ec.main_cycle_interval;
+
+                log(info, "start timer %13.9f, \n", dc_sync.start_timer / 1E9);
 
                 for (int nr = 0; nr < ec.slave_cnt; ++nr) {
                     log(verbose, "slave %d: propagation delay %d [ns]\n", 
@@ -817,8 +830,8 @@ int master::set_state(module_state_t state) {
             for (auto& kv : groups) {
                 auto& grp = kv.second; 
 
-                double grp_rate = (rate / grp->divisor);
-                grp->set_rate(grp_rate);
+                double grp_rate = (rate * grp->divisor);
+                grp->set_rate(1. / grp_rate);
     
                 for (auto& s_nr : grp->_slaves) {
                     _slave_info[s_nr]->rate = grp_rate;
@@ -870,7 +883,7 @@ int master::set_state(module_state_t state) {
                     "- double: last_diff\n"
                     "- double: p_part\n"
                     "- double: i_part\n"
-                    "- double: start_timer\n"
+                    "- uint64_t: start_timer\n"
                     "- double: kp\n"
                     "- double: ki\n"
                     "- double: i_limit\n"
@@ -938,43 +951,5 @@ void master::tick() {
 
     pd_cookie++;
     pd_cond.notify_all();
-}
-
-/*! Correct Master clock according to distributed clock. */
-void master::dc_set_clock() {
-    try {
-        int64_t rate_in_ns = dc_sync.start_timer * 1E9;
-        rate_in_ns += ec.dc.timer_correction;
-        rate = 1./((double)rate_in_ns / 1E9);
-        trg->dev->set_rate(rate);
-
-        log(info, "setting new clock rate to %8.3f [Hz], correction %+8.3f, rtc %ld, dc %ld, act_diff %ld\n", rate, ec.dc.timer_correction, ec.dc.rtc_time, ec.dc.dc_time, ec.dc.act_diff);
-        if (dc_sync.log) {
-            log(verbose, "setting new clock rate to %8.3f [Hz]\n", rate);
-        }
-    } catch (exception& e) {
-        log(warning, "setting new clock failed: %s\n", e.what());
-    }
-
-    dc_sync.first_run = false;
-    
-#if 0
-    // check if diff converged
-    if (    !dc_sync.diff_converged         &&
-            dc_sync.diff_converge_cycles    && 
-            ((++dc_sync.diff_converge_cnt % dc_sync.diff_converge_cycles) == 0)) {
-        dc_sync.diff_converge_cnt = 0;
-
-        double margin = 1. / (dc_sync.start_timer / 100.);
-
-        if (fabs(ec.dc.timer_correction) < margin) {
-            dc_sync.diff_converged = true;
-        }
-    }
-#endif
-
-    if (pd_dc_sync) {
-        pd_dc_sync->trigger();
-    }
 }
 

@@ -159,14 +159,14 @@ class master :
             double p_part;
             double i_part;
 
-            double start_timer;
+            uint64_t start_timer;           //!< @brief Start timer in [ns]
 
             double kp;
             double ki;
             double i_limit;
             double slew_rate;
         
-            int64_t timer_override;
+            int64_t timer_override;         //!< @brief Timer override in [ns]
             
             uint64_t diff_converge_cycles;
             uint64_t diff_converge_cnt;
@@ -179,6 +179,10 @@ class master :
         moving_average<int64_t> act_diff_avg;
 
         robotkernel::sp_process_data_t pd_dc_sync;
+
+        unsigned int max_timer_deviation_in_percent; //!< brief Deviation in rage [0-100] percent.
+        uint64_t min_timer_rate;  //!< @brief Maximum allowed timer rate in [ns]
+        uint64_t max_timer_rate;  //!< @brief Maximum allowed timer rate in [ns]
 
         struct {
             bool configure_tun;
@@ -268,9 +272,6 @@ class master :
          * \return success or failure
          */
         int set_state(module_state_t state);
-
-        /*! Correct Master clock according to distributed clock. */
-        void dc_set_clock();
 
         void recv_group(int group_index);
         void recv_dc();
