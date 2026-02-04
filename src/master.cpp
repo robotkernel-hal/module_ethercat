@@ -584,8 +584,9 @@ void master::open() {
 
 //! destruction 
 master::~master() {
-    ec_close(&ec);
-    ec_opened = false;
+    if (state != module_state_init) {
+        set_state(module_state_init);
+    }
 
     for (auto& kv : _slave_info) {
         kv.second->clean_up();
@@ -671,11 +672,13 @@ int master::set_state(module_state_t state) {
             pd_dc_sync = nullptr;
 
             if (pdin_dc) {
-                pdin_dc->reset_provider(pdin_dc_provider);
+                auto tmp = pdin_dc;
+                pdin_dc = nullptr;
+
+                tmp->reset_provider(pdin_dc_provider);
                 pdin_dc_provider = nullptr;
 
-                robotkernel::remove_device(pdin_dc);
-                pdin_dc = nullptr;
+                robotkernel::remove_device(tmp);
             }
             
             if (recv_error_trigger) {
