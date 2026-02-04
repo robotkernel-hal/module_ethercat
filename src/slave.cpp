@@ -824,6 +824,8 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
         case preop_2_boot:
             delete_keys();
 
+            robotkernel::remove_device(shared_from_this_as<service_provider_key_value::base>());
+
             // ====> deinit devices
             REMOVE_SERVICE_COLLECTOR(_mbx_foe);
             REMOVE_SERVICE_COLLECTOR(mbx_coe);
