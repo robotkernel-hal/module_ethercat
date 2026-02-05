@@ -223,18 +223,18 @@ static void cb_dc(void *arg, int num) {
 void master::recv_dc() {
     if (ec.dc.mode == dc_mode_ref_clock) {
         if (dc_sync.adjust_master_clock) {
-            int64_t rate_in_ns = dc_sync.start_timer;
+            uint64_t rate_in_ns = dc_sync.start_timer;
             rate_in_ns += ec.dc.timer_correction;
-            rate = ((double)rate_in_ns / 1E9);
 
             // apply max deviation (all in [s])
-            if (rate < min_timer_rate) {
-                rate = min_timer_rate;
-            } else if (rate > max_timer_rate) {
-                rate = max_timer_rate;
+            if (rate_in_ns < min_timer_rate) {
+                rate_in_ns = min_timer_rate;
+            } else if (rate_in_ns > max_timer_rate) {
+                rate_in_ns = max_timer_rate;
             }
-
-            trg->dev->set_rate(1. / rate); // set in [Hz]
+            
+            rate = 1. / ((double)rate_in_ns / 1E9);
+            trg->dev->set_rate(rate); // set in [Hz]
         } else {
             int64_t act_diff_middle = act_diff_avg.add(ec.dc.act_diff);
 
