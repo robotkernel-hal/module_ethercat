@@ -9,7 +9,7 @@ class MainProject(ConanFile):
     url = "https://rmc-github.robotic.dlr.de/robotkernel/module_ethercat"
     exports_sources = ["*", "!.gitignore"]
     requires = [
-            "libethercat/0.7.7@common/snapshot",
+            "libethercat/0.7.7@common/stable",
             "robotkernel/[~6]@robotkernel/unstable",
             "service_provider_memory_inspection/[~6]@robotkernel/unstable",
             "service_provider_canopen_protocol/[~6]@robotkernel/unstable",
