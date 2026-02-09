@@ -39,7 +39,8 @@
 #include "slave.h"
 #include "hw_stream.h"
 
-#include "libethercat/config.h"
+#include "libethercat/settings.h"
+#include "libethercat/common.h"
 #include "libethercat/ec.h"
 #include "libethercat/slave.h"
 #include "libethercat/coe.h"
