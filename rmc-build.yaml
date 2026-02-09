@@ -1,6 +1,5 @@
 _: &build_configs
   - imports: [linux_defaults_build_profile]
-  - debian11-x86_64
 
 builds:
   - context: conan

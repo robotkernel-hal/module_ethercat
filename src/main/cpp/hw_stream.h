@@ -40,7 +40,12 @@
 #ifndef LIBETHERCAT_HW_STREAM_H
 #define LIBETHERCAT_HW_STREAM_H
 
-#include <libethercat/hw.h>
+#include "libethercat/common.h"
+#include "libethercat/hw.h"
+
+#include "libosal/osal.h"
+#include "libosal/task.h"
+#include "libosal/types.h"
 
 typedef size_t (*stream_read_t)(void *user, void *buf, size_t nbyte);
 typedef size_t (*stream_write_t)(void *user, void *buf, size_t nbyte);

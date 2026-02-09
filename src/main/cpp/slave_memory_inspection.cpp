@@ -79,7 +79,7 @@ void slave::memory_inspection::read_memory(const uint64_t& address,
         }
         case request_type_memory: {
             for (unsigned offset = 0; offset < data.size(); offset+=100) {
-                uint32_t act_len = min(100, data.size() - offset);
+                uint32_t act_len = std::min((size_t)100, (size_t)(data.size() - offset));
                 uint16_t wkc;
 
                 ec_fprd(&slv->master_dev->ec, slv->master_dev->ec.slaves[slv->index].fixed_address, 
@@ -108,7 +108,7 @@ void slave::memory_inspection::write_memory(const uint64_t& address,
         }
         case request_type_memory: {
             for (unsigned offset = 0; offset < data.size(); offset+=100) {
-                uint32_t act_len = min(100, data.size() - offset);
+                uint32_t act_len = std::min((size_t)100, (size_t)(data.size() - offset));
                 uint16_t wkc;
 
                 ec_fpwr(&slv->master_dev->ec, slv->master_dev->ec.slaves[slv->index].fixed_address, 
