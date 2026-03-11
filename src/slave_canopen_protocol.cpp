@@ -580,7 +580,7 @@ std::map<uint16_t, data_type_desc_t> data_type_2_desc = {
  */
 string slave::canopen::get_pdo_description(uint16_t idx) {
     YAML::Emitter out;
-    out << YAML::BeginSeq;
+    out << YAML::BeginMap;
 
     // read mapped pdo count
     service_provider_canopen_protocol::element_t element;
@@ -691,16 +691,14 @@ string slave::canopen::get_pdo_description(uint16_t idx) {
                     ss << "combined_" << combined_cnt++;
                     string combined_name = ss.str();
 
-                    out << YAML::BeginMap;
-                    out << YAML::Key << combined_data_type << YAML::Value << combined_name;
-                    out << YAML::EndMap;
+                    out << YAML::Key << combined_name << YAML::Value << YAML::BeginMap << 
+                        YAML::Key << "type" << YAML::Value << combined_data_type << YAML::EndMap;
 
                     stored_bits = 0;
                 }
 
-                out << YAML::BeginMap;
-                out << YAML::Key << data_type << YAML::Value << desc.name;
-                out << YAML::EndMap;
+                out << YAML::Key << desc.name << YAML::Value << YAML::BeginMap << 
+                    YAML::Key << "type" << YAML::Value << data_type << YAML::EndMap;
             }
         }                        
 
@@ -713,9 +711,8 @@ string slave::canopen::get_pdo_description(uint16_t idx) {
             ss << "combined_" << combined_cnt++;
             string combined_name = ss.str();
 
-            out << YAML::BeginMap;
-            out << YAML::Key << combined_data_type << YAML::Value << combined_name;
-            out << YAML::EndMap;
+            out << YAML::Key << combined_name << YAML::Value << YAML::BeginMap << 
+                YAML::Key << "type" << YAML::Value << combined_data_type << YAML::EndMap;
 
             stored_bits = 0;
         }

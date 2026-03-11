@@ -172,8 +172,8 @@ void master::init() {
     if (max_timer_deviation_in_percent > 100) { max_timer_deviation_in_percent = 100; }
 
     // read in distributed clocks settings
-    dc_sync.log                        = get_as<bool>(config, "dc_sync_log", false);
-    dc_sync.mode_string                = get_as<string>(config, "dc_sync_mode", "ref_clock");
+    dc_sync_log                        = get_as<bool>(config, "dc_sync_log", false);
+    dc_sync_mode_string                = get_as<string>(config, "dc_sync_mode", "ref_clock");
     dc_sync.adjust_master_clock        = get_as<bool>(config, "dc_adjust_master_clock", true);
     dc_sync.first_run                  = true;
     dc_sync.last_diff                  = 0.;
@@ -679,6 +679,7 @@ int master::set_state(module_state_t state) {
         case safeop_2_boot:
             // ====> stop receiving measurements
             robotkernel::remove_device(pd_dc_sync);
+            pd_master_dc_sync_inputs::remove_definition();
             pd_dc_sync = nullptr;
 
             if (pdin_dc) {
@@ -689,6 +690,7 @@ int master::set_state(module_state_t state) {
                 pdin_dc_provider = nullptr;
 
                 robotkernel::remove_device(tmp);
+                pd_master_dc_inputs::remove_definition();
             }
             
             if (recv_error_trigger) {
@@ -754,8 +756,8 @@ int master::set_state(module_state_t state) {
             if (!is_error()) {
                 robotkernel::add_device(shared_from_this_as<service_provider_canopen_protocol::base>());
 
-                ec.dc.mode = dc_sync.mode_string == "ref_clock" ? 
-                    dc_mode_ref_clock : dc_sync.mode_string == "master_as_ref_clock" ?
+                ec.dc.mode = dc_sync_mode_string == "ref_clock" ? 
+                    dc_mode_ref_clock : dc_sync_mode_string == "master_as_ref_clock" ?
                     dc_mode_master_as_ref_clock : dc_mode_master_clock;
             }
 
@@ -870,32 +872,16 @@ int master::set_state(module_state_t state) {
                     "- int64_t: act_diff\n"
                     "- uint64_t: packet_duration\n";
 
+                pd_master_dc_inputs::register_definition();
                 pdin_dc = make_shared<robotkernel::triple_buffer>(
-                        (uint8_t *)&ec.dc.timer_correction - (uint8_t *)&ec.dc.dc_time,
-                        name, "dc.inputs", pdo_desc);
+                        pd_master_dc_inputs::size, name, "dc.inputs", pd_master_dc_inputs::definition_name);
                 pdin_dc_provider = make_shared<robotkernel::pd_provider>(name);
                 pdin_dc->set_provider(pdin_dc_provider);
                 robotkernel::add_device(pdin_dc);
 
-                string pd_dc_sync_desc = 
-                    "- uint32_t: first_run\n"
-                    "- uint32_t: padding_0\n"
-                    "- double: last_diff\n"
-                    "- double: p_part\n"
-                    "- double: i_part\n"
-                    "- uint64_t: start_timer\n"
-                    "- double: kp\n"
-                    "- double: ki\n"
-                    "- double: i_limit\n"
-                    "- int64_t: timer_override\n"
-                    "- uint64_t: diff_converge_cycles\n"
-                    "- uint64_t: diff_converge_cnt\n"
-                    "- uint32_t: diff_converged\n"
-                    "- uint32_t: adjust_master_clock\n"
-                    "- uint64_t: act_diff_threshold_dcsoffset_correction\n";
-
-                pd_dc_sync = make_shared<robotkernel::pointer_buffer>(sizeof(dc_sync) - (size_t)((uint8_t *)&dc_sync.first_run - (uint8_t *)&dc_sync), (uint8_t *)&dc_sync.first_run, 
-                        name, "dc_sync_ctrl.inputs", pd_dc_sync_desc);
+                pd_master_dc_sync_inputs::register_definition();
+                pd_dc_sync = make_shared<robotkernel::pointer_buffer>(pd_master_dc_sync_inputs::size, (uint8_t *)&dc_sync, 
+                           name, "dc_sync_ctrl.inputs", pd_master_dc_sync_inputs::definition_name);
                 robotkernel::add_device(pd_dc_sync);
             }
 

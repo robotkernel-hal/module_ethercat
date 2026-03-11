@@ -1,0 +1,24 @@
+pds:
+  module_ethercat/master_dc_inputs:
+    dc_time: { type: uint64_t }
+    dc_sto: { type: int64_t }
+    rtc_time: { type: uint64_t }
+    rtc_sto: { type: int64_t }
+    act_diff: { type: int64_t }
+    packet_duration: { type: uint64_t }
+  module_ethercat/master_dc_sync_inputs:
+    first_run: { type: uint32_t }
+    padding_0: { type: uint32_t }
+    last_diff: { type: double }
+    p_part: { type: double }
+    i_part: { type: double }
+    start_timer: { type: uint64_t }
+    kp: { type: double }
+    ki: { type: double }
+    i_limit: { type: double }
+    timer_override: { type: int64_t }
+    diff_converge_cycles: { type: uint64_t }
+    diff_converge_cnt: { type: uint64_t }
+    diff_converged: { type: uint32_t }
+    adjust_master_clock: { type: uint32_t }
+    act_diff_threshold_dcsoffset_correction: { type: uint64_t }

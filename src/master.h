@@ -42,6 +42,7 @@
 #include "group.h"
 #include "slave.h"
 #include "hw_stream.h"
+#include "gen_definitions.h"
 
 #include "libethercat/settings.h"
 #include "libethercat/common.h"
@@ -150,31 +151,9 @@ class master :
         typedef std::map<int, wp_slave_t> slave_map_t;
         slave_map_t _slave_info;
 
-        struct {
-            bool log;
-            std::string mode_string;
-
-            bool first_run;
-            double last_diff;
-            double p_part;
-            double i_part;
-
-            uint64_t start_timer;           //!< @brief Start timer in [ns]
-
-            double kp;
-            double ki;
-            double i_limit;
-            double slew_rate;
-        
-            int64_t timer_override;         //!< @brief Timer override in [ns]
-            
-            uint64_t diff_converge_cycles;
-            uint64_t diff_converge_cnt;
-            bool diff_converged;
-    
-            bool adjust_master_clock;
-            uint64_t act_diff_threshold_dcsoffset_correction;
-        } dc_sync;
+        bool dc_sync_log;
+        std::string dc_sync_mode_string;
+        pd_master_dc_sync_inputs::data dc_sync; 
 
         moving_average<int64_t> act_diff_avg;
 

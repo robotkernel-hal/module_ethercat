@@ -915,10 +915,14 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                 }
 
                 if (pdo_desc == "") {
-                    pdo_desc = string_printf("- uint8_t[%zu]: buf\n", slv->pdin.len);
+                    pdo_desc = string_printf("buf: { type: uint8_t, array: true, size: %zu }", slv->pdin.len);
                 }
 
-                pdin = make_shared<robotkernel::triple_buffer>(slv->pdin.len, master_dev->name, base_name, pdo_desc);
+                string def_name = master_dev->use_real_names ?
+                    string_printf("module_ethercat/%s/inputs", name.c_str()) : 
+                    string_printf("module_ethercat/slave_%d/inputs", index);
+                robotkernel::add_pd_definition(def_name, pdo_desc);
+                pdin = make_shared<robotkernel::triple_buffer>(slv->pdin.len, master_dev->name, base_name, def_name);
                 pdin_provider = make_shared<robotkernel::pd_provider>(master_dev->name + "." + base_name);
                 pdin->set_provider(pdin_provider);
                 robotkernel::add_device(pdin);
@@ -946,10 +950,14 @@ void slave::post_state_transition(module_state_t from, module_state_t to) {
                 }
                 
                 if (pdo_desc == "") {
-                    pdo_desc = string_printf("- uint8_t[%zu]: buf\n", slv->pdout.len);
+                    pdo_desc = string_printf("buf: { type: uint8_t, array: true, size: %zu }", slv->pdout.len);
                 }
 
-                pdout = make_shared<robotkernel::triple_buffer>(slv->pdout.len, master_dev->name, base_name, pdo_desc);
+                string def_name = master_dev->use_real_names ?
+                    string_printf("module_ethercat/%s/outputs", name.c_str()) : 
+                    string_printf("module_ethercat/slave_%d/outputs", index);
+                robotkernel::add_pd_definition(def_name, pdo_desc);
+                pdout = make_shared<robotkernel::triple_buffer>(slv->pdout.len, master_dev->name, base_name, def_name);
                 pdout_consumer = make_shared<robotkernel::pd_consumer>(master_dev->name + "." + base_name);
                 pdout->set_consumer(pdout_consumer);
                 robotkernel::add_device(pdout);
