@@ -764,7 +764,7 @@ int master::set_state(module_state_t state) {
             state_transition(module_state_preop);
 
             if (!is_error()) {
-                trg->aquire();
+                trg->acquire();
             
                 // trigger devices stores rate in [Hz]
                 double rate = trg->dev->get_rate() / trg->divisor;
