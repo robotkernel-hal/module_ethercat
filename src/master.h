@@ -217,6 +217,7 @@ class master :
         std::string trigger_mod_name;
 
         std::shared_ptr<robotkernel::triggerable> trg;
+        std::shared_ptr<robotkernel::triggerable> recv_trg;
 
         //! named process data for distributed clocks info
         robotkernel::sp_process_data_t pdin_dc;
@@ -242,6 +243,8 @@ class master :
 
         //! module trigger callback
         virtual void tick() override;
+        virtual void send_trigger();
+        virtual void recv_trigger();
 
         void state_transition(const module_state_t& to_state); 
 

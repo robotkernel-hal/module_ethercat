@@ -107,7 +107,15 @@ void master::init() {
     get_yaml(bool,     monitor_state, false);
     get_yaml(bool,     use_real_names, false);
     
-    trg = make_shared<triggerable>(config["trigger"], std::bind(&master::tick, this));
+    if (config["trigger"]) {
+        trg = make_shared<triggerable>(config["trigger"], std::bind(&master::tick, this));
+
+        if (config["send_trigger"]) log(warning, "send_trigger ignored, global trigger specified!");
+        if (config["receive_trigger"]) log(warning, "receive_trigger ignored, global trigger specified!");
+    } else {
+        trg = make_shared<triggerable>(config["send_trigger"], std::bind(&master::send_trigger, this));
+        recv_trg = make_shared<triggerable>(config["recv_trigger"], std::bind(&master::recv_trigger, this));
+    }
 
     ec.ec_log_func_user = this;
     ec.ec_log_func = log_func;
@@ -235,6 +243,7 @@ void master::recv_dc() {
             
             rate = 1. / ((double)rate_in_ns / 1E9);
             trg->dev->set_rate(rate); // set in [Hz]
+            if (recv_trg) recv_trg->dev->set_rate(rate); 
         } else {
             int64_t act_diff_middle = act_diff_avg.add(ec.dc.act_diff);
 
@@ -705,7 +714,8 @@ int master::set_state(module_state_t state) {
         case preop_2_init:
         case preop_2_boot:
             // ====> deinit devices
-            trg->release();
+            if (trg) trg->release();
+            else { recv_trg->release(); recv_trg->release(); }
 
             state_transition(module_state_init);
 
@@ -765,6 +775,7 @@ int master::set_state(module_state_t state) {
 
             if (!is_error()) {
                 trg->acquire();
+                if (recv_trg) recv_trg->acquire();
             
                 // trigger devices stores rate in [Hz]
                 double rate = trg->dev->get_rate() / trg->divisor;
@@ -934,6 +945,41 @@ void master::tick() {
     if (hw_tx(ec.phw) != EC_OK) {
         log(error, "error sending EtherCAT frames!\n");
     }
+
+    hw_rx(ec.phw);
+
+    pd_cookie++;
+    pd_cond.notify_all();
+}
+
+void master::send_trigger() {
+    int i;
+
+    if (!ec_opened) { return; }
+
+    for (i = 0; i < ec.pd_group_cnt; ++i) {
+        auto& g = groups[i];
+        if (ec_group_will_be_sent(&ec, i) != 0) {
+            for (const auto& slave : g->_slaves) {
+                _slave_info[slave]->pdout_handler();
+            }
+        }
+    }
+
+    ec_send_distributed_clocks_sync(&ec);
+    ec_send_process_data(&ec);
+
+    if (monitor_state) {
+        ec_send_brd_ec_state(&ec); 
+    }
+
+    if (hw_tx(ec.phw) != EC_OK) {
+        log(error, "error sending EtherCAT frames!\n");
+    }
+}
+
+void master::recv_trigger() {
+    hw_rx(ec.phw);
 
     pd_cookie++;
     pd_cond.notify_all();
