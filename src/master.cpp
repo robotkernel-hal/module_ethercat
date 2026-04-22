@@ -418,8 +418,32 @@ void master::open() {
     }
 #endif
 
-    if (ret != 0) 
+    if (ret != 0) {
+        log(error, 
+                "Unable to open or find an appropriate hardware layer for given ifname \"%s\".\n"
+                "Examples for appropriate hardware layers:\n"
+#ifdef LIBETHERCAT_BUILD_DEVICE_FILE
+                "ifname: file:/dev/ecat0:polling:blocking:monitor     - Using file layer with additional options\n"
+                "                                                       polling: Try to disable interrupts and do busy-loop-polling.\n"
+                "                                                       blocking: Try to do kernel-blocking when waiting for response.\n"
+                "                                                       monitor: Enable monitor device 'ecat_monitorX'. Dangerous for RT!\n"
+#endif
+#ifdef LIBETHERCAT_BUILD_DEVICE_BPF
+                "ifname: bdf:eth0                                     - Using BPF device.\n"
+#endif
+#ifdef LIBETHERCAT_BUILD_DEVICE_SOCK_RAW_LEGACY
+                "ifname: sock-raw:enp5s0                              - Using RAW socket network device. Needs root or CAP_NET_RAW!\n"
+#endif
+#ifdef LIBETHERCAT_BUILD_DEVICE_SOCK_RAW_MMAPED
+                "ifname: sock-raw-mmaped:enp5s0                       - Using RAW socket network device with mmap. Needs root or CAP_NET_RAW!\n"
+#endif
+#ifdef LIBETHERCAT_BUILD_DEVICE_PIKEOS
+                "ifname: pikeos:enp5s0                                - Using Pikeos socket layer\n."
+#endif
+                , ifname.c_str()); 
+
         throw runtime_error(string("opening hardware layer failed!\n"));
+    }
 
     // -----------------------------------------------------------
     // open ethercat interface
