@@ -34,6 +34,21 @@ using namespace robotkernel;
 using namespace robotkernel::helpers;
 using namespace module_ethercat;
 
+/* 
+ * User-Level equivalent to eth_hw_addr_random()
+ * uses "locally administered" bit (0x02) and clears Multicast (0x01)
+ */
+static void user_eth_hw_addr_random(uint8_t mac[6]) {
+    if (!mac) return;
+    
+    // generate random bytes
+    for (int i = 0; i < 6; i++) {
+        mac[i] = (uint8_t)rand();
+    }
+    
+    mac[0] = (mac[0] & 0xFE) | 0x02;
+}
+
 //! ethercat state string
 const string module_ethercat::state_strings[] = {
     "Unknown (0)",
@@ -120,14 +135,15 @@ void master::init() {
     ec.ec_log_func_user = this;
     ec.ec_log_func = log_func;
 
-    if (config["tun_ip"]) {
+    if (config["tun_device_name"]) {
         tun_settings.configure_tun = true;
+        tun_settings.tun_device_name = get_as<std::string>(config, "tun_device_name");
 
-        sscanf(get_as<string>(config, "tun_ip").c_str(), "%hhu.%hhu.%hhu.%hhu", 
-                &tun_settings.ip_address[3], 
-                &tun_settings.ip_address[2], 
-                &tun_settings.ip_address[1], 
-                &tun_settings.ip_address[0]);
+        sscanf(get_as<string>(config, "tun_master_ip").c_str(), "%hhu.%hhu.%hhu.%hhu", 
+                &tun_settings.tun_master_ip[3], 
+                &tun_settings.tun_master_ip[2], 
+                &tun_settings.tun_master_ip[1], 
+                &tun_settings.tun_master_ip[0]);
     } else {
         tun_settings.configure_tun = false;
     }
@@ -597,7 +613,12 @@ void master::open() {
     }
 
     if (tun_settings.configure_tun) {
-        ec_configure_tun(&ec, tun_settings.ip_address);
+        osal_uint8_t master_mac[6] = { 0 };
+        user_eth_hw_addr_random(master_mac);
+        ec_veth_open_tun(
+                &ec, tun_settings.tun_device_name.c_str(), 
+                master_mac, 
+                *(uint32_t *)&tun_settings.tun_master_ip[0]);
     }
 }
 

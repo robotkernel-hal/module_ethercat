@@ -165,7 +165,8 @@ class master :
 
         struct {
             bool configure_tun;
-            uint8_t ip_address[4];
+            std::string tun_device_name;
+            uint8_t tun_master_ip[4];
         } tun_settings;
 
         bool ec_opened;
