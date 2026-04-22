@@ -963,11 +963,9 @@ void master::tick() {
         ec_send_brd_ec_state(&ec); 
     }
 
-    if (hw_tx(ec.phw) != EC_OK) {
-        log(error, "error sending EtherCAT frames!\n");
+    if (hw_tx(ec.phw) != 0) {
+        hw_rx(ec.phw);
     }
-
-    hw_rx(ec.phw);
 
     pd_cookie++;
     pd_cond.notify_all();
@@ -994,8 +992,8 @@ void master::send_trigger() {
         ec_send_brd_ec_state(&ec); 
     }
 
-    if (hw_tx(ec.phw) != EC_OK) {
-        log(error, "error sending EtherCAT frames!\n");
+    if (hw_tx(ec.phw) != 0) {
+        hw_rx(ec.phw);
     }
 }
 
