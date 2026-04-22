@@ -12,7 +12,7 @@ class MainProject(ConanFile):
         "robotkernel_generator/[~6]@robotkernel/unstable",
     ]
     requires = [
-            "libethercat/ubuntu-noble@common/snapshot",
+            "libethercat/[~0.8]@common/unstable",
             "robotkernel/[~6]@robotkernel/unstable",
             "service_provider_memory_inspection/[~6]@robotkernel/unstable",
             "service_provider_canopen_protocol/[~6]@robotkernel/unstable",
