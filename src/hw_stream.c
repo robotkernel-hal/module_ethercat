@@ -172,7 +172,7 @@ void hw_device_stream_recv_internal(struct hw_stream *phw_stream) {
     ec_frame_t *pframe = (ec_frame_t *) &phw_stream->recv_frame;
 
     // using tradional recv function
-    osal_ssize_t bytesrx = phw_stream->stream_read(phw_stream->user, pframe, ETH_FRAME_LEN);
+    osal_ssize_t bytesrx = phw_stream->stream_read(phw_stream->user, pframe, EC_ETH_FRAME_LEN);
 
     if (bytesrx > 0) {
         hw_process_rx_frame(&phw_stream->common, pframe);
