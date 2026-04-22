@@ -303,7 +303,7 @@ class master :
             desc.object_code    = obj_desc.obj_code;
             desc.max_subindices = obj_desc.max_subindices;
 
-            if (obj_desc.name) {
+            if (obj_desc.name_len > 0) {
                 desc.name = std::string(obj_desc.name, obj_desc.name_len);
             }
         }
