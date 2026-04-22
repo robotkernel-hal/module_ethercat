@@ -59,6 +59,16 @@
 #use_real_names: false
 
 #########################################################
+# TUN settings
+
+# Enable EtherCAT virtual Ethernet switch for EoE and 
+# Mailbox Gateway.
+#tun_device_name: file:/dev/ecat_tun0
+
+# Specify EtherCAT master IP address.
+#tun_master_ip: 172.25.0.2
+
+#########################################################
 # Process data group settings. 
 # Specify ethercat process data groups. Each group must have
 # a unique groupt number. 
