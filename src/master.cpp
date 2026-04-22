@@ -140,10 +140,18 @@ void master::init() {
         tun_settings.tun_device_name = get_as<std::string>(config, "tun_device_name");
 
         sscanf(get_as<string>(config, "tun_master_ip").c_str(), "%hhu.%hhu.%hhu.%hhu", 
-                &tun_settings.tun_master_ip[3], 
-                &tun_settings.tun_master_ip[2], 
+                &tun_settings.tun_master_ip[0], 
                 &tun_settings.tun_master_ip[1], 
-                &tun_settings.tun_master_ip[0]);
+                &tun_settings.tun_master_ip[2], 
+                &tun_settings.tun_master_ip[3]);
+
+        log(info, "using tun device \"%s\" with master ip %d.%d.%d.%d\n", 
+                tun_settings.tun_device_name.c_str(),
+                tun_settings.tun_master_ip[0], 
+                tun_settings.tun_master_ip[1], 
+                tun_settings.tun_master_ip[2], 
+                tun_settings.tun_master_ip[3]);
+                
     } else {
         tun_settings.configure_tun = false;
     }
