@@ -1,0 +1,11 @@
+Source: module-ethercat-ln-msgdef
+Section: utils
+Priority: optional
+Maintainer: Robert Burger <robert.burger@dlr.de>
+Build-Depends: robotkernel-ln-helper (>= 6)
+Standards-Version: 4.6.0
+
+Package: module-ethercat-ln-msgdef
+Architecture: all
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Message definitions for Links-and-Nodes middleware.

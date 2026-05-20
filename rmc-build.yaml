@@ -3,6 +3,9 @@ _: &build_configs
 
 builds:
   - context: conan
+    build_file: share/msg_definitions/conanfile.py
+    configurations: *build_configs
+  - context: conan
     build_file: conanfile.py
     configurations: *build_configs
   - context: conan

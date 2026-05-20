@@ -24,7 +24,7 @@ libmodule_ethercat_la_LDFLAGS  = -Wall -release $(PACKAGE_VERSION) @LIBETHERCAT_
 
 VPATH = $(srcdir):$(top_srcdir)/share
 
-GEN_DEFINITIONS = pd_definitions/module_ethercat/master
+GEN_DEFINITIONS = msg_definitions/module_ethercat/master
 
 $(top_builddir)/src/gen_definitions.h: Makefile $(GEN_DEFINITIONS)
 	@echo creating $@
