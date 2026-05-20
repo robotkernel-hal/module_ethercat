@@ -1,7 +1,7 @@
 from conan import ConanFile
 
 class MainProject(ConanFile):
-    python_requires = "conan_template/[~6]@robotkernel/unstable"
+    python_requires = "conan_template/[~6]@robotkernel/stable"
     python_requires_extend = "conan_template.RobotkernelConanFile"
 
     name = "module_ethercat"
@@ -9,17 +9,17 @@ class MainProject(ConanFile):
     url = "https://rmc-github.robotic.dlr.de/robotkernel/module_ethercat"
     exports_sources = ["*", "!.gitignore"]
     tool_requires = [
-        "robotkernel_generator/[~6]@robotkernel/unstable",
+        "robotkernel_generator/[~6]@robotkernel/stable",
     ]
     requires = [
             "libethercat/[~0.8]@common/unstable",
-            "robotkernel/[~6]@robotkernel/unstable",
-            "service_provider_memory_inspection/[~6]@robotkernel/unstable",
-            "service_provider_canopen_protocol/[~6]@robotkernel/unstable",
-            "service_provider_key_value/[~6]@robotkernel/unstable",
-            "service_provider_sercos_protocol/[~6]@robotkernel/unstable",
-            "service_provider_file_protocol/[~6]@robotkernel/unstable",
-            "service_provider_process_data_inspection/[~6]@robotkernel/unstable", ]
+            "robotkernel/[~6]@robotkernel/stable",
+            "service_provider_memory_inspection/[~6]@robotkernel/stable",
+            "service_provider_canopen_protocol/[~6]@robotkernel/stable",
+            "service_provider_key_value/[~6]@robotkernel/stable",
+            "service_provider_sercos_protocol/[~6]@robotkernel/stable",
+            "service_provider_file_protocol/[~6]@robotkernel/stable",
+            "service_provider_process_data_inspection/[~6]@robotkernel/stable", ]
 
     options = {
             "max_slaves"                 : ["ANY"],
