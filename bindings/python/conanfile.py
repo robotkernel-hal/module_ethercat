@@ -1,11 +1,11 @@
 import os
 from conan import ConanFile, conan_version
 from conan.tools.files import copy
-from conan.tools.scm import Version
 
-IS_CONAN1 = Version(conan_version) < "2.0.0"
+IS_CONAN1 = conan_version < "2.0.0"
 
 class lnrk_interface_python(ConanFile):
+    package_type = "application" # needed by Conan 2 to pass env variables
     name = "module_ethercat_rkgui"
     description = "python binding to module_ethercat."
     author = "Robert Burger <robert.burgert@dlr.de>"
