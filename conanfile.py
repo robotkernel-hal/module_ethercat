@@ -12,7 +12,7 @@ class MainProject(ConanFile):
         "robotkernel_generator/[~6]@robotkernel/stable",
     ]
     requires = [
-            "libethercat/[~0.8]@common/unstable",
+            "libethercat/[~0.8]@common/stable",
             "robotkernel/[~6]@robotkernel/stable",
             "service_provider_memory_inspection/[~6]@robotkernel/stable",
             "service_provider_canopen_protocol/[~6]@robotkernel/stable",
